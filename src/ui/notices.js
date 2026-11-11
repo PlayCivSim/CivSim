@@ -80,6 +80,7 @@ const HAPPY_INFO = {
   employment: ['idle', 'Employment', 'Idle adults grow restless.'],
   safety: ['military', 'Safety', 'War and enemies in your lands frighten people; a garrison reassures them.'],
   amenities: ['star', 'Amenities', 'Shrines, markets, wonders and other comforts.'],
+  culture: ['star', 'Culture towns', 'Each settlement focused on Culture adds +3.'],
   policy: ['crown', 'Laws & government', 'Effects of enacted laws, government and traits.'],
   crowding: ['population', 'Crowding', 'Larger societies are harder to please.'],
 };

@@ -5,6 +5,8 @@
 //   every 10 ticks  – census, territory refresh, AI fast/steward (staggered)
 //   every 50 ticks  – job + housing assignment, needs/happiness, stage checks
 //   every day       – economy ledger, demographics, regrowth, diplomacy, events, AI strategy
+import { updateSupply, checkEra, aiSpecialise } from './logistics.js';
+import { TECH } from '../data/techs.js';
 import { rollPersonality } from './aimind.js';
 import { updateMissions, updateExplore, exploreTerritory, dailyIntel, revealCircle } from './intel.js';
 import { DAY_TICKS, DAYS_PER_YEAR, TICK_DT, SPEEDS, MAP_SIZES, DIFFICULTIES, STARTS, SEASONS } from '../core/constants.js';
@@ -301,6 +303,8 @@ export class Game {
     // seedlings: stumps regrow into saplings slowly
     this.dip.daily();
     dailyIntel(this);
+    updateSupply(this);
+    for (const t of this.tribes) if (t.alive) { checkEra(this, t, TECH); if (!t.isPlayer && this.day % 5 === 0) aiSpecialise(this, t); }
     rollEvents(this);
     if (this.weather && this.tick > this.weather.until) this.weather = null;
     if (!this.weather && this.rng.chance(0.18)) this.weather = { kind: this.season === 3 ? 'snow' : 'rain', until: this.tick + this.rng.int(80, 220) };

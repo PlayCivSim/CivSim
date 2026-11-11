@@ -1,5 +1,6 @@
 // Diplomacy: opinions built from decaying modifiers, treaties, wars,
 // proposals with explainable acceptance, AI diplomatic reasoning and trade.
+import { specOf } from './logistics.js';
 import { aiOf, remember, memoryOpinion, memoryBreakdown, perceivedStrength, coalitionTick, inCoalitionAgainst } from './aimind.js';
 import { intel } from './intel.js';
 import { RESOURCES } from '../data/resources.js';
@@ -245,6 +246,7 @@ export class Diplomacy {
       case 'offerTribute':
         add(30, 'Welcomes tribute'); break;
       case 'contract': {
+        if (!tt.techs.includes('barter') || !tf.techs.includes('barter')) return { accept: false, score: -100, reasons: [{ v: -100, label: 'Contracts need Barter on both sides' }] };
         if (this.atWar(from, to)) return { accept: false, score: -100, reasons: [{ v: -100, label: 'At war' }] };
         for (const [r, v] of Object.entries(p.get || {})) if ((tt.stock[r] || 0) < v * 2) return { accept: false, score: -100, reasons: [{ v: -100, label: `They cannot spare ${RESOURCES[r].name} regularly` }] };
         const { get, give } = contractValue(this, from, to, p);
@@ -624,7 +626,7 @@ export function tradeTrip(game, a, t) {
     }
     const tariff = tribe.tariffRate || 0;
     if (tariff) game.dip.addMod(partner.id, tribe.id, 'tariff', -tariff * 0.6, { label: 'High tariffs', decay: 0.15, min: -tariff * 30 });
-    const base = 5 * (1 + mod(tribe, 'trade') + bonus + tariff) * (tribe.productivity || 1) * (game.dip.has('exclusive', tribe.id, partner.id) ? 1.5 : 1);
+    const base = (wb && specOf(game, wb.sid) === 'trade' ? 1.3 : 1) * 5 * (1 + mod(tribe, 'trade') + bonus + tariff) * (tribe.productivity || 1) * (game.dip.has('exclusive', tribe.id, partner.id) ? 1.5 : 1);
     const ts = game.dip.tradeStats = game.dip.tradeStats || {}; const tk = tribe.id + ':' + partner.id; ts[tk] = (ts[tk] || 0) + 1;
     if (tribe.techs.includes('currency')) addRes(game, tribe, 'coins', base * 1.6 * (1 + mod(tribe, 'tariff')));
     else addRes(game, tribe, 'goods', base * 0.25);

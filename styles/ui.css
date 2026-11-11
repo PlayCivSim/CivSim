@@ -656,3 +656,10 @@ body.cb .bar.green i { background: #6ab0ff; } body.cb .bar.red i { background: #
 /* ================= Stage 5: AI temperament ================= */
 .trait-chip { font-family: var(--font-caps); font-size: 0.58em; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 6px; border: 1px solid rgba(216,178,90,0.4); color: var(--gold); cursor: help; }
 .trait-chip.bad { border-color: var(--bad); color: var(--bad); }
+
+/* ================= Stage 6: logistics ================= */
+.spec-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0; border-bottom: 1px dashed rgba(216,178,90,0.15); }
+.spec-row .spec-name { font-size: 0.92em; }
+.supply { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-family: var(--font-caps); font-size: 0.62em; color: var(--text-dim); width: 120px; cursor: help; }
+.supply .bar { flex: 1; height: 6px; }
+@media (max-width: 1420px) and (min-width: 761px) { .res { padding: 3px 4px 3px 2px; gap: 3px; } .res .v { min-width: 0; } .clock { min-width: 0; } .tb-tribe { min-width: 0; } }

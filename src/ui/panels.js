@@ -19,6 +19,7 @@ import { TREATY_NAMES } from '../sim/diplomacy.js';
 import { intelBadges, economyLine, strengthChip, intentLine, missionsSection, counterSection, reputationLine, inboxSection, intelActions, confirmJourney } from './intelui.js';
 import { route, intel } from '../sim/intel.js';
 import { traits } from '../sim/aimind.js';
+import { SPECS, SPEC_COOLDOWN_DAYS, ERAS, eraOf, supplyAt } from '../sim/logistics.js';
 import { counterOffer, dealText, embargoed, TARIFFS } from '../sim/trade.js';
 import { proposalText } from './hud.js';
 import { sfx } from '../audio/audio.js';
@@ -39,7 +40,7 @@ const overview = {
     const trait = LEADER_TRAITS.find(x => x.key === L?.trait);
     return `
       <div class="row" style="gap:12px;align-items:stretch">
-        <div class="parch" style="flex:1"><div class="caps" style="color:var(--parch-dim)">Stage ${t.stage} of 6</div><div class="display" style="font-size:2em;line-height:1;color:var(--parch-ink)">${STAGES[t.stage].name}</div><div style="font-family:var(--font-prose);font-size:0.9em;color:var(--parch-dim)">${STAGES[t.stage].desc}</div></div>
+        <div class="parch" style="flex:1"><div class="caps" style="color:var(--parch-dim)">Stage ${t.stage} of 6 · ${ERAS[eraOf(t, TECH)]}</div><div class="display" style="font-size:2em;line-height:1;color:var(--parch-ink)">${STAGES[t.stage].name}</div><div style="font-family:var(--font-prose);font-size:0.9em;color:var(--parch-dim)">${STAGES[t.stage].desc}</div></div>
         <div class="parch" style="width:150px;text-align:center"><img src="${spriteURL('person', t.key, 'researcher', 0, L?.female, false, 1, null, t.stage, false)}" style="width:36px;height:48px" class="pix"><div style="font-size:0.95em">${t.def.leaderTitle} ${esc(L?.name || '')}</div><div style="font-size:0.75em;color:var(--parch-dim)" data-tip="${esc(trait?.desc || '')}">the ${esc(traitName(L?.trait))} · ${Math.floor((L?.age || 0) / DAYS_PER_YEAR)} yrs</div></div>
       </div>
       ${sp ? `<div class="section-title">Toward ${sp.next.name}</div>${sp.reqs.map(r => `<div class="req ${r.have >= r.need ? 'ok' : ''}">${r.have >= r.need ? ico('check', 'sm') : ico('lock', 'sm')}<span>${esc(r.label)}</span><span class="num">${fmt(r.have)} / ${r.need}</span>${bar(Math.min(1, r.have / r.need), r.have >= r.need ? 'green' : '')}</div>`).join('')}
@@ -61,11 +62,18 @@ const overview = {
       <div class="col">
         ${[['work', 'Workforce steward', 'Automatically assign workers to jobs'], ['housing', 'Housing steward', 'Build homes when space runs short'], ['build', 'Master builder', 'Plan and place all buildings'], ['research', 'Royal scholar', 'Choose research when idle']].map(([k, n, d]) => `<div class="row between" data-act="steward" data-k="${k}" style="cursor:pointer"><span>${n}<br><small class="faint">${d}</small></span>${toggleHTML(t.steward[k])}</div>`).join('')}
       </div>
+      ${settlementsHTML(g, t)}
       <div class="section-title">Expansion</div>
       ${(() => { const c = canFound(g, t); return `<button class="btn ${c.ok ? 'primary' : 'disabled'}" data-act="found" ${c.ok ? '' : `data-tip="${esc(c.why)}"`}>${ico('settle')} Found a new settlement</button> <span class="faint" style="font-size:0.8em">${c.ok ? '' : esc(c.why)}</span>`; })()}
     `;
   },
 };
+function settlementsHTML(g, t) {
+  return `<div class="section-title">Settlements</div>${t.settlements.map(sid => { const s = g.settlements.get(sid); if (!s) return ''; const cd = s.specAt && g.tick - s.specAt < SPEC_COOLDOWN_DAYS * 360;
+    return `<div class="spec-row"><div class="spec-name">${s.capital ? ico('crown', 'sm') : ico('house', 'sm')} ${esc(s.name)} <span class="faint">· ${s.pop} people</span></div>
+      <div class="seg">${Object.entries(SPECS).map(([k, v]) => `<button class="btn xs ${s.spec === k ? 'on' : ''} ${cd && s.spec !== k ? 'disabled' : ''}" data-act="spec" data-sid="${sid}" data-k="${k}" data-tip="${esc(v.name + ': ' + v.desc + (cd ? ` Changing focus is possible ${SPEC_COOLDOWN_DAYS} days after the last change.` : ''))}">${ico(v.icon, 'sm')}${v.name}</button>`).join('')}</div></div>`; }).join('')}
+    <div class="faint" style="font-size:0.8em">A town's focus speeds some work and slows the rest. It can change once every ${SPEC_COOLDOWN_DAYS} days.</div>`;
+}
 function advisorHTML(g, t) {
   const plan = planProgress(g, t);
   if (!plan.goal) return '';
@@ -390,17 +398,17 @@ const military = {
     return `<div class="stat-grid">${stat('soldier', 'Soldiers', soldiers, `cap ${t.slots.soldier}`)}${stat('weapons', 'Weapons', t.stock.weapons || 0, `equip tier ${eq}`)}${stat('military', 'Strength', Math.round(t.strength))}
         ${stat('flag', 'Defences', towers, 'towers & forts')}${stat('sad', 'War weariness', Math.round(t.warWeariness || 0))}${stat('coin', 'Upkeep', soldiers ? fmt(soldiers * 0.15 * Math.max(0.2, 1 + (t.mods.upkeep || 0)), 1) : 0, 'wood/day')}</div>
       <div class="section-title">Balance of power</div>
-      ${g.tribes.filter(o => o.alive).map(o => `<div class="gauge" style="margin:4px 0"><img src="${emblemURL(o.key)}" width="20" class="pix"><span style="width:80px;color:${o.def.pal.light}">${o.name}</span><div class="bar" style="flex:1;height:12px"><i style="width:${o.strength / maxS * 100}%;background:${o.color}"></i></div><span class="num" style="width:40px;text-align:right">${Math.round(o.strength)}</span></div>`).join('')}
+      ${g.tribes.filter(o => o.alive).map(o => { const r = o === t ? { lv: 3, val: o.strength } : intel(g, t.id, o.id, 'military'); const v = r.val ?? 0; const known = r.lv > 0 && r.val != null; return `<div class="gauge" style="margin:4px 0" data-tip="${esc(o === t ? 'Your own forces' : known ? `${['Unknown', 'Rumoured', 'Reported', 'Verified'][r.lv]} estimate${r.age ? `, ${r.age} days old` : ''}` : 'Unknown: send a scout or agent')}"><img src="${emblemURL(o.key)}" width="20" class="pix"><span style="width:80px;color:${o.def.pal.light}">${(o === t || g.dip.contact[t.id][o.id]) ? o.name : 'Unknown'}</span><div class="bar" style="flex:1;height:12px"><i style="width:${known ? Math.min(100, v / maxS * 100) : 0}%;background:${o.color};${r.lv < 3 ? 'opacity:0.55' : ''}"></i></div><span class="num" style="width:40px;text-align:right">${known ? (r.lv < 3 ? '~' : '') + Math.round(v) : '?'}</span></div>`; }).join('')}
       <div class="section-title">Recruitment</div>
       <div class="alloc">${ico('soldier')}<div class="nm"><span>Soldiers</span><small>${t.slots.soldier} places · build barracks to raise the cap</small></div><div class="cnt num">${t.alloc.soldier || 0}</div><div class="ctl"><button class="btn xs icon" data-act="alloc" data-job="soldier" data-d="-1">${ico('minus', 'sm')}</button><button class="btn xs icon" data-act="alloc" data-job="soldier" data-d="1">${ico('plus', 'sm')}</button><button class="btn xs icon" data-act="alloc" data-job="soldier" data-d="5">+5</button></div></div>
       <div class="prose" style="font-size:0.85em">Soldiers eat more, consume wood and coin, and produce nothing — but strength deters rivals. Equipment depends on your weapons technology and the weapons in your stores.</div>
       <div class="section-title">Wars</div>
       ${enemies.length ? enemies.map(e => { const o = g.tribes[e]; const w = D.war(t.id, e); return `<div class="frame" style="margin-bottom:10px;padding:2px 4px"><div class="row"><img src="${emblemURL(o.key)}" width="32" class="pix"><div style="flex:1"><div style="color:${o.def.pal.light};font-size:1.2em">War with the ${o.name}</div><div class="dim" style="font-size:0.8em">${Math.floor((g.tick - w.start) / 360)} days · war score ${Math.round(w.score[t.id] || 0)} : ${Math.round(w.score[e] || 0)}</div></div><button class="btn sm" data-act="dip" data-to="${e}" data-type="peace">${ico('peace', 'sm')} Sue for peace</button></div>
           <div class="caps" style="color:var(--gold);margin:8px 0 4px">Their settlements</div>
-          ${o.settlements.map(sid => { const s = g.settlements.get(sid); const c = g.buildings.get(s.centre); return `<div class="row between" style="padding:3px 0"><span>${s.capital ? ico('crown', 'sm') : ico('house', 'sm')} ${esc(s.name)} <span class="faint">· ${s.pop} people${c ? ' · walls ' + Math.round(c.hp / c.maxHp * 100) + '%' : ''}${s.capital ? ' · capital (can be sacked)' : ''}</span></span><button class="btn xs" data-act="campaign" data-sid="${sid}" data-tip="Send ${Math.round(st.commit * 100)}% of idle soldiers">${ico('target', 'sm')} Attack</button></div>`; }).join('')}</div>`; }).join('')
+          ${o.settlements.map(sid => { const s = g.settlements.get(sid); const c = g.buildings.get(s.centre); return `<div class="row between" style="padding:3px 0"><span>${s.capital ? ico('crown', 'sm') : ico('house', 'sm')} ${esc(s.name)} <span class="faint">· ${!g.fog || intel(g, t.id, o.id, 'military').lv >= 3 ? `${s.pop} people${c ? ' · walls ' + Math.round(c.hp / c.maxHp * 100) + '%' : ''}` : 'defences unknown'}${s.capital ? ' · capital (can be sacked)' : ''}</span></span><button class="btn xs" data-act="campaign" data-sid="${sid}" data-tip="Send ${Math.round(st.commit * 100)}% of idle soldiers">${ico('target', 'sm')} Attack</button></div>`; }).join('')}</div>`; }).join('')
         + `<div class="row" style="gap:8px"><span class="dim" style="font-size:0.85em">Commit</span>${[0.5, 0.75, 1].map(f => `<button class="btn xs ${st.commit === f ? 'on' : ''}" data-act="commit" data-f="${f}">${f * 100}%</button>`).join('')}<span class="faint" style="font-size:0.8em">of idle soldiers to each attack</span></div>`
         : '<div class="prose" style="font-size:0.9em">You are at peace. Declare war from the Diplomacy panel.</div>'}
-      ${armies.length ? `<div class="section-title">Armies in the field</div>${armies.map(a => `<div class="row between" style="padding:4px 0"><span>${ico('flag', 'sm')} ${a.alive ?? a.size} soldiers › ${esc(g.settlements.get(a.target)?.name || '?')} <span class="faint">· ${a.state} · ${a.kills} kills, ${a.losses} lost</span></span><span class="row"><button class="btn xs" data-act="army-view" data-id="${a.id}">${ico('eye', 'sm')}</button>${a.state !== 'return' ? `<button class="btn xs" data-act="recall" data-id="${a.id}">Recall</button>` : ''}</span></div>`).join('')}` : ''}`;
+      ${armies.length ? `<div class="section-title">Armies in the field</div>${armies.map(a => `<div class="row between" style="padding:4px 0"><span>${ico('flag', 'sm')} ${a.alive ?? a.size} soldiers › ${esc(g.settlements.get(a.target)?.name || '?')} <span class="faint">· ${a.state} · ${a.kills} kills, ${a.losses} lost${a.attrition ? ` (${a.attrition} to attrition)` : ''}</span><span class="supply" data-tip="${esc(`Supply ${Math.round((a.supply ?? 1) * 100)}%: ${a.supplyWhy || 'within reach of your towns'}. Effectiveness ${Math.round((0.6 + 0.4 * (a.supply ?? 1)) * 100)}%. Below 50% soldiers fall sick and desert. Friendly or allied land, border access, roads and Military towns extend supply; winter shortens it.`)}">Supply ${bar(a.supply ?? 1, (a.supply ?? 1) < 0.5 ? 'red' : (a.supply ?? 1) < 0.8 ? '' : 'green')}</span></span><span class="row"><button class="btn xs" data-act="army-view" data-id="${a.id}">${ico('eye', 'sm')}</button>${a.state !== 'return' ? `<button class="btn xs" data-act="recall" data-id="${a.id}">Recall</button>` : ''}</span></div>`).join('')}` : ''}`;
   },
 };
 
@@ -621,6 +629,7 @@ export const ACTIONS = {
   commit: (hud, b) => { hud.panelState.commit = +b.dataset.f; },
   recall: (hud, b) => { hud.sim.call('recall', +b.dataset.id); },
   'army-view': (hud, b) => { const g = hud.game; let sx = 0, sy = 0, n = 0; for (const a of g.agents.values()) if (a.army === +b.dataset.id) { sx += a.x; sy += a.y; n++; } if (n) hud.renderer.flyTo(sx / n, sy / n, 3.5); },
+  spec: async (hud, b) => { const r = await hud.sim.call('specialise', +b.dataset.sid, b.dataset.k); if (!r.ok) fail('Cannot change focus', r.why, 'house'); },
   'chron-f': (hud, b) => { hud.panelState.cf = b.dataset.f; },
   'chron-t': (hud, b) => { hud.panelState.ct = b.dataset.t; },
   'b-focus': (hud, b) => { const bd = hud.game.buildings.get(+b.dataset.id); if (bd) bd.focus = b.dataset.k || null; hud.sim.call('bFocus', +b.dataset.id, b.dataset.k || null); },

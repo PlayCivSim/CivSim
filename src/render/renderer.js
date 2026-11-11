@@ -382,7 +382,9 @@ export class Renderer {
       const X = sx / n * TILE, Y = sy / n * TILE;
       ctx.fillStyle = '#2a1e18'; ctx.fillRect(X, Y - 14, 1, 14);
       ctx.fillStyle = TRIBES[ar.tribe].color; ctx.fillRect(X + 1, Y - 14, 7, 5);
-      ctx.fillStyle = '#fff'; ctx.font = '5px monospace'; ctx.fillText(String(n), X + 2, Y - 10);
+      let seen = ar.tribe === g.playerId || !g.fog;
+      if (!seen) for (const a of g.agents.values()) if (a.tribe === g.playerId && !a.hidden && Math.abs(a.x - sx / n) + Math.abs(a.y - sy / n) < 12) { seen = true; break; }
+      ctx.fillStyle = '#fff'; ctx.font = '5px monospace'; ctx.fillText(seen ? String(n) : '?', X + 2, Y - 10);
     }
   }
 

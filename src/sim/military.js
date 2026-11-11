@@ -1,5 +1,6 @@
 // Soldiers, armies, battles and sieges. Combat outcomes come from strength,
 // equipment, morale, terrain and fortifications with modest randomness.
+import { supplyFactor } from './logistics.js';
 import { BUILDINGS } from '../data/buildings.js';
 import { BIOMES } from '../world/biomes.js';
 import { TECH } from '../data/techs.js';
@@ -19,6 +20,7 @@ export function soldierPower(game, tribe, a) {
   p *= 1 + (a.skill.soldier || 0) * 0.3 + Math.min(0.3, (a.xp || 0) * 0.01);
   p *= 0.6 + a.health * 0.4;
   if (tribe.foodSat < 0.8) p *= 0.8;
+  if (a.army) p *= supplyFactor(game.armies.find(r => r.id === a.army));
   return p;
 }
 

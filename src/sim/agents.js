@@ -1,6 +1,7 @@
 // Individual inhabitants: creation, the per-tick behaviour state machine and
 // movement. Production happens through these work cycles, so the economy is a
 // direct result of what people are visibly doing on the map.
+import { specMul, specOf } from './logistics.js';
 import { DAY_TICKS, TICK_DT, WORK_AGE, ELDER_AGE, DAYS_PER_YEAR } from '../core/constants.js';
 import { BUILDINGS } from '../data/buildings.js';
 import { BIOMES, B, isWater } from '../world/biomes.js';
@@ -355,13 +356,13 @@ function doWork(game, a, dt) {
   }
   const t = a.task; a.task = null; a.hidden = false;
   if (!t) { a.state = 'think'; return; }
-  if (t.drill) { a.state = 'think'; skillUp(game, tribe, a, 'soldier'); a.xp = (a.xp || 0) + 1; return; }
+  if (t.drill) { a.state = 'think'; skillUp(game, tribe, a, 'soldier'); a.xp = (a.xp || 0) + (specOf(game, a.sid) === 'military' ? 2 : 1); return; }
   const w = game.world;
   const wb = t.b != null ? game.buildings.get(t.b) : null;
   if (t.b != null && !wb) { if (t.res != null) game.reserved.delete(t.res); a.state = 'think'; return; }
   const def = wb ? BUILDINGS[wb.type] : null;
   const job = a.job;
-  const p = productivity(game, tribe, a) * skillMul(a, job);
+  const p = productivity(game, tribe, a) * skillMul(a, job) * specMul(game, wb, job);
   let carry = null;
   const add = (r, v) => { if (v > 0) { carry = carry || {}; carry[r] = (carry[r] || 0) + v; } };
 

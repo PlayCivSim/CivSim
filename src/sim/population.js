@@ -1,5 +1,6 @@
 // Population: census, housing, workforce assignment, needs, happiness,
 // stability, births, deaths, migration and leadership.
+import { specOf, cultureHappiness } from './logistics.js';
 import { BUILDINGS, JOBS, JOB_KEYS } from '../data/buildings.js';
 import { WORK_AGE, ELDER_AGE, DAYS_PER_YEAR } from '../core/constants.js';
 import { makeAgent, ageYears, isAdult } from './agents.js';
@@ -22,7 +23,7 @@ export function census(game) {
     if (def.housing) { t.housing += def.housing; const s = game.settlements.get(b.sid); if (s) s.housing += def.housing; }
     if (def.storage) t._stores.push(b.id);
     if (b.type === 'storehouse') t.storehouses++;
-    if (def.job && def.slots) t.slots[def.job] = (t.slots[def.job] || 0) + def.slots;
+    if (def.job && def.slots) t.slots[def.job] = (t.slots[def.job] || 0) + Math.round(def.slots * (def.job === 'soldier' && specOf(game, b.sid) === 'military' ? 1.5 : 1));
     if (b.type === 'centre') { t.slots.gatherer += 2; t.slots.woodcutter += 1; t.slots.researcher += 1; t.slots.hunter += 2; }
   }
   for (const a of game.agents.values()) {
@@ -187,6 +188,7 @@ export function updateNeeds(game, tribe) {
   parts.employment = -18 * Math.max(0, idle) / Math.max(1, tribe.adults) * (1 + mod(tribe, 'idleUnrest'));
   parts.safety = (tribe.atWar ? -4 : 0) + (tribe.threat ? -10 : 0) + Math.min(3, (tribe.jobCounts.soldier || 0) / Math.max(1, tribe.pop) * 30);
   parts.amenities = am.happy;
+  parts.culture = cultureHappiness(game, tribe);
   parts.policy = mod(tribe, 'happiness');
   parts.crowding = -Math.max(0, tribe.pop - 60) / 40; // larger societies are harder to please
   let target = 0; for (const v of Object.values(parts)) target += v;
