@@ -48,7 +48,7 @@ export function initTooltips() {
     if (!t) { tipEl.classList.remove('show'); return; }
     renderTip();
   });
-  document.addEventListener('mousemove', e => { if (tipTarget) placeTip(e.clientX, e.clientY); });
+  document.addEventListener('mousemove', e => { if (tipTarget && tipTarget !== mapTipEl) placeTip(e.clientX, e.clientY); });
   document.addEventListener('mousedown', () => { if (document.body.classList.contains('touch')) return; tipEl.classList.remove('show'); tipTarget = null; });
 }
 function renderTip() {
@@ -59,14 +59,17 @@ function renderTip() {
   tipEl.classList.add('show');
 }
 const mapTipEl = {}; let mapHTML = '';
-// tooltip for things drawn on the map (no DOM element): fn() -> html, or null to hide
+// Tooltip for things drawn on the map (no DOM element): fn() -> html, or null to hide.
+// It is placed where the pointer first entered and stays put until hidden.
 export function mapTip(fn, x, y) {
   if (!fn) { if (tipTarget === mapTipEl) { tipTarget = null; tipEl.classList.remove('show'); } return; }
+  const first = tipTarget !== mapTipEl;
   mapTipEl._tip = fn; tipTarget = mapTipEl;
-  const h = fn(); if (h !== mapHTML) { mapHTML = h; renderTip(); }
-  placeTip(x, y);
+  const h = fn();
+  if (first || h !== mapHTML) { mapHTML = h; renderTip(); }
+  if (first) placeTip(x, y);
 }
-export function refreshTip() { if (tipTarget === mapTipEl) { mapHTML = ''; return; } if (tipTarget && document.body.contains(tipTarget)) renderTip(); else if (tipTarget) { tipTarget = null; tipEl.classList.remove('show'); } }
+export function refreshTip() { if (tipTarget === mapTipEl) { const h = mapTipEl._tip(); if (h !== mapHTML) { mapHTML = h; renderTip(); } return; } if (tipTarget && document.body.contains(tipTarget)) renderTip(); else if (tipTarget) { tipTarget = null; tipEl.classList.remove('show'); } }
 function placeTip(x, y) {
   const r = tipEl.getBoundingClientRect();
   let nx = x + 18, ny = y + 18;

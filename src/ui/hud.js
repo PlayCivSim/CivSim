@@ -317,11 +317,15 @@ export class Hud {
     if (html !== this.lastHintHTML || !host.firstElementChild) { host.innerHTML = html; this.lastHintHTML = html; }
   }
 
-  // desktop: hovering a building shows its info and who is inside
+  // desktop: hovering a building shows its info and who is inside. It appears when the
+  // pointer first enters the building and stays until the pointer leaves it completely.
   hoverBuilding(w, e) {
     let b = null;
     if (!this.placing) { const g = this.game, wd = g.world; for (const dy of [0, 1]) { const x = w.x | 0, y = (w.y + dy) | 0; if (wd.inb(x, y) && wd.occ[wd.idx(x, y)] > 0) { b = g.buildings.get(wd.occ[wd.idx(x, y)] - 1); break; } } }
-    if (b && !this.game.agentAt(w.x, w.y, 0.8)) mapTip(() => `<div class="inspector" style="--tribe:${TRIBES[b.tribe].color}">${buildingTip(this, b, null)}</div>`, e.clientX, e.clientY); else mapTip(null);
+    if (!b) { this.hoverB = null; mapTip(null); return; }
+    if (this.hoverB !== b.id) mapTip(null); // a different building: show it afresh beside the pointer
+    this.hoverB = b.id;
+    mapTip(() => { const cur = this.game.buildings.get(this.hoverB); return cur ? `<div style="width:290px;--tribe:${TRIBES[cur.tribe].color}">${buildingTip(this, cur, null)}</div>` : ''; }, e.clientX, e.clientY);
   }
 
   onHover(w, e) {
