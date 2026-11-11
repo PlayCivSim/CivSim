@@ -67,7 +67,7 @@ export class Diplomacy {
     const g = this.game, ta = g.tribes[a], tb = g.tribes[b];
     this.addMod(a, b, 'treaty_' + type, 6, { label: 'Signed ' + TREATY_NAMES[type], decay: 0.15, max: 12 });
     this.addMod(b, a, 'treaty_' + type, 6, { label: 'Signed ' + TREATY_NAMES[type], decay: 0.15, max: 12 });
-    if (type !== 'tribute') g.log(ta, 'diplomacy', `${ta.name} and ${tb.name} signed a ${TREATY_NAMES[type]}.`, (ta.isPlayer || tb.isPlayer) ? 2 : 1);
+    if (type !== 'tribute') g.log(ta, 'diplomacy', `${ta.name} and ${tb.name} signed a ${TREATY_NAMES[type]}.`, (ta.isPlayer || tb.isPlayer) ? 2 : 1, { with: b });
     g.bus.emit('treaty', { type, a, b });
   }
   cancel(type, a, b, by = a, broken = false) {
@@ -79,7 +79,7 @@ export class Diplomacy {
       this.reputation[by] -= type === 'alliance' ? 12 : 7;
       this.addMod(other, by, 'betrayal', -30, { label: 'Broke a treaty with us', decay: 0.2 });
     } else this.addMod(other, by, 'cancelled', -8, { label: 'Ended a treaty', decay: 0.4 });
-    g.log(g.tribes[by], 'diplomacy', `${g.tribes[by].name} ${broken ? 'broke' : 'ended'} the ${TREATY_NAMES[type]} with the ${g.tribes[other].name}.`, 2);
+    g.log(g.tribes[by], 'diplomacy', `${g.tribes[by].name} ${broken ? 'broke' : 'ended'} the ${TREATY_NAMES[type]} with the ${g.tribes[other].name}.`, 2, { with: other, alert: g.tribes[other].isPlayer && broken });
   }
 
   declareWar(a, b, reason = '') {
@@ -98,7 +98,7 @@ export class Diplomacy {
     this.addMod(b, a, 'war', -40, { label: 'At war with us', decay: 0.3, min: -60 });
     this.addMod(a, b, 'war', -20, { label: 'At war with us', decay: 0.3, min: -60 });
     ta.atWar = tb.atWar = true;
-    g.log(ta, 'war', `${ta.name} declared war on the ${tb.name}${reason ? ' — ' + reason : ''}.`, 3);
+    g.log(ta, 'war', `${ta.name} declared war on the ${tb.name}${reason ? ' — ' + reason : ''}.`, 3, { with: b });
     g.bus.emit('war', { a, b });
     // allies are called to arms
     for (const ally of this.allies(b)) {
@@ -127,7 +127,7 @@ export class Diplomacy {
     this.truce[a * 8 + b] = g.tick + DAY_TICKS * 20;
     ta.atWar = this.enemies(a).length > 0; tb.atWar = this.enemies(b).length > 0;
     const tt = terms === 'white' ? 'a white peace' : `peace, with the ${(terms === 'tribute_a' ? ta : tb).name} paying tribute`;
-    g.log(ta, 'war', `${ta.name} and ${tb.name} agreed to ${tt}.`, 3);
+    g.log(ta, 'war', `${ta.name} and ${tb.name} agreed to ${tt}.`, 3, { with: b });
     g.bus.emit('peace', { a, b });
   }
   warScore(a, b, pts) { const w = this.war(a, b); if (w) w.score[a] = (w.score[a] || 0) + pts; }
@@ -149,7 +149,7 @@ export class Diplomacy {
       this.mods[a][b] = this.mods[a][b].filter(m => Math.abs(m.v) > 0.05 || m.persist);
       if (!this.contact[a][b]) {
         const d = settlementDistance(g, a, b);
-        if (d < 55 || g.day > 10) { this.contact[a][b] = this.contact[b][a] = true; if (a < b) g.log(ta, 'diplomacy', `The ${ta.name} made first contact with the ${tb.name}.`, ta.isPlayer || tb.isPlayer ? 2 : 1); }
+        if (d < 55 || g.day > 10) { this.contact[a][b] = this.contact[b][a] = true; if (a < b) g.log(ta, 'diplomacy', `The ${ta.name} made first contact with the ${tb.name}.`, ta.isPlayer || tb.isPlayer ? 2 : 1, { with: b }); }
         continue;
       }
       // borders
@@ -276,19 +276,19 @@ export class Diplomacy {
         takeRes(tf, p.res, p.amt); addRes(g, tt, p.res, p.amt);
         const v = Math.min(25, 3 + Math.sqrt(p._value || 10) * 1.4);
         this.addMod(to, from, 'gift', v, { label: 'Generous gifts', decay: 0.4, max: 30 });
-        g.log(tf, 'diplomacy', `${tf.name} sent a gift of ${Math.round(p.amt)} ${RESOURCES[p.res].name} to the ${tt.name}.`, 1);
+        g.log(tf, 'diplomacy', `${tf.name} sent a gift of ${Math.round(p.amt)} ${RESOURCES[p.res].name} to the ${tt.name}.`, 1, { with: to });
         break;
       }
       case 'exchange':
         for (const [r, v] of Object.entries(p.give || {})) { takeRes(tf, r, v); addRes(g, tt, r, v); }
         for (const [r, v] of Object.entries(p.get || {})) { takeRes(tt, r, v); addRes(g, tf, r, v); }
         this.addMod(to, from, 'exchange', 2, { label: 'Fair dealings', decay: 0.2, max: 10 });
-        g.log(tf, 'diplomacy', `${tf.name} and ${tt.name} exchanged goods.`, 1);
+        g.log(tf, 'diplomacy', `${tf.name} and ${tt.name} exchanged goods.`, 1, { with: to, cat: 'trade' });
         break;
       case 'tribute':
         this.sign('tribute', from, to, { payer: to, until: g.tick + DAY_TICKS * 10 });
         this.addMod(to, from, 'extortion', -15, { label: 'Extorted tribute', decay: 0.25 });
-        g.log(tf, 'diplomacy', `The ${tt.name} agreed to pay tribute to the ${tf.name}.`, 2);
+        g.log(tf, 'diplomacy', `The ${tt.name} agreed to pay tribute to the ${tf.name}.`, 2, { with: to });
         break;
     }
     return ev;
@@ -304,7 +304,9 @@ export class Diplomacy {
       this.lastWarn = this.lastWarn || {};
       if (g.tick - (this.lastWarn[a] || -1e9) > DAY_TICKS * 3) {
         this.lastWarn[a] = g.tick;
-        g.bus.emit('tension', { from: a, level: v > WAR_THRESHOLD ? 'high' : 'rising', reason: this.assessWar(g.tribes[a], other).reason });
+        const reason = this.assessWar(g.tribes[a], other).reason, high = v > WAR_THRESHOLD;
+        g.log(g.tribes[a], 'diplomacy', high ? `The ${g.tribes[a].name} are preparing for war against the ${other.name}.` : `Relations between the ${g.tribes[a].name} and the ${other.name} are deteriorating.`, 1, { with: b, alert: high });
+        g.bus.emit('tension', { from: a, level: high ? 'high' : 'rising', reason });
       }
     }
   }
@@ -350,7 +352,7 @@ export class Diplomacy {
     this.ultimatumAt = this.ultimatumAt || {}; this.casusBelli = this.casusBelli || {};
     this.ultimatumAt[a * 8 + b] = g.tick; this.lastProposal[a][b] = g.tick;
     const p = { type: 'tribute', ultimatum: true, reason: A.reason };
-    g.log(tribe, 'diplomacy', `The ${tribe.name} issued an ultimatum to the ${other.name}: pay tribute or face war.`, other.isPlayer ? 2 : 1);
+    g.log(tribe, 'diplomacy', `The ${tribe.name} issued an ultimatum to the ${other.name}: pay tribute or face war.`, other.isPlayer ? 2 : 1, { with: b, alert: other.isPlayer });
     if (other.isPlayer) {
       g.pendingProposals.push({ from: a, to: b, p, tick: g.tick, expires: g.tick + DAY_TICKS * 1.5 });
       g.bus.emit('proposal', { from: a, to: b, p });
@@ -426,7 +428,7 @@ export class Diplomacy {
       const atWar = this.atWar(a, b);
       const send = (p) => {
         this.lastProposal[a][b] = g.tick;
-        if (other.isPlayer && p.type !== 'gift') { g.bus.emit('proposal', { from: a, to: b, p }); g.pendingProposals.push({ from: a, to: b, p, tick: g.tick }); return; }
+        if (other.isPlayer && p.type !== 'gift') { g.log(tribe, 'diplomacy', `An envoy of the ${tribe.name} arrived with a proposal.`, 1, { with: b }); g.bus.emit('proposal', { from: a, to: b, p }); g.pendingProposals.push({ from: a, to: b, p, tick: g.tick }); return; }
         const r = this.propose(a, b, p);
         if (other.isPlayer && p.type === 'gift' && r.accept) g.bus.emit('proposal', { from: a, to: b, p });
       };

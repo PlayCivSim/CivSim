@@ -16,8 +16,8 @@ export function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':
 export function fmt(n, d = 0) {
   if (n == null || isNaN(n)) return '0';
   const a = Math.abs(n);
-  if (a >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (a >= 1e4) return (n / 1e3).toFixed(1) + 'k';
+  if (a >= 1e6) return (n / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M';
+  if (a >= 1e3) return (Math.floor(n / 100) / 10).toFixed(a >= 1e4 ? 0 : 1).replace(/\.0$/, '') + 'k';
   return d ? n.toFixed(d) : Math.floor(n + (n < 0 ? 0.999 : 0)).toString();
 }
 export function sign(n, d = 1) { if (Math.abs(n) < 0.05) return '±0'; return (n > 0 ? '+' : '') + (Math.abs(n) >= 100 ? Math.round(n) : n.toFixed(d)); }

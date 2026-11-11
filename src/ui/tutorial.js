@@ -21,7 +21,7 @@ export const STEPS = [
   { title: 'Moving the camera', text: 'Drag the map to pan and scroll or pinch to zoom. Zoom out far enough and people are hidden to keep things smooth. Press H, or the house button by the minimap, to return home.', to: ['.minimap'],
     enter: ({ app, mem }) => { const c = app.renderer.cam; mem.c = [c.x, c.y, c.zoom]; },
     done: ({ app, mem }) => { const c = app.renderer.cam; return Math.hypot(c.x - mem.c[0], c.y - mem.c[1]) > 40 || Math.abs(c.zoom - mem.c[2]) > 0.2; } },
-  { title: 'Your resources', text: 'The top bar shows what your tribe owns and how fast each stock is changing per day. Hover any item for production and use. Food is the sum of all edible goods. The last two numbers are population and happiness.', to: ['#tb-res'], next: true,
+  { title: 'Your resources', text: 'The top bar shows what your tribe owns and how fast each stock is changing per day. Hover any item for production and use. Food is the sum of all edible goods. After population come soldiers (manpower) and happiness: tap or click happiness to see exactly what is raising or lowering it.', to: ['#tb-res'], next: true,
     link: 'Resources come from buildings, buildings need workers, and workers are your population.' },
   { title: 'Time', text: 'The world is paused. Press play (or Space) to start time. The other buttons run it faster. Pause whenever you want to think; you can still build and open panels while paused.', to: ['.speed'],
     enter: ({ sim }) => sim.setSpeed(0), done: ({ g }) => g.speed > 0 },
@@ -72,6 +72,7 @@ export const STEPS = [
     link: 'Weak armies lower how rivals see you (Diplomacy), and soldiers cost upkeep paid from stocks and coins (Economy).' },
   { title: 'Stewards', text: 'Open Overview. Stewards are optional helpers that automate the workforce, housing, building, research and diplomacy, handy when your realm gets big. You always override them.', to: [rail('overview')], done: panel('overview') },
   { title: 'Saving and the Chronicle', text: 'The game autosaves, and Esc opens the menu to save, change settings or quit. The Chronicle panel records everything that happens, so check it when something surprising occurs.', to: [rail('chronicle')], next: true },
+  { title: 'Notices', text: 'The bell collects every dispatch that concerns you, with how many days ago it happened. Filter by diplomacy, trade, war, production or alerts, or search. Red entries need your attention. The pin button chooses what the top bar shows.', to: ['.bell'], next: true },
   { title: 'You are ready', text: 'That covers the main systems. This is now a normal sandbox run, so keep building, or exit to the menu and begin a new chronicle with a world of your own. You can replay this tutorial from the main menu any time.', next: true, last: true },
 ];
 

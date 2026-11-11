@@ -68,6 +68,8 @@ const DRAW = {
   stability: p => { p.hline(2, 2, 8, '#cfc8b8'); p.hline(1, 3, 10, '#a59d8b'); for (const x of [3, 6, 9]) p.vline(x, 4, 6, '#cfc8b8'); p.hline(1, 10, 10, '#a59d8b'); },
   heart: p => { p.map(1, 2, ['.aa..aa..', 'abbaabba.', 'abbbbbba.', '.abbbba..', '..abba...', '...aa....'], { a: '#8a1a24', b: '#e04a5a' }); },
   warning: p => { for (let y = 1; y < 11; y++) { const w = Math.round(y * 1.0); p.rect(6 - w / 2, y, w, 1, '#f2c84b'); } p.vline(6, 4, 4, O); p.px(6, 9, O); },
+  bell: p => { p.ellipse(6, 6, 3, 4, '#e0b850'); p.rect(2, 7, 9, 2, '#e0b850'); p.hline(2, 9, 9, '#a07a2a'); p.px(5, 4, '#f8e090'); p.px(6, 1, '#a07a2a'); p.rect(5, 10, 2, 1, O); },
+  pin: p => { p.ellipse(6, 4, 3, 3, '#e05a48'); p.px(5, 3, '#f8a090'); p.vline(6, 7, 4, '#c8c0b0'); p.px(6, 11, O); },
   house: p => { p.rect(2, 6, 8, 5, '#c9b48a'); for (let r = 0; r < 5; r++) p.hline(6 - r - 1, 1 + r, r * 2 + 2, '#8a5a32'); p.rect(5, 8, 2, 3, '#4a3020'); },
   crown: p => DRAW.government(p),
   sun: p => { p.ellipse(6, 6, 3, 3, '#f8d050'); for (const [x, y] of [[6, 0], [6, 12], [0, 6], [12, 6], [2, 2], [10, 10], [2, 10], [10, 2]]) p.px(x, y, '#f8d050'); },

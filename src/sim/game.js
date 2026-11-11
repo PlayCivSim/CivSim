@@ -141,9 +141,11 @@ export class Game {
   }
 
   // ---------------------------------------------------------------- helpers
-  log(tribe, type, text, importance = 1) {
+  // Records a timestamped event (see records.js). extra: { with, cat, alert }
+  log(tribe, type, text, importance = 1, extra) {
     this.logSeq = (this.logSeq || 0) + 1;
     const e = { tick: this.tick, day: this.day, tribe: tribe ? tribe.id : -1, type, text, imp: importance, seq: this.logSeq };
+    if (extra) { if (extra.with != null) e.with = extra.with; if (extra.cat) e.cat = extra.cat; if (extra.alert) e.alert = 1; }
     this.history.push(e);
     if (this.history.length > 1500) this.history.splice(0, this.history.length - 1500);
     this.bus.emit('log', e);
@@ -244,7 +246,8 @@ export class Game {
     for (const t of this.tribes) {
       if (!t.alive) continue;
       t.foodSat = dailyEconomy(this, t);
-      if (t.foodSat < 0.95 && t.isPlayer) this.bus.emit('shortage', { res: 'food', sat: t.foodSat });
+      if (t.foodSat < 0.95 && t.isPlayer) { if (!t._famine) this.log(t, 'population', `Famine: the ${t.name} have too little food.`, 1, { cat: 'production', alert: true }); this.bus.emit('shortage', { res: 'food', sat: t.foodSat }); }
+      t._famine = t.foodSat < 0.95;
       dailyDemographics(this, t);
       t.addResearchBase = 3 + (t.elders || 0) * 0.4 + t.stage;
       addResearch(this, t, t.addResearchBase * (1 + (t.mods.research || 0)));

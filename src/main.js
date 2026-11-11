@@ -47,6 +47,7 @@ class App {
   applySettings() {
     const s = this.settings;
     document.documentElement.style.setProperty('--ui', s.uiScale);
+    document.body.classList.toggle('cb', !!s.colorblind);
     Object.assign(this.renderer.settings, { particles: s.particles, animations: s.animations, territory: s.territory, quality: s.quality, lighting: s.lighting !== false });
     setVolumes(s);
     this.touch = s.inputMode === 'touch';
@@ -155,6 +156,7 @@ class App {
       const thumb = this.thumbnail();
       const json = await this.sim.call('serialize');
       await saveGame(this.game, slot, thumb, json);
+      this.lastSaved = Date.now(); this.lastSlot = slot === 'auto' ? 'autosave' : slot === 'quick' ? 'quicksave' : 'slot ' + slot.slice(1);
       if (!silent) { toast('Chronicle saved', `${this.game.runName} · ${slot === 'auto' ? 'Autosave' : slot === 'quick' ? 'Quicksave' : 'Slot ' + slot.slice(1)}`, { icon: 'save', ms: 2500 }); sfx('save'); }
     } catch (e) {
       console.error(e);

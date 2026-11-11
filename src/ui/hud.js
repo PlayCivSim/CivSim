@@ -19,6 +19,10 @@ import { sfx, setMusicMood } from '../audio/audio.js';
 import { openSettings } from './menu.js';
 import { SLOT_NAMES } from '../save/saves.js';
 import { techCost } from '../sim/progress.js';
+import { unread, openHappiness, manpower, manpowerTip, openHudCustomise, hudHidden } from './notices.js';
+import { isAlert } from '../sim/records.js';
+
+const SPEED_INFO = ['Paused: the world holds still, but you can still give orders', 'Normal: 1x speed', 'Fast: 3x speed', 'Very fast: 8x speed'];
 
 const TOP_RES = ['food', 'wood', 'stone', 'clay', 'iron', 'tools', 'coins', 'research'];
 const RAIL = [
@@ -51,20 +55,27 @@ export class Hud {
         <div class="tb-res" id="tb-res">${TOP_RES.map(k => `<div class="res" data-res="${k}">${ico(k === 'food' ? 'food' : k)}<div class="v-wrap"><span class="v num">0</span><span class="d num"></span></div></div>`).join('<div class="res-sep"></div>'.slice(0, 0))}
           <div class="res-sep"></div>
           <div class="res" data-res="pop">${ico('population')}<div class="v-wrap"><span class="v num">0</span><span class="d num"></span></div></div>
+          <div class="res" data-res="manpower">${ico('soldier')}<div class="v-wrap"><span class="v num">0</span><span class="d num"></span></div></div>
           <div class="res" data-res="happy">${ico('happy')}<div class="v-wrap"><span class="v num">0</span><span class="d num"></span></div></div>
         </div>
         <div class="tb-right">
           <div class="clock"><div class="dial"><canvas width="18" height="18"></canvas></div><div><div class="when" id="tb-when"></div><div class="yr" id="tb-year"></div></div></div>
-          <div class="speed">${['pause', 'play', 'fast', 'faster'].map((ic, i) => `<button class="btn icon sm" data-speed="${i}" data-tip="${SPEED_NAMES[i]} (${i === 0 ? 'Space' : i})">${ico(ic, 'sm')}</button>`).join('')}</div>
+          <div class="speed-wrap"><div class="speed">${['pause', 'play', 'fast', 'faster'].map((ic, i) => `<button class="btn icon sm" data-speed="${i}" data-tip="${esc(SPEED_INFO[i])} (${i === 0 ? 'Space' : i})">${ico(ic, 'sm')}</button>`).join('')}</div><div class="spd-label" id="tb-speed"></div></div>
+          <div class="save-ind" id="tb-save">${ico('save', 'sm')}<span></span></div>
+          <button class="btn icon sm bell" data-act="notices" data-tip="Notices (N)">${ico('bell', 'sm')}<span class="badge hidden"></span></button>
+          <button class="btn icon sm hc-btn" data-act="hud-pins" data-tip="Customise top bar">${ico('pin', 'sm')}</button>
           <button class="btn icon sm" data-act="esc" data-tip="Menu (Esc)">${ico('menu', 'sm')}</button>
         </div>
       </div>
       <div class="rail frame thin">${RAIL.map(([k, n, ic, key], i) => `${i === 1 || i === 4 || i === 8 ? '<div class="sep"></div>' : ''}<button class="btn rb" data-panel="${k}" data-tip="${n} (${key})">${ico(ic)}<span class="badge hidden"></span></button>`).join('')}</div>
+      <div class="alert-strip hidden" data-panel="overview"></div>
       <div id="panel-host"></div>
       <div class="minimap frame thin"><div class="mm-tools"><button class="btn icon xs" data-act="zoom-out" data-tip="Zoom out">${ico('minus', 'sm')}</button><button class="btn icon xs" data-act="zoom-in" data-tip="Zoom in">${ico('plus', 'sm')}</button><button class="btn icon xs" data-act="territory" data-tip="Toggle territory overlay">${ico('flag', 'sm')}</button><button class="btn icon xs" data-act="home" data-tip="Return to capital (H)">${ico('house', 'sm')}</button></div><canvas id="mm"></canvas></div>
       <div id="insp-host"></div>
       <div id="place-host"></div>`;
     this.bindResTips();
+    this.applyHudPins();
+    tip($('#tb-save', this.root), () => { const a = this.app; const ago = a.lastSaved ? Math.round((Date.now() - a.lastSaved) / 1000) : null; return `<div class="tt-title">${ico('save', 'sm')} Saving</div>${a.saving ? 'Saving now…' : ago == null ? 'Not saved yet this session.' : `Last saved ${ago < 60 ? ago + ' s' : Math.round(ago / 60) + ' min'} ago (${esc(a.lastSlot || 'auto')}).`}<div class="faint">${a.settings.autosaveMin ? `Autosaves every ${a.settings.autosaveMin} min.` : 'Autosave is off.'}</div>`; });
     this.root.onclick = e => this.onHudClick(e);
     this.root.addEventListener('mouseover', e => { if (e.target.closest('.btn')) sfx('hover'); });
     const mm = $('#mm', this.root);
@@ -103,9 +114,29 @@ export class Hud {
     on('campaign', ({ tribe, target }) => { if (target.tribe === P) { sfx('war'); toast('Invasion!', `A ${tribe.name} army marches on ${target.name}!`, { icon: 'military', kind: 'bad', ms: 8000, onClick: () => this.renderer.flyTo(target.x, target.y, 3) }); } });
     on('sfx', ({ k, x, y }) => { const r = this.renderer; if (!r.view) return; const X = x * TILE, Y = y * TILE; if (X < r.view.x0 || X > r.view.x1 || Y < r.view.y0 || Y > r.view.y1 || r.cam.zoom < 2.5) return; sfx(k, { vol: Math.min(1, r.cam.zoom / 6) * 0.6, pan: Math.max(-1, Math.min(1, (X - r.cam.x) / ((r.view.x1 - r.view.x0) / 2))) }); });
     on('placed', ({ tribe }) => { if (tribe.id === P) sfx('place'); });
+    on('log', e => { if (isAlert(e, P)) $('.bell', this.root)?.classList.add('ring'); this.updateBell(); });
     on('depleted', ({ tribe, res }) => { if (tribe.id === P && performance.now() - (this.state['dep' + res] || 0) > 60000) { this.state['dep' + res] = performance.now(); toast('Deposit exhausted', `A ${RESOURCES[res].name} deposit has run dry.`, { icon: res }); } });
   }
 
+  updateBell() {
+    const g = this.game; if (!g) return;
+    const b = $('.bell', this.root); if (!b) return;
+    const u = this.panel === 'notices' ? { n: 0, alerts: 0 } : unread(g);
+    const bd = $('.badge', b); bd.textContent = u.n > 99 ? '99+' : u.n; bd.classList.toggle('hidden', !u.n); bd.classList.toggle('calm', !u.alerts);
+    if (!u.alerts) b.classList.remove('ring');
+  }
+  updateSaveInd() {
+    const el = $('#tb-save', this.root); if (!el) return; const a = this.app;
+    const m = a.lastSaved ? Math.floor((Date.now() - a.lastSaved) / 60000) : null;
+    const txt = a.saving ? '…' : m == null ? '—' : m < 1 ? 'now' : m + 'm';
+    const sp = $('span', el); if (sp.textContent !== txt) sp.textContent = txt;
+    el.classList.toggle('saving', !!a.saving);
+  }
+  applyHudPins() {
+    const hid = hudHidden(this.app.settings);
+    for (const el of $$('.res', this.root)) el.classList.toggle('unpinned', hid.has(el.dataset.res));
+    $('.alert-strip', this.root)?.classList.toggle('unpinned', hid.has('alerts'));
+  }
   badge(panel, n) { const b = $(`.rail [data-panel="${panel}"] .badge`, this.root); if (!b) return; b.textContent = n; b.classList.toggle('hidden', !n); }
 
   // ---------------------------------------------------------------- update
@@ -120,6 +151,9 @@ export class Hud {
     $('#tb-when', this.root).textContent = g.seasonName;
     $('#tb-year', this.root).textContent = `Year ${g.year} · Day ${g.day % DAYS_PER_YEAR + 1}`;
     $$('[data-speed]', this.root).forEach(b => b.classList.toggle('on', +b.dataset.speed === g.speed));
+    const sl = $('#tb-speed', this.root); const sTxt = g.speed === 0 ? 'Paused' : `${SPEED_NAMES[g.speed]} ×${SPEEDS[g.speed]}`;
+    if (sl.textContent !== sTxt) { sl.textContent = sTxt; sl.classList.toggle('paused', g.speed === 0); this.root.classList.toggle('paused', g.speed === 0); }
+    this.updateSaveInd();
     const vals = this.resValues();
     for (const [k, v] of Object.entries(vals)) {
       const el = $(`[data-res="${k}"]`, this.root); if (!el) continue;
@@ -144,7 +178,11 @@ export class Hud {
     if (this.selected) this.renderInspector();
     if (this.placing) this.updatePlaceHint();
     this.badge('diplomacy', g.pendingProposals.filter(p => p.to === g.playerId).length);
-    const warn = this.warnings().filter(w => w.bad).length; this.badge('overview', warn);
+    const bad = this.warnings().filter(w => w.bad); this.badge('overview', bad.length);
+    const strip = $('.alert-strip', this.root);
+    const sh = bad.length ? `${ico('warning', 'sm')}<span>${esc(bad[0].text)}</span>${bad.length > 1 ? `<small>+${bad.length - 1} more</small>` : ''}` : '';
+    if (strip._h !== sh) { strip._h = sh; strip.innerHTML = sh; strip.classList.toggle('hidden', !bad.length); }
+    this.updateBell();
     refreshTip();
   }
 
@@ -158,7 +196,7 @@ export class Hud {
       iron: { v: s.iron || 0, d: r.iron, hide: !t.techs.includes('mining') }, tools: { v: s.tools || 0, d: r.tools },
       coins: { v: s.coins || 0, d: r.coins, hide: !t.techs.includes('currency') && !(s.coins > 0) },
       research: { v: t.research.progress, d: t.researchRate || null },
-      pop: { v: t.pop, d: null }, happy: { v: t.happiness, d: null, short: t.happiness < 35 },
+      pop: { v: t.pop, d: null }, manpower: { v: t.jobCounts?.soldier || 0, d: null, short: manpower(t).share > 0.25 }, happy: { v: t.happiness, d: null, short: t.happiness < 35 },
     };
   }
 
@@ -172,13 +210,14 @@ export class Hud {
           return `<div class="tt-title">${ico('food', 'sm')} Food</div>${FOOD_KEYS.map(f => `<div class="tt-row"><span>${ico(f, 'sm')} ${RESOURCES[f].name}</span><span class="num">${fmt(t.stock[f] || 0)} <span class="${(t.rates[f] || 0) >= 0 ? 'good' : 'bad'}">${sign(t.rates[f] || 0)}</span></span></div>`).join('')}
             <div class="divider"></div><div class="tt-row"><span>Eaten per day</span><span class="num">${fmt(need, 1)}</span></div><div class="tt-row"><span>Days of reserve</span><span class="num">${fmt(foodTotal(t) / Math.max(1, need), 1)}</span></div><div class="tt-row"><span>Spoiled yesterday</span><span class="num">${fmt(L?.spoiled || 0, 1)}</span></div>`;
         }
+        if (k === 'manpower') return manpowerTip(t);
         if (k === 'pop') return `<div class="tt-title">${ico('population', 'sm')} Population</div><div class="tt-row"><span>Adults</span><span>${t.adults}</span></div><div class="tt-row"><span>Children</span><span>${t.children}</span></div><div class="tt-row"><span>Elders</span><span>${t.elders}</span></div><div class="tt-row"><span>Housing</span><span>${t.pop} / ${t.housing}</span></div><div class="tt-row"><span>Homeless</span><span class="${t.homeless ? 'bad' : ''}">${t.homeless}</span></div>`;
         if (k === 'happy') return `<div class="tt-title">${ico('happy', 'sm')} Happiness ${Math.round(t.happiness)}%</div>${Object.entries(t.happyParts || {}).filter(([n]) => n !== 'base').map(([n, v]) => `<div class="tt-row"><span>${cap(n)}</span><span class="${v >= 0 ? 'good' : 'bad'}">${sign(v)}</span></div>`).join('')}<div class="divider"></div><div class="tt-row"><span>Stability</span><span>${Math.round(t.stability)}</span></div><div class="tt-row"><span>Productivity</span><span>${Math.round(t.productivity * 100)}%</span></div>`;
         if (k === 'research') { const c = t.research.current; return `<div class="tt-title">${ico('research', 'sm')} Research</div>${c ? `<div>${TECH[c].name}: ${fmt(t.research.progress)} / ${techCost(t, c)}</div>` : '<div class="warn">No research selected</div>'}<div class="tt-row"><span>Research per day</span><span class="good">${fmt(t.researchRate || 0, 1)}</span></div>`; }
         const res = RESOURCES[k];
         return `<div class="tt-title">${ico(k, 'sm')} ${res.name}</div><div class="tt-row"><span>Stock</span><span class="num">${fmt(t.stock[k] || 0)} / ${k === 'coins' ? 'no limit' : fmt(t._cap || 0)}</span></div><div class="tt-row"><span>Change per day</span><span class="${(t.rates[k] || 0) >= 0 ? 'good' : 'bad'}">${sign(t.rates[k] || 0)}</span></div><div class="tt-row"><span>Produced yesterday</span><span>${fmt(t.lastLedger?.prod[k] || 0, 1)}</span></div><div class="tt-row"><span>Used yesterday</span><span>${fmt(t.lastLedger?.cons[k] || 0, 1)}</span></div>`;
       });
-      el.onclick = () => this.openPanel(k === 'pop' || k === 'happy' ? 'population' : k === 'research' ? 'technology' : 'economy');
+      el.onclick = () => { if (k === 'happy') { sfx('click'); openHappiness(this); return; } this.openPanel(k === 'pop' ? 'population' : k === 'manpower' ? 'military' : k === 'research' ? 'technology' : 'economy'); };
     }
   }
 
@@ -220,6 +259,8 @@ export class Hud {
     this.panel = key; this.panelState = this.panelState || {};
     sfx('open');
     $$('.rail .rb', this.root).forEach(b => b.classList.toggle('on', b.dataset.panel === key));
+    if (key === 'notices') this.panelState.nSeenAtOpen = null;
+    $('.bell', this.root)?.classList.toggle('on', key === 'notices');
     const P = PANELS[key];
     const host = $('#panel-host', this.root);
     host.innerHTML = '';
@@ -239,6 +280,7 @@ export class Hud {
     sfx('close');
     this.panel = null; $('#panel-host', this.root).innerHTML = ''; this.root.classList.remove('full-open');
     $$('.rail .rb', this.root).forEach(b => b.classList.remove('on'));
+    $('.bell', this.root)?.classList.remove('on'); this.updateBell();
     $('#insp-host .inspector', this.root)?.classList.remove('shifted');
     this.cancelPlacing();
   }
@@ -272,6 +314,8 @@ export class Hud {
     if (b.dataset.panel) this.openPanel(b.dataset.panel);
     else if (b.dataset.speed) this.setSpeed(+b.dataset.speed);
     else if (b.dataset.act === 'esc') this.escMenu();
+    else if (b.dataset.act === 'notices') this.openPanel('notices');
+    else if (b.dataset.act === 'hud-pins') openHudCustomise(this);
     else if (b.dataset.act === 'territory') { this.app.settings.territory = !this.app.settings.territory; this.app.applySettings(); }
     else if (b.dataset.act === 'home') this.goHome();
     else if (b.dataset.act === 'zoom-in' || b.dataset.act === 'zoom-out') { const c = this.renderer.cam; c.tz = Math.max(this.renderer.minZoom(), Math.min(9, c.tz * (b.dataset.act === 'zoom-in' ? 1.5 : 1 / 1.5))); }
@@ -450,7 +494,7 @@ export class Hud {
     if (k === '1' || k === '2' || k === '3') { this.setSpeed(+k); return; }
     if (k === 'F5') { e.preventDefault(); this.app.save('quick'); return; }
     if (/^F[1-9]$/.test(k)) { e.preventDefault(); this.openPanel(RAIL[+k.slice(1) - 1][0]); return; }
-    const map = { b: 'build', p: 'population', o: 'economy', t: 'technology', g: 'diplomacy', l: 'government', m: 'military', c: 'chronicle' };
+    const map = { n: 'notices', b: 'build', p: 'population', o: 'economy', t: 'technology', g: 'diplomacy', l: 'government', m: 'military', c: 'chronicle' };
     if (map[k.toLowerCase()] && !e.ctrlKey) { this.openPanel(map[k.toLowerCase()]); return; }
     if (k.toLowerCase() === 'h') this.goHome();
   }
@@ -463,11 +507,13 @@ export class Hud {
       <div class="caps" style="color:var(--gold);margin-top:6px">Save to slot</div>
       <div class="seg">${['quick', 's1', 's2', 's3'].map(s => `<button class="btn sm" data-v="save:${s}">${ico('save', 'sm')} ${SLOT_NAMES[s].replace('Slot ', '')}</button>`).join('')}</div>
       <button class="btn" data-v="settings">${ico('menu')} Settings</button>
+      <button class="btn" data-v="pins">${ico('pin')} Customise top bar</button>
       <button class="btn" data-v="exit">${ico('house')} Save & exit to menu</button></div>`,
     { onMount: m => m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { sfx('click'); closeModal(b.dataset.v); }) });
     this.sim.setSpeed(prev);
     if (r?.startsWith('save:')) this.app.save(r.slice(5));
     else if (r === 'settings') openSettings(this.app, () => {});
+    else if (r === 'pins') openHudCustomise(this);
     else if (r === 'exit') this.app.exitToMenu();
   }
 
