@@ -2,8 +2,13 @@
 // crickets, settlement murmur), generative music and synthesised effects.
 // Separate buses for music, effects and ambience; nothing loops audibly.
 
-let ctx = null, master, musicBus, sfxBus, ambBus, reverb;
-const vol = { master: 0.8, music: 0.5, sfx: 0.7, ambience: 0.6 };
+let ctx = null, master, musicBus, sfxBus, ambBus, uiBus, reverb, limiter;
+const vol = { master: 0.8, music: 0.5, sfx: 0.7, ambience: 0.6, ui: 0.6 };
+// minimum gap (ms) between repeats of the same cue; unlisted cues use 60ms
+const COOLDOWN = { hover: 70, click: 50, open: 120, close: 120, place: 150, built: 700, tech: 1500, stage: 3000, diplomacy: 900, war: 3500, event: 900, bad: 1500, coin: 300, save: 1000, error: 250, chop: 140, hammer: 160, clash: 110 };
+const UI_CUES = new Set(['hover', 'click', 'open', 'close', 'error']);
+const MAX_VOICES = 10;
+let voices = [];
 let started = false;
 let amb = null;
 let musicTimer = null, musicMood = 'menu';
@@ -17,6 +22,7 @@ export function setVolumes(v) {
   musicBus.gain.setTargetAtTime(vol.music * 0.5, t, 0.1);
   sfxBus.gain.setTargetAtTime(vol.sfx * 0.7, t, 0.1);
   ambBus.gain.setTargetAtTime(vol.ambience * 0.6, t, 0.1);
+  uiBus.gain.setTargetAtTime(vol.ui * 0.7, t, 0.1);
 }
 
 export function initAudio() {
@@ -25,8 +31,12 @@ export function initAudio() {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
   } catch { return; }
   started = true;
-  master = ctx.createGain(); master.connect(ctx.destination);
-  musicBus = ctx.createGain(); sfxBus = ctx.createGain(); ambBus = ctx.createGain();
+  // master -> limiter -> speakers, so stacked cues never clip
+  limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -10; limiter.knee.value = 6; limiter.ratio.value = 12; limiter.attack.value = 0.003; limiter.release.value = 0.25;
+  master = ctx.createGain(); master.connect(limiter); limiter.connect(ctx.destination);
+  musicBus = ctx.createGain(); sfxBus = ctx.createGain(); ambBus = ctx.createGain(); uiBus = ctx.createGain(); uiBus.connect(master);
+  document.addEventListener('visibilitychange', () => { if (!ctx) return; if (document.hidden) ctx.suspend(); else ctx.resume(); });
   reverb = ctx.createConvolver(); reverb.buffer = impulse(2.6);
   const revGain = ctx.createGain(); revGain.gain.value = 0.35; reverb.connect(revGain); revGain.connect(master);
   for (const b of [musicBus, sfxBus, ambBus]) b.connect(master);
@@ -148,21 +158,23 @@ function pad(f, dur, v) {
   o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(musicBus);
   o.start(t); o2.start(t); o.stop(t + dur + 0.1); o2.stop(t + dur + 0.1);
 }
-function drum(t, v) {
+function drum(t, v, bus = musicBus) {
   const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine';
   o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.25);
   g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
-  o.connect(g); g.connect(musicBus); o.start(t); o.stop(t + 0.4);
+  o.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.4);
 }
 
 // ---------------------------------------------------------------- effects
+let target = null; // bus for the cue being built
 function env(node, t, a, peak, d) { node.gain.setValueAtTime(0.0001, t); node.gain.linearRampToValueAtTime(peak, t + a); node.gain.exponentialRampToValueAtTime(0.0001, t + a + d); }
 function tone(type, f, f2, dur, v, delay = 0, pan = 0) {
   const t = ctx.currentTime + delay; const o = ctx.createOscillator(), g = ctx.createGain();
   o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
   env(g, t, 0.005, v, dur);
-  if (pan) { const p = ctx.createStereoPanner(); p.pan.value = pan; o.connect(g); g.connect(p); p.connect(sfxBus); }
-  else { o.connect(g); g.connect(sfxBus); }
+  const out = target || sfxBus;
+  if (pan) { const p = ctx.createStereoPanner(); p.pan.value = pan; o.connect(g); g.connect(p); p.connect(out); }
+  else { o.connect(g); g.connect(out); }
   o.start(t); o.stop(t + dur + 0.05);
 }
 function noise(dur, freq, q, v, delay = 0, type = 'bandpass', pan = 0) {
@@ -170,15 +182,19 @@ function noise(dur, freq, q, v, delay = 0, type = 'bandpass', pan = 0) {
   const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
   const g = ctx.createGain(); env(g, t, 0.004, v, dur);
   const p = ctx.createStereoPanner(); p.pan.value = pan;
-  s.connect(f); f.connect(g); g.connect(p); p.connect(sfxBus); s.start(t); s.stop(t + dur + 0.05);
+  s.connect(f); f.connect(g); g.connect(p); p.connect(target || sfxBus); s.start(t); s.stop(t + dur + 0.05);
 }
 
 export function sfx(kind, opts = {}) {
-  if (!ctx) return;
+  if (!ctx || ctx.state !== 'running') return;
   const now = performance.now();
-  const minGap = { hover: 40, chop: 120, hammer: 140, clash: 90 }[kind] || 30;
-  if (now - (lastPlayed.get(kind) || 0) < minGap) return;
+  if (now - (lastPlayed.get(kind) || 0) < (COOLDOWN[kind] ?? 60)) return;
+  // cap simultaneous cues; ambient work sounds give way first
+  voices = voices.filter(t => now - t < 250);
+  if (voices.length >= MAX_VOICES || (['chop', 'hammer', 'clash'].includes(kind) && voices.length >= MAX_VOICES / 2)) return;
+  voices.push(now);
   lastPlayed.set(kind, now);
+  target = UI_CUES.has(kind) ? uiBus : sfxBus;
   const v = opts.vol ?? 1, pan = opts.pan || 0;
   switch (kind) {
     case 'hover': tone('square', 1800, 0, 0.02, 0.012 * v); break;
@@ -190,7 +206,7 @@ export function sfx(kind, opts = {}) {
     case 'tech': [523, 659, 784, 1046, 1318].forEach((f, i) => tone('triangle', f, 0, 0.6, 0.05 * v, i * 0.09)); noise(0.6, 6000, 2, 0.02 * v, 0.1, 'highpass'); break;
     case 'stage': [392, 523, 659, 784, 1046].forEach((f, i) => { tone('sawtooth', f, 0, 0.9, 0.025 * v, i * 0.12); tone('triangle', f / 2, 0, 1.2, 0.04 * v, i * 0.12); }); break;
     case 'diplomacy': tone('sawtooth', 294, 0, 0.5, 0.04 * v); tone('sawtooth', 440, 0, 0.6, 0.035 * v, 0.18); break;
-    case 'war': drum(ctx.currentTime, 0.4 * v); drum(ctx.currentTime + 0.3, 0.35 * v); tone('sawtooth', 147, 110, 0.9, 0.05 * v, 0.1); break;
+    case 'war': drum(ctx.currentTime, 0.28 * v, target); drum(ctx.currentTime + 0.3, 0.24 * v, target); tone('sawtooth', 147, 110, 0.9, 0.05 * v, 0.1); break;
     case 'event': tone('sine', 880, 0, 1.2, 0.05 * v); tone('sine', 1318, 0, 1.4, 0.03 * v, 0.02); break;
     case 'bad': tone('triangle', 330, 220, 0.5, 0.06 * v); tone('triangle', 311, 207, 0.6, 0.04 * v, 0.12); break;
     case 'coin': tone('square', 1568, 0, 0.06, 0.03 * v); tone('square', 2093, 0, 0.12, 0.03 * v, 0.06); break;

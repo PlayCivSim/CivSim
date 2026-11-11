@@ -6,6 +6,10 @@ import { militaryStrength } from './military.js';
 import { doorTile, centreOf } from './buildings.js';
 import { DAY_TICKS } from '../core/constants.js';
 
+export const WAR_THRESHOLD = 22;
+const fortValue = (g, t) => { let v = 0; for (const b of g.buildings.values()) if (b.tribe === t.id && b.built && (b.type === 'tower' || b.type === 'fort')) v += b.type === 'fort' ? 6 : 1.5; return v * (1 + (t.mods?.defense || 0)); };
+const stockWorth = t => { let v = 0; for (const [k, a] of Object.entries(t.stock)) v += (RESOURCES[k]?.value || 1) * a; return v; };
+
 const COMPAT = {
   'oruvai-thalori': 10, 'oruvai-vaelith': 5, 'kharvak-oruvai': -6, 'kharvak-thalori': -4, 'kharvak-vaelith': -8, 'thalori-vaelith': 0,
 };
@@ -84,6 +88,12 @@ export class Diplomacy {
     for (const type of ['nap', 'alliance', 'trade']) if (this.has(type, a, b)) this.cancel(type, a, b, a, type !== 'trade');
     this.treaties = this.treaties.filter(t => !(t.type === 'tribute' && ((t.a === a && t.b === b) || (t.a === b && t.b === a))));
     this.wars.push({ a, b, start: g.tick, score: { [a]: 0, [b]: 0 }, reason });
+    // aggression has diplomatic consequences: unprovoked wars alarm everyone
+    const provoked = (this.casusBelli?.[a * 8 + b] || 0) > g.tick || this.opinion(a, b) < -40 || /alliance/.test(reason);
+    if (!provoked) {
+      this.reputation[a] -= 4;
+      for (const o of g.tribes) if (o.alive && o.id !== a && o.id !== b) this.addMod(o.id, a, 'warmonger', -6, { label: 'Wages unprovoked wars', decay: 0.15, min: -24 });
+    }
     this.addMod(b, a, 'war', -40, { label: 'At war with us', decay: 0.3, min: -60 });
     this.addMod(a, b, 'war', -20, { label: 'At war with us', decay: 0.3, min: -60 });
     ta.atWar = tb.atWar = true;
@@ -103,6 +113,7 @@ export class Diplomacy {
     const w = this.war(a, b); if (!w) return;
     const g = this.game, ta = g.tribes[a], tb = g.tribes[b];
     this.wars = this.wars.filter(x => x !== w);
+    if (this.peaceOffers) { this.peaceOffers[a * 8 + b] = 0; this.peaceOffers[b * 8 + a] = 0; }
     for (const ar of g.armies) if ((ar.tribe === a && ar.enemy === b) || (ar.tribe === b && ar.enemy === a)) ar.state = 'return';
     this.addMod(a, b, 'peace', 8, { label: 'Made peace', decay: 0.3 });
     this.addMod(b, a, 'peace', 8, { label: 'Made peace', decay: 0.3 });
@@ -151,6 +162,12 @@ export class Diplomacy {
       const ratio = (tb.strength + 1) / (ta.strength + 1);
       if (ratio > 1.8 && tb.def.ai.aggression > 0.5 && border > 0) this.addMod(a, b, 'fear', -0.3, { label: 'Fears our military', decay: 0.2, min: -12 });
       if (this.atWar(a, b)) this.addMod(a, b, 'war', -0.2, { label: 'At war with us', decay: 0.3, min: -60 });
+    }
+    // ignored ultimatums count as refusals
+    for (const pr of g.pendingProposals.slice()) if (pr.p.ultimatum && pr.expires && g.tick > pr.expires) {
+      g.pendingProposals = g.pendingProposals.filter(x => x !== pr);
+      this.onTributeRefused(pr.from, pr.to, pr.p);
+      g.log(g.tribes[pr.to], 'diplomacy', `The ${g.tribes[pr.to].name} ignored the ${g.tribes[pr.from].name} ultimatum.`, 2);
     }
     // tribute payments and treaty expiry
     for (const t of this.treaties.slice()) {
@@ -229,6 +246,7 @@ export class Diplomacy {
       }
       case 'tribute': {
         add(-40, 'Pride');
+        if (p.ultimatum) add(rs > 1.6 ? 25 : 0, 'Fears the threatened war');
         add((rs - 1) * 35, rs > 1 ? 'Fears your army' : 'Does not fear you');
         add(-ai.aggression * 15, 'Defiant temperament');
         if (this.atWar(from, to)) add(-30, 'At war');
@@ -275,6 +293,125 @@ export class Diplomacy {
     return ev;
   }
 
+  // ---------------------------------------------------------------- war calculus
+  setRisk(a, b, v) {
+    this.warRisk = this.warRisk || Array.from({ length: this.game.tribes.length }, () => Array(this.game.tribes.length).fill(0));
+    const prev = this.warRisk[a][b]; this.warRisk[a][b] = v;
+    const g = this.game, other = g.tribes[b];
+    // warn the player as hostility builds (never more than every few days)
+    if (other.isPlayer && v > WAR_THRESHOLD - 18 && prev <= WAR_THRESHOLD - 18) {
+      this.lastWarn = this.lastWarn || {};
+      if (g.tick - (this.lastWarn[a] || -1e9) > DAY_TICKS * 3) {
+        this.lastWarn[a] = g.tick;
+        g.bus.emit('tension', { from: a, level: v > WAR_THRESHOLD ? 'high' : 'rising', reason: this.assessWar(g.tribes[a], other).reason });
+      }
+    }
+  }
+
+  // Weighs expected gains against expected losses, diplomatic fallout and
+  // strategic distractions, filtered through personality.
+  assessWar(tribe, other) {
+    const g = this.game, ai = tribe.def.ai, a = tribe.id, b = other.id;
+    const op = this.opinion(a, b);
+    const allies = this.allies(b).filter(x => !this.atWar(x, a) && x !== a);
+    const theirPower = other.strength + 1 + allies.reduce((s, x) => s + g.tribes[x].strength * 0.6 * g.tribes[x].def.ai.loyalty, 0) + fortValue(g, other);
+    const myPower = tribe.strength + 1;
+    const rs = myPower / theirPower;
+    const border = sharedBorder(g, a, b);
+    // gains: plunder, weakly held towns, and land holding resources we lack
+    const loot = Math.min(25, Math.sqrt(stockWorth(other)) * 0.25);
+    const towns = other.settlements.filter(sid => !g.settlements.get(sid)?.capital).length;
+    const wanted = Object.keys(tribe.plan?.bottlenecks || {}).filter(r => (other.stock[r] || 0) > 100).length;
+    const gain = loot + towns * 6 * Math.min(1.5, rs) + wanted * 8 + (border > 0 ? Math.min(10, border * 0.08) : 0);
+    // costs: soldiers lost, trade lost, reputation with onlookers, weariness
+    const losses = Math.min(40, 18 / Math.max(0.3, rs));
+    const tradeLoss = this.has('trade', a, b) ? 10 * ai.trade : 0;
+    const onlookers = g.tribes.filter(o => o.alive && o !== tribe && o !== other && this.opinion(o.id, b) > 25).length * 5;
+    const treaty = (this.has('nap', a, b) ? 30 * ai.loyalty + 10 : 0) + (this.has('alliance', a, b) ? 60 : 0);
+    const distraction = (this.enemies(a).length ? 25 : 0) + g.tribes.filter(o => o.alive && o !== tribe && o !== other && this.atWar(o.id, a) === false && this.opinion(o.id, a) < -30 && o.strength > tribe.strength).length * 10;
+    const economy = (tribe.foodSat < 0.95 ? 20 : 0) + (tribe.strategy && tribe.strategy !== 'balanced' ? 8 : 0);
+    let desire = ai.aggression * 28 + gain * (0.5 + ai.aggression) - losses * (0.6 + ai.caution) - tradeLoss - onlookers - treaty - distraction - economy - op * 0.5;
+    if (op > -10 && ai.aggression < 0.6) desire -= 20;            // peaceful peoples need a grievance
+    if (this.enemies(b).length) desire -= 18 * (1 - ai.aggression); // reluctant to dog-pile
+    if ((tribe.jobCounts?.soldier || 0) < 5) desire -= 30;
+    if (rs < 1.25) desire -= 25;                                     // recognise weakness
+    // early-game protection: young peoples are left to grow
+    const grace = other.isPlayer ? { gentle: 55, balanced: 40, harsh: 28 }[g.difficulty] ?? 40 : 30;
+    if (g.day < grace || other.stage < 2 || tribe.stage < 2) desire -= 70;
+    if (other.isPlayer) desire += g.difficultyDef.aiBonus * 25;
+    if (this.treaties.some(x => x.type === 'tribute' && x.payer === b && (x.a === a || x.b === a))) desire -= 40; // they already pay
+    const reason = wanted ? 'to seize resources they cannot do without' : border > 15 ? 'over disputed borderlands' : towns && rs > 1.5 ? 'to take weakly held towns' : warReason(tribe, other, border);
+    return { desire, gain, losses, rs, reason };
+  }
+
+  issueUltimatum(tribe, other, A) {
+    const g = this.game, a = tribe.id, b = other.id;
+    this.ultimatumAt = this.ultimatumAt || {}; this.casusBelli = this.casusBelli || {};
+    this.ultimatumAt[a * 8 + b] = g.tick; this.lastProposal[a][b] = g.tick;
+    const p = { type: 'tribute', ultimatum: true, reason: A.reason };
+    g.log(tribe, 'diplomacy', `The ${tribe.name} issued an ultimatum to the ${other.name}: pay tribute or face war.`, other.isPlayer ? 2 : 1);
+    if (other.isPlayer) {
+      g.pendingProposals.push({ from: a, to: b, p, tick: g.tick, expires: g.tick + DAY_TICKS * 1.5 });
+      g.bus.emit('proposal', { from: a, to: b, p });
+      return;
+    }
+    const r = this.propose(a, b, p);
+    if (!r.accept) this.onTributeRefused(a, b, p);
+  }
+  onTributeRefused(a, b, p) {
+    this.casusBelli = this.casusBelli || {};
+    this.addMod(a, b, 'defiance', -8, { label: 'Defied our demands', decay: 0.3 });
+    if (p?.ultimatum) this.casusBelli[a * 8 + b] = this.game.tick + DAY_TICKS * 6;
+  }
+
+  // ---------------------------------------------------------------- envoy
+  // The player's optional diplomatic steward. Configurable, never declares
+  // war, never cancels treaties, and stays clear of anything the player has
+  // personally refused or ended recently.
+  envoyThink(t) {
+    const g = this.game, cfg = { answer: true, trade: true, peace: true, alliances: true, appease: true, gifts: true, ...(t.envoy || {}) };
+    const blocked = (o, type) => (t.envoyBlock?.[o + ':' + type] || 0) > g.tick;
+    const outcome = [];
+    // 1. answer envoys waiting on us
+    if (cfg.answer) for (const pr of g.pendingProposals.filter(p => p.to === t.id)) {
+      const from = g.tribes[pr.from];
+      let yes;
+      if (pr.p.type === 'tribute') {
+        const rs = (t.strength + 1) / (from.strength + 1);
+        yes = cfg.appease && pr.p.ultimatum && rs < 0.8 && !this.enemies(t.id).length;
+      } else if (pr.p.type === 'peace') yes = cfg.peace && pr.p.terms !== 'tribute_b' || (cfg.appease && (t.warWeariness || 0) > 40);
+      else if (pr.p.type === 'alliance') yes = cfg.alliances && this.opinion(t.id, pr.from) > 0;
+      else yes = this.evaluate(pr.from, t.id, pr.p).score > -10;
+      g.pendingProposals = g.pendingProposals.filter(x => x !== pr);
+      if (yes) { acceptProposalLocal(g, pr); outcome.push(`accepted the ${from.name} ${pr.p.type}`); }
+      else { this.addMod(pr.from, t.id, 'rebuffed', -2, { label: 'Rebuffed our envoys', decay: 0.4 }); if (pr.p.type === 'tribute') this.onTributeRefused(pr.from, t.id, pr.p); outcome.push(`declined the ${from.name} ${pr.p.type}`); }
+    }
+    // 2. seek peace, pacts, trade and goodwill
+    for (const o of g.tribes) {
+      if (o === t || !o.alive || !this.contact[t.id][o.id]) continue;
+      if (g.tick - this.lastProposal[t.id][o.id] < DAY_TICKS * 2) continue;
+      const tryP = (p, label) => { if (blocked(o.id, p.type)) return false; this.lastProposal[t.id][o.id] = g.tick; const r = this.propose(t.id, o.id, p); outcome.push(`${label} with the ${o.name}: ${r.accept ? 'agreed' : 'refused'}`); return true; };
+      if (this.atWar(t.id, o.id)) {
+        if (cfg.peace) { const w = this.war(t.id, o.id); const losing = (w.score[o.id] || 0) - (w.score[t.id] || 0) > 20; tryP({ type: 'peace', terms: losing && cfg.appease ? 'tribute_a' : 'white' }, 'proposed peace'); }
+        continue;
+      }
+      const risk = this.warRisk?.[o.id]?.[t.id] || -99;
+      if (cfg.gifts && risk > WAR_THRESHOLD - 15) {
+        const res = Object.entries(t.stock).filter(([k, v]) => RESOURCES[k] && k !== 'coins' && v > 120).sort((x, y) => y[1] - x[1])[0];
+        if (res && !blocked(o.id, 'gift')) { tryP({ type: 'gift', res: res[0], amt: 30 }, 'sent a gift to calm tensions'); continue; }
+      }
+      if (cfg.alliances && !this.has('nap', t.id, o.id) && !this.has('alliance', t.id, o.id) && sharedBorder(g, t.id, o.id) > 0 && tryP({ type: 'nap' }, 'proposed a non-aggression pact')) continue;
+      if (cfg.trade && !this.has('trade', t.id, o.id) && t.techs.includes('barter') && o.techs.includes('barter') && tryP({ type: 'trade' }, 'proposed trade')) continue;
+      if (cfg.alliances && !this.has('alliance', t.id, o.id) && this.opinion(o.id, t.id) > 30 && tryP({ type: 'alliance' }, 'proposed an alliance')) continue;
+      // keep existing agreements healthy
+      if (cfg.gifts && (this.has('trade', t.id, o.id) || this.has('alliance', t.id, o.id)) && this.opinion(o.id, t.id) < 5) {
+        const res = Object.entries(t.stock).filter(([k, v]) => RESOURCES[k] && k !== 'coins' && v > 150).sort((x, y) => y[1] - x[1])[0];
+        if (res) tryP({ type: 'gift', res: res[0], amt: 20 }, 'sent a gift to keep our agreement');
+      }
+    }
+    if (outcome.length) { t.envoyLog = [...outcome.map(text => ({ tick: g.tick, text })), ...(t.envoyLog || [])].slice(0, 12); g.bus.emit('envoy', { lines: outcome }); }
+  }
+
   // ---------------------------------------------------------------- AI
   aiThink(tribe, opts = {}) {
     const g = this.game, ai = tribe.def.ai, rng = g.rng;
@@ -299,24 +436,31 @@ export class Diplomacy {
         const wantPeace = (tribe.warWeariness || 0) * 0.5 + (theirS - myS) * 0.6 - ai.aggression * 20 + (rs < 0.8 ? 15 : 0) + days;
         // a clear victor dictates terms once the point is made
         const victor = myS - theirS > 40 && days > 5;
-        if ((wantPeace > 25 || victor) && canPropose) send({ type: 'peace', terms: theirS - myS > 25 ? 'tribute_a' : myS - theirS > 25 ? 'tribute_b' : 'white' });
+        if ((wantPeace > 25 || victor) && canPropose) {
+          this.peaceOffers = this.peaceOffers || {};
+          const k = a * 8 + b; this.peaceOffers[k] = (this.peaceOffers[k] || 0) + 1;
+          // war aims met and terms ignored twice: withdraw rather than raid on and on
+          if (victor && this.peaceOffers[k] > 2 && days > 10) {
+            this.peaceOffers[k] = 0;
+            g.log(tribe, 'war', `The ${tribe.name}, their war aims achieved, withdrew from the war with the ${other.name}.`, 2);
+            this.makePeace(a, b, 'white');
+            continue;
+          }
+          send({ type: 'peace', terms: theirS - myS > 25 ? 'tribute_a' : myS - theirS > 25 ? 'tribute_b' : 'white' });
+        }
         continue;
       }
-      // war consideration
+      // war consideration: a reasoned assessment rather than a mood
       const border = sharedBorder(g, a, b);
-      let warDesire = ai.aggression * 30 + Math.min(25, (rs - 1) * 25 * ai.aggression * 1.6) - op * 0.6 - ai.caution * 15 + (border > 0 ? 8 + Math.min(10, border * 0.1) : -10);
-      if (op > -10 && ai.aggression < 0.6) warDesire -= 25; // peaceful peoples need a grievance
-      if (this.enemies(b).length) warDesire -= 20 * (1 - ai.aggression); // reluctant to dog-pile
-      if (this.has('nap', a, b)) warDesire -= 30 * ai.loyalty + 10;
-      if (this.has('alliance', a, b)) warDesire -= 60;
-      if (this.has('trade', a, b)) warDesire -= 10 * ai.trade;
-      if (this.enemies(a).length) warDesire -= 25;
-      if (tribe.stage < 2 || g.day < 25) warDesire -= 60;
-      if ((this.truce?.[a * 8 + b] || 0) > g.tick || (this.truce?.[b * 8 + a] || 0) > g.tick) continue;
-      if ((tribe.jobCounts?.soldier || 0) < 5) warDesire -= 30;
-      if (rs < 1.35) warDesire -= 30; // recognise weakness
-      if (other.isPlayer) warDesire += g.difficultyDef.aiBonus * 30;
-      if (!opts.noWar && warDesire > 22 && rng.chance(0.25)) { this.declareWar(a, b, warReason(tribe, other, border)); continue; }
+      if ((this.truce?.[a * 8 + b] || 0) > g.tick || (this.truce?.[b * 8 + a] || 0) > g.tick) { this.setRisk(a, b, -50); continue; }
+      const A = this.assessWar(tribe, other);
+      this.setRisk(a, b, A.desire);
+      if (!opts.noWar && A.desire > WAR_THRESHOLD) {
+        const cb = this.casusBelli?.[a * 8 + b] || 0;
+        const recentUltimatum = g.tick - (this.ultimatumAt?.[a * 8 + b] || -1e9) < DAY_TICKS * 8;
+        if (cb > g.tick || op < -55) { if (rng.chance(0.35)) { this.declareWar(a, b, A.reason); this.casusBelli[a * 8 + b] = 0; } continue; }
+        if (!recentUltimatum && canPropose) { this.issueUltimatum(tribe, other, A); continue; }
+      }
       if (!canPropose) continue;
       // alliances: reassess
       if (this.has('alliance', a, b) && (op < -5 || (rs < 0.4 && ai.caution > 0.5 && op < 20))) { this.cancel('alliance', a, b, a, false); continue; }
@@ -332,6 +476,18 @@ export class Diplomacy {
     }
   }
 }
+
+function acceptProposalLocal(g, pr) {
+  const D = g.dip;
+  switch (pr.p.type) {
+    case 'trade': case 'nap': case 'alliance': D.sign(pr.p.type, pr.from, pr.to); break;
+    case 'peace': D.makePeace(pr.from, pr.to, pr.p.terms || 'white'); break;
+    case 'tribute': D.sign('tribute', pr.from, pr.to, { payer: pr.to, until: g.tick + DAY_TICKS * 10 }); D.addMod(pr.from, pr.to, 'submitted', 8, { label: 'Paid us tribute', decay: 0.2 }); break;
+    case 'exchange': D.propose(pr.to, pr.from, { type: 'exchange', give: pr.p.get, get: pr.p.give }); break;
+    case 'gift': D.addMod(pr.to, pr.from, 'gift', 5, { label: 'Generous gifts', decay: 0.4 }); break;
+  }
+}
+export { acceptProposalLocal };
 
 function warReason(t, o, border) {
   if (border > 10) return 'over disputed borderlands';

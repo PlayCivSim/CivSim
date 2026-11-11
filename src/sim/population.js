@@ -248,7 +248,7 @@ export function dailyDemographics(game, tribe) {
     if (!w.female || !w.partner || !game.agents.has(w.id)) continue;
     const y = ageYears(w); if (y < 18 || y > 44) continue;
     if (freeHousing - births <= 0) break;
-    const p = 0.075 * (1 + mod(tribe, 'birth')) * foodF * moodF * (tribe.boom ? 1.6 : 1);
+    const p = 0.085 * (1 + mod(tribe, 'birth')) * foodF * moodF * (tribe.boom ? 1.6 : 1);
     if (rng.next() < p) {
       const s = game.settlements.get(w.sid); if (!s) continue;
       const c = makeAgent(game, tribe, s, { age: 0, x: w.x, y: w.y, parents: [w.id, w.partner] });
@@ -258,7 +258,8 @@ export function dailyDemographics(game, tribe) {
   }
   if (births && tribe.isPlayer && rng.chance(0.3)) game.bus.emit('births', { tribe, n: births });
   // immigration: prosperous tribes attract wanderers
-  if (tribe.happiness > 62 && freeHousing > 4 && tribe.stage >= 2 && rng.chance(0.18 + (tribe.happiness - 62) / 100)) {
+  // graded rather than a cliff: contentment above 50 draws wanderers in proportion
+  if (freeHousing > 4 && tribe.stage >= 2 && tribe.foodSat >= 0.99 && rng.chance(Math.max(0, Math.min(0.45, (tribe.happiness - 50) / 40)))) {
     const s = game.settlements.get(tribe.capital);
     if (s) {
       const n = rng.int(2, 4);

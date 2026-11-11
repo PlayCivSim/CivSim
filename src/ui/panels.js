@@ -14,6 +14,7 @@ import { jobCap, normaliseAlloc, assignJobs, traitName } from '../sim/population
 import { lawSlots, enactedCount, canEnact, enactLaw, canAdoptGov, adoptGov, policyInteractions, LEADER_TRAITS } from '../sim/government.js';
 import { launchCampaign, equipTier, recallArmy } from '../sim/military.js';
 import { canFound, ENVOY_DEFAULTS } from '../sim/ai.js';
+import { planProgress } from '../sim/planner.js';
 import { TREATY_NAMES } from '../sim/diplomacy.js';
 import { proposalText } from './hud.js';
 import { sfx } from '../audio/audio.js';
@@ -39,6 +40,7 @@ const overview = {
       </div>
       ${sp ? `<div class="section-title">Toward ${sp.next.name}</div>${sp.reqs.map(r => `<div class="req ${r.have >= r.need ? 'ok' : ''}">${r.have >= r.need ? ico('check', 'sm') : ico('lock', 'sm')}<span>${esc(r.label)}</span><span class="num">${fmt(r.have)} / ${r.need}</span>${bar(Math.min(1, r.have / r.need), r.have >= r.need ? 'green' : '')}</div>`).join('')}
         <div class="faint" style="font-size:0.8em;margin-top:4px">Unlocks: ${sp.next.unlocks.join(' · ')}</div>` : '<div class="section-title">The pinnacle of civilisation</div>'}
+      ${advisorHTML(g, t)}
       <div class="section-title">Wellbeing</div>
       ${gauge('happy', 'Happiness', t.happiness / 100, Math.round(t.happiness), t.happiness > 55 ? 'green' : t.happiness < 35 ? 'red' : '')}
       ${gauge('stability', 'Stability', t.stability / 100, Math.round(t.stability), t.stability > 55 ? 'blue' : t.stability < 30 ? 'red' : '')}
@@ -53,13 +55,20 @@ const overview = {
       <div class="section-title">Stewards</div>
       <div class="prose" style="font-size:0.9em;margin-bottom:6px">Delegate routine decisions to your advisors. They follow the same reasoning as rival rulers.</div>
       <div class="col">
-        ${[['work', 'Workforce steward', 'Automatically assign workers to jobs'], ['housing', 'Housing steward', 'Build homes when space runs short'], ['build', 'Master builder', 'Plan and place all buildings'], ['research', 'Royal scholar', 'Choose research when idle'], ['diplomacy', 'Envoy', 'Answer foreign envoys and seek treaties or peace (never declares war)']].map(([k, n, d]) => `<div class="row between" data-act="steward" data-k="${k}" style="cursor:pointer"><span>${n}<br><small class="faint">${d}</small></span>${toggleHTML(t.steward[k])}</div>`).join('')}
+        ${[['work', 'Workforce steward', 'Automatically assign workers to jobs'], ['housing', 'Housing steward', 'Build homes when space runs short'], ['build', 'Master builder', 'Plan and place all buildings'], ['research', 'Royal scholar', 'Choose research when idle']].map(([k, n, d]) => `<div class="row between" data-act="steward" data-k="${k}" style="cursor:pointer"><span>${n}<br><small class="faint">${d}</small></span>${toggleHTML(t.steward[k])}</div>`).join('')}
       </div>
       <div class="section-title">Expansion</div>
       ${(() => { const c = canFound(g, t); return `<button class="btn ${c.ok ? 'primary' : 'disabled'}" data-act="found" ${c.ok ? '' : `data-tip="${esc(c.why)}"`}>${ico('settle')} Found a new settlement</button> <span class="faint" style="font-size:0.8em">${c.ok ? '' : esc(c.why)}</span>`; })()}
     `;
   },
 };
+function advisorHTML(g, t) {
+  const plan = planProgress(g, t);
+  if (!plan.goal) return '';
+  const items = [...plan.needs.slice(0, 4).map(n => esc(n)), ...Object.entries(plan.bottlenecks || {}).slice(0, 3).map(([r, how]) => `${ico(r, 'sm')} Short of ${RESOURCES[r]?.name || r} — ${esc(how)}`), ...plan.research.slice(0, 1).map(k => `${ico('technology', 'sm')} Research ${TECH[k].name}`)];
+  if (!items.length) return '';
+  return `<div class="parch" style="margin-top:10px"><div class="caps" style="color:var(--parch-dim)">Advisor · path to ${esc(plan.goal)}</div>${items.map(i => `<div style="font-size:0.88em">· ${i}</div>`).join('')}${t.strategy && t.strategy !== 'balanced' ? `<div style="font-size:0.8em;color:var(--parch-dim)">Current focus: ${esc(t.strategy)}</div>` : ''}</div>`;
+}
 function gauge(icon, label, frac, val, cls) { return `<div class="gauge" style="margin:4px 0">${ico(icon, 'sm')}<span style="width:92px">${label}</span>${bar(frac, cls)}<span class="num" style="width:44px;text-align:right">${val}</span></div>`; }
 function stat(icon, k, v, sub) { return `<div class="stat"><span class="k">${ico(icon, 'sm')}${k}</span><span class="v num">${typeof v === 'number' ? fmt(v) : esc(v)} <small>${esc(sub || '')}</small></span></div>`; }
 
@@ -96,10 +105,10 @@ const population = {
     const assigned = JOB_KEYS.reduce((a, k) => a + (t.alloc[k] || 0), 0);
     const rows = JOB_KEYS.map(k => {
       const cap = jobCap(t, k); const cur = t.jobCounts[k] || 0; const target = t.alloc[k] || 0;
-      const capTxt = cap === Infinity ? '∞' : cap;
+      const capTxt = cap === Infinity ? 'Any' : cap;
       return `<div class="alloc" data-tip="${esc(JOBS[k].desc)}">${ico(k)}<div class="nm"><span>${JOBS[k].plural}</span><small>${cap === 0 ? 'No workplaces — build one' : `${capTxt} places`}</small></div>
         <div class="cnt num">${target}<small>${cur !== target ? `now ${cur}` : ''}</small></div>
-        <div class="ctl"><button class="btn xs icon" data-act="alloc" data-job="${k}" data-d="-5">−5</button><button class="btn xs icon" data-act="alloc" data-job="${k}" data-d="-1">${ico('minus', 'sm')}</button><button class="btn xs icon" data-act="alloc" data-job="${k}" data-d="1">${ico('plus', 'sm')}</button><button class="btn xs icon" data-act="alloc" data-job="${k}" data-d="5">+5</button></div>
+        <div class="ctl"><button class="btn xs icon" data-act="alloc" data-job="${k}" data-d="-5">-5</button><button class="btn xs icon" data-act="alloc" data-job="${k}" data-d="-1">${ico('minus', 'sm')}</button><button class="btn xs icon" data-act="alloc" data-job="${k}" data-d="1">${ico('plus', 'sm')}</button><button class="btn xs icon" data-act="alloc" data-job="${k}" data-d="5">+5</button></div>
         <div class="meter">${bar(cap === Infinity ? target / Math.max(1, t.adults) : cap ? target / cap : 0, 'tribe')}</div></div>`;
     }).join('');
     const causes = Object.entries(t.deathCauses || {}).sort((a, b) => b[1] - a[1]);
@@ -211,7 +220,7 @@ const technology = {
     const nodes = TECHS.map(tech => { const p = L.pos[tech.key]; return `<div class="tnode" data-act="research" data-key="${tech.key}" style="left:${p.x}px;top:${p.y}px;--bc:${brColor[tech.branch]}"><div class="tico">${ico(techIcon(tech), 'sm')}</div><div style="min-width:0"><div class="tname">${tech.name}</div><div class="tcost">${ico('research', 'sm')}<span class="tc">${techCost(t, tech.key)}</span> · ${['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][tech.tier]}</div></div><div class="prog"></div></div>`; }).join('');
     const lanes = L.lanes.map(l => `<div class="lane" style="top:${l.y}px;height:${l.h}px"><div class="lane-label" style="top:${l.h / 2 - 8}px;color:${l.br.color}">${ico(l.br.icon, 'sm')}${l.br.name}</div></div>`).join('');
     const tiers = [0, 1, 2, 3, 4, 5, 6].map(i => `<div class="tier-label" style="left:${LEFT + i * COL_W + NODE_W / 2}px">Tier ${['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][i]}</div>`).join('');
-    return `<div class="tech-top"><div class="cur" id="tt-cur"></div><div class="row faint" style="font-size:0.8em;gap:12px"><span>${ico('check', 'sm')} Known</span><span style="color:var(--gold-hi)">◆ Researching</span><span>Click to research — prerequisites are queued automatically</span></div></div>
+    return `<div class="tech-top"><div class="cur" id="tt-cur"></div><div class="row faint" style="font-size:0.8em;gap:12px"><span>${ico('check', 'sm')} Known</span><span style="color:var(--gold-hi)">* Researching</span><span>Click to research — prerequisites are queued automatically</span></div></div>
       <div class="tech-wrap scroll" id="tech-wrap"><div class="tech-canvas" style="width:${L.w}px;height:${L.h}px">${lanes}${tiers}<svg width="${L.w}" height="${L.h}">${edges}</svg>${nodes}</div></div>`;
   },
   mount(hud, body) {
@@ -246,7 +255,7 @@ const technology = {
     }
     const cur = t.research.current;
     const el = body.querySelector('#tt-cur');
-    const html = cur ? `<div class="row" style="gap:10px">${ico('research', 'lg')}<div style="flex:1"><div class="row between"><span style="color:var(--gold-hi)">Researching ${TECH[cur].name}</span><span class="num dim">${fmt(t.research.progress)} / ${techCost(t, cur)} · ${fmt(t.researchRate || 0, 1)}/day</span></div>${bar(t.research.progress / techCost(t, cur))}${t.research.queue.length ? `<div class="faint" style="font-size:0.8em">Then: ${t.research.queue.map(k => TECH[k].name).join(' → ')}</div>` : ''}</div></div>` : `<div class="warn-item">${ico('warning', 'sm')}Choose a technology to research. Researchers and elders generate knowledge each day.</div>`;
+    const html = cur ? `<div class="row" style="gap:10px">${ico('research', 'lg')}<div style="flex:1"><div class="row between"><span style="color:var(--gold-hi)">Researching ${TECH[cur].name}</span><span class="num dim">${fmt(t.research.progress)} / ${techCost(t, cur)} · ${fmt(t.researchRate || 0, 1)}/day</span></div>${bar(t.research.progress / techCost(t, cur))}${t.research.queue.length ? `<div class="faint" style="font-size:0.8em">Then: ${t.research.queue.map(k => TECH[k].name).join(' › ')}</div>` : ''}</div></div>` : `<div class="warn-item">${ico('warning', 'sm')}Choose a technology to research. Researchers and elders generate knowledge each day.</div>`;
     if (el.innerHTML !== html) el.innerHTML = html;
   },
 };
@@ -278,7 +287,7 @@ const diplomacy = {
     const g = hud.game, t = g.player, D = g.dip;
     const props = g.pendingProposals.filter(p => p.to === t.id);
     const others = g.tribes.filter(o => o !== t);
-    return `${props.length ? `<div class="section-title">Envoys awaiting your answer</div>${props.map((p, i) => `<div class="proposal"><img src="${emblemURL(g.tribes[p.from].key)}" width="36" class="pix"><div style="flex:1"><div style="color:var(--gold-hi)">The ${g.tribes[p.from].name}</div><div class="prose" style="font-size:0.9em">${esc(proposalText(p.p))}</div></div><button class="btn sm primary" data-act="prop-yes" data-i="${g.pendingProposals.indexOf(p)}">Accept</button><button class="btn sm" data-act="prop-no" data-i="${g.pendingProposals.indexOf(p)}">Decline</button></div>`).join('')}` : ''}
+    return `${envoySection(t)}${props.length ? `<div class="section-title">Envoys awaiting your answer</div>${props.map((p, i) => `<div class="proposal" ${p.p.ultimatum ? 'style="border-left-color:var(--bad);background:rgba(255,90,80,0.08)"' : ''}><img src="${emblemURL(g.tribes[p.from].key)}" width="36" class="pix"><div style="flex:1"><div style="color:${p.p.ultimatum ? 'var(--bad)' : 'var(--gold-hi)'}">${p.p.ultimatum ? 'Ultimatum from the ' : 'The '}${g.tribes[p.from].name}</div><div class="prose" style="font-size:0.9em">${esc(proposalText(p.p))}${p.expires ? ` <span class="warn">Answer within ${Math.max(0, Math.ceil((p.expires - g.tick) / 360 * 10) / 10)} days.</span>` : ''}</div></div><button class="btn sm primary" data-act="prop-yes" data-i="${g.pendingProposals.indexOf(p)}">${p.p.ultimatum ? 'Pay tribute' : 'Accept'}</button><button class="btn sm ${p.p.ultimatum ? 'danger' : ''}" data-act="prop-no" data-i="${g.pendingProposals.indexOf(p)}">${p.p.ultimatum ? 'Refuse' : 'Decline'}</button></div>`).join('')}` : ''}
       ${others.map(o => {
         if (!o.alive) return `<div class="frame dip-card" style="opacity:0.5"><div class="dip-head"><img class="emb" src="${emblemURL(o.key)}" style="filter:grayscale(1)"><div><div class="dip-name">${o.name}</div><div class="dim">Fallen</div></div></div></div>`;
         const known = D.contact[t.id][o.id];
@@ -296,7 +305,7 @@ const diplomacy = {
           <div class="rel-bar has-tip" data-tip="${esc(bd.map(x => `${x.label}: ${sign(x.v, 0)}`).join('\n') || 'No strong feelings')}"><div class="mark" style="left:${(op + 100) / 2}%"></div></div>
           <div class="faint" style="font-size:0.78em">${bd.slice(0, 4).map(x => `${esc(x.label)} ${sign(x.v, 0)}`).join(' · ')}</div>
           <div class="dim" style="font-size:0.78em;margin-top:3px" data-tip="What your envoys observe of their intentions">${ico('eye', 'sm')} ${esc(o.lastDecision || 'Consolidating their lands')}${o.research.current ? ` · studying ${TECH[o.research.current].name}` : ''}${o.warPrep ? ' · <span class="warn">mobilising for war</span>' : ''}</div></div></div>
-          <div class="row" style="flex-wrap:wrap;gap:4px;margin-top:6px">${war ? `<span class="chip red">${ico('military', 'sm')} At war · score ${Math.round(ws.score[t.id] || 0)} : ${Math.round(ws.score[o.id] || 0)}</span>` : ''}${treaties.map(x => `<span class="chip ${x.type === 'alliance' ? 'green' : x.type === 'tribute' ? 'red' : 'blue'}">${TREATY_NAMES[x.type]}${x.type === 'tribute' ? (x.payer === t.id ? ' (you pay)' : ' (they pay)') : ''}${x.until ? ` · ${Math.max(0, Math.ceil((x.until - g.tick) / 360))}d` : ''}</span>`).join('')}
+          <div class="row" style="flex-wrap:wrap;gap:4px;margin-top:6px">${!war ? warRiskChip(D.warRisk?.[o.id]?.[t.id]) : ''}${war ? `<span class="chip red">${ico('military', 'sm')} At war · score ${Math.round(ws.score[t.id] || 0)} : ${Math.round(ws.score[o.id] || 0)}</span>` : ''}${treaties.map(x => `<span class="chip ${x.type === 'alliance' ? 'green' : x.type === 'tribute' ? 'red' : 'blue'}">${TREATY_NAMES[x.type]}${x.type === 'tribute' ? (x.payer === t.id ? ' (you pay)' : ' (they pay)') : ''}${x.until ? ` · ${Math.max(0, Math.ceil((x.until - g.tick) / 360))}d` : ''}</span>`).join('')}
             <span class="chip" data-tip="Military strength comparison">${ico('military', 'sm')} ${rs > 1.3 ? 'Weaker than you' : rs < 0.77 ? 'Stronger than you' : 'Evenly matched'}</span>
             <span class="chip">${ico('flag', 'sm')} ${o.settlements.length} towns</span></div>
           <div class="dip-actions">${war ? `<button class="btn sm" data-act="dip" data-to="${o.id}" data-type="peace">${ico('peace', 'sm')} Propose peace</button>` : `
@@ -312,6 +321,19 @@ const diplomacy = {
   },
 };
 
+function warRiskChip(v) {
+  if (v == null) return '';
+  const [label, cls] = v > 22 ? ['War risk: high', 'red'] : v > 4 ? ['War risk: elevated', 'red'] : v > -20 ? ['War risk: low', ''] : ['War risk: negligible', 'green'];
+  return `<span class="chip ${cls}" data-tip="How seriously their council weighs war against you: gains, losses, treaties, allies and your defences.">${ico('target', 'sm')} ${label}</span>`;
+}
+const ENVOY_OPTS = [['answer', 'Answer envoys', 'Reply to foreign proposals on your behalf'], ['trade', 'Seek trade', 'Propose trade agreements'], ['alliances', 'Seek pacts & alliances', 'Non-aggression with neighbours, alliances with friends'], ['peace', 'Seek peace', 'Propose peace when at war'], ['appease', 'Appease the strong', 'Pay tribute to far stronger rivals rather than fight'], ['gifts', 'Diplomatic gifts', 'Send surplus goods to calm hostile or cooling partners']];
+function envoySection(t) {
+  const on = t.steward.diplomacy; const cfg = { ...ENVOY_DEFAULTS, ...(t.envoy || {}) };
+  return `<div class="frame" style="padding:2px 4px;margin-bottom:10px"><div class="row between"><div><div style="color:var(--gold-hi)">${ico('scroll', 'sm')} Envoy steward</div><div class="faint" style="font-size:0.8em">Never declares war or cancels treaties, and leaves alone anything you have refused or ended. Your own decisions always take precedence.</div></div><span class="row" data-act="steward" data-k="diplomacy" style="cursor:pointer">${toggleHTML(on)}</span></div>
+    ${on ? `<div class="row" style="flex-wrap:wrap;gap:4px;margin-top:6px">${ENVOY_OPTS.map(([k, n, d]) => `<button class="btn xs ${cfg[k] ? 'on' : ''}" data-act="envoy" data-k="${k}" data-tip="${esc(d)}">${n}</button>`).join('')}</div>
+      ${(t.envoyLog || []).length ? `<div class="faint" style="font-size:0.8em;margin-top:6px">${t.envoyLog.slice(0, 4).map(l => '· ' + esc(l.text)).join('<br>')}</div>` : ''}` : ''}</div>`;
+}
+
 // ================================================================= GOVERNMENT
 const government = {
   title: 'Government', icon: 'government', sub: 'Leadership, reforms and law', wide: true,
@@ -326,7 +348,7 @@ const government = {
         <div class="faint" style="font-size:0.8em">${Object.entries(gov.mods).map(([k, v]) => `${modName(k)} ${sign(Math.abs(v) < 2 ? v * 100 : v, 0)}${Math.abs(v) < 2 ? '%' : ''}`).join(' · ')}${gov.favours === t.key ? ' · <span class="good">Suits your people (+5 stability)</span>' : ''}</div></div>
         <div style="text-align:center"><div class="caps" style="color:var(--gold)">Law slots</div><div class="slots" style="justify-content:center;margin-top:6px">${Array.from({ length: slots }, (_, i) => `<i class="${i < used ? 'full' : ''}"></i>`).join('')}</div><div class="faint" style="font-size:0.8em;margin-top:4px">${used} / ${slots}</div></div></div>
       <div class="section-title">Reforms</div>
-      <div class="row" style="flex-wrap:wrap;gap:6px">${Object.entries(GOVERNMENTS).filter(([k]) => k !== t.gov).map(([k, gv]) => { const c = canAdoptGov(g, t, k); return `<button class="btn sm ${c.ok ? '' : 'disabled'}" data-act="gov" data-k="${k}" data-tip="${esc(gv.desc + (c.ok ? ' Reform causes a temporary loss of stability.' : ' — ' + c.why))}">${gv.name}${gv.favours === t.key ? ' ★' : ''}</button>`; }).join('')}</div>
+      <div class="row" style="flex-wrap:wrap;gap:6px">${Object.entries(GOVERNMENTS).filter(([k]) => k !== t.gov).map(([k, gv]) => { const c = canAdoptGov(g, t, k); return `<button class="btn sm ${c.ok ? '' : 'disabled'}" data-act="gov" data-k="${k}" data-tip="${esc(gv.desc + (c.ok ? ' Reform causes a temporary loss of stability.' : ' — ' + c.why))}">${gv.name}${gv.favours === t.key ? ' *' : ''}</button>`; }).join('')}</div>
       <div class="row between" style="margin-top:12px"><div class="section-title" style="flex:1;margin:0">Laws</div>${cd ? `<span class="chip">Council deliberating · ${cd}s</span>` : ''}</div>
       ${cats.map(cat => `<div class="caps" style="color:var(--text-dim);margin:10px 0 6px">${cat}</div>${LAWS.filter(l => l.cat === cat).map(l => {
         const locked = l.tech && !t.techs.includes(l.tech);
@@ -365,7 +387,7 @@ const military = {
           ${o.settlements.map(sid => { const s = g.settlements.get(sid); const c = g.buildings.get(s.centre); return `<div class="row between" style="padding:3px 0"><span>${s.capital ? ico('crown', 'sm') : ico('house', 'sm')} ${esc(s.name)} <span class="faint">· ${s.pop} people${c ? ' · walls ' + Math.round(c.hp / c.maxHp * 100) + '%' : ''}${s.capital ? ' · capital (can be sacked)' : ''}</span></span><button class="btn xs" data-act="campaign" data-sid="${sid}" data-tip="Send ${Math.round(st.commit * 100)}% of idle soldiers">${ico('target', 'sm')} Attack</button></div>`; }).join('')}</div>`; }).join('')
         + `<div class="row" style="gap:8px"><span class="dim" style="font-size:0.85em">Commit</span>${[0.5, 0.75, 1].map(f => `<button class="btn xs ${st.commit === f ? 'on' : ''}" data-act="commit" data-f="${f}">${f * 100}%</button>`).join('')}<span class="faint" style="font-size:0.8em">of idle soldiers to each attack</span></div>`
         : '<div class="prose" style="font-size:0.9em">You are at peace. Declare war from the Diplomacy panel.</div>'}
-      ${armies.length ? `<div class="section-title">Armies in the field</div>${armies.map(a => `<div class="row between" style="padding:4px 0"><span>${ico('flag', 'sm')} ${a.alive ?? a.size} soldiers → ${esc(g.settlements.get(a.target)?.name || '?')} <span class="faint">· ${a.state} · ${a.kills} kills, ${a.losses} lost</span></span><span class="row"><button class="btn xs" data-act="army-view" data-id="${a.id}">${ico('eye', 'sm')}</button>${a.state !== 'return' ? `<button class="btn xs" data-act="recall" data-id="${a.id}">Recall</button>` : ''}</span></div>`).join('')}` : ''}`;
+      ${armies.length ? `<div class="section-title">Armies in the field</div>${armies.map(a => `<div class="row between" style="padding:4px 0"><span>${ico('flag', 'sm')} ${a.alive ?? a.size} soldiers › ${esc(g.settlements.get(a.target)?.name || '?')} <span class="faint">· ${a.state} · ${a.kills} kills, ${a.losses} lost</span></span><span class="row"><button class="btn xs" data-act="army-view" data-id="${a.id}">${ico('eye', 'sm')}</button>${a.state !== 'return' ? `<button class="btn xs" data-act="recall" data-id="${a.id}">Recall</button>` : ''}</span></div>`).join('')}` : ''}`;
   },
 };
 
@@ -405,7 +427,7 @@ export function buildingTip(hud, b, inspector) {
     if (d.prod?.deps) {
       const acc = accessibleDeposits(tribe, d.prod.deps);
       const r = depositsNear(g, tribe, b.x + b.size / 2, b.y + b.size / 2, d.prod.radius, d.prod.deps);
-      info += `<span>Deposits</span><span>${Object.entries(r.found).map(([k, n]) => `${ico(DEPOSITS[DEP[k]].res, 'sm')}${n}${acc.includes(k) ? '' : '<span class="faint">🔒</span>'}`).join(' ') || '<span class="bad">None in reach</span>'}</span>`;
+      info += `<span>Deposits</span><span>${Object.entries(r.found).map(([k, n]) => `${ico(DEPOSITS[DEP[k]].res, 'sm')}${n}${acc.includes(k) ? '' : ico('lock', 'sm')}`).join(' ') || '<span class="bad">None in reach</span>'}</span>`;
     }
     if (b.flags & 1) info += `<span>Status</span><span class="warn">No resources within reach</span>`;
     if (b.flags & 2) info += `<span>Status</span><span class="warn">Missing input materials</span>`;
@@ -415,7 +437,7 @@ export function buildingTip(hud, b, inspector) {
   let ctl = '';
   if (mine && b.built) {
     if (d.prod?.deps) { const acc = accessibleDeposits(tribe, d.prod.deps); ctl += `<div class="row" style="flex-wrap:wrap;gap:3px;margin-top:6px"><span class="caps" style="color:var(--gold)">Focus</span><button class="btn xs ${!b.focus ? 'on' : ''}" data-act="b-focus" data-id="${b.id}" data-k="">Auto</button>${acc.map(k => `<button class="btn xs ${b.focus === k ? 'on' : ''}" data-act="b-focus" data-id="${b.id}" data-k="${k}">${ico(DEPOSITS[DEP[k]].res, 'sm')}</button>`).join('')}</div>`; }
-    if (d.prod?.recipes) ctl += `<div class="row" style="flex-wrap:wrap;gap:3px;margin-top:6px"><span class="caps" style="color:var(--gold)">Recipe</span><button class="btn xs ${b.recipe < 0 ? 'on' : ''}" data-act="b-recipe" data-id="${b.id}" data-r="-1">Auto</button>${d.prod.recipes.map((r, i) => `<button class="btn xs ${b.recipe === i ? 'on' : ''}" data-act="b-recipe" data-id="${b.id}" data-r="${i}" data-tip="${esc(Object.entries(r.in).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(' + ') + ' → ' + r.amt + ' ' + RESOURCES[r.out].name)}">${Object.keys(r.in).map(k => ico(k, 'sm')).join('')}→${ico(r.out, 'sm')}</button>`).join('')}</div>`;
+    if (d.prod?.recipes) ctl += `<div class="row" style="flex-wrap:wrap;gap:3px;margin-top:6px"><span class="caps" style="color:var(--gold)">Recipe</span><button class="btn xs ${b.recipe < 0 ? 'on' : ''}" data-act="b-recipe" data-id="${b.id}" data-r="-1">Auto</button>${d.prod.recipes.map((r, i) => `<button class="btn xs ${b.recipe === i ? 'on' : ''}" data-act="b-recipe" data-id="${b.id}" data-r="${i}" data-tip="${esc(Object.entries(r.in).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(' + ') + ' › ' + r.amt + ' ' + RESOURCES[r.out].name)}">${Object.keys(r.in).map(k => ico(k, 'sm')).join('')}›${ico(r.out, 'sm')}</button>`).join('')}</div>`;
     const up = upgradeTarget(tribe, b);
     ctl += `<div class="row" style="margin-top:8px;gap:4px">${up ? `<button class="btn xs" data-act="b-upgrade" data-id="${b.id}" data-tip="${esc('Upgrade to ' + BUILDINGS[up].name + ': ' + Object.entries(buildingCost(tribe, up)).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', '))}">${ico('plus', 'sm')} Upgrade</button>` : ''}${b.type !== 'centre' ? `<button class="btn xs danger" data-act="b-demolish" data-id="${b.id}">${ico('close', 'sm')} Demolish</button>` : ''}</div>`;
   }

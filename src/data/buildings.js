@@ -45,7 +45,7 @@ export const BUILDINGS = {
     prod: { out: 'stone', amt: 2.6, time: 55, mod: 'mine', gather: 'deposit', deps: ['stone', 'clay', 'salt'], radius: 6 }, desc: 'Cuts stone, clay or salt from deposits — or slowly quarries bare rock from nearby hills and mountains.', site: 'rock' },
   mine: { name: 'Mine', cat: 'production', size: 2, cost: { wood: 40, stone: 20 }, work: 70, job: 'miner', slots: 4, tech: 'mining', hp: 140,
     prod: { out: 'iron', amt: 2, time: 65, mod: 'mine', gather: 'deposit', deps: ['iron', 'copper', 'coal', 'silver', 'gold', 'gems'], radius: 6 }, desc: 'Extracts ores within reach. Some ores need deeper mining knowledge.', site: 'deposit:iron,copper,coal,silver,gold,gems' },
-  derrick: { name: 'Oil Derrick', cat: 'production', size: 2, cost: { steel: 25, stone: 30, machinery: 4 }, work: 120, job: 'miner', slots: 3, tech: 'industrialextraction', hp: 160,
+  derrick: { name: 'Oil Derrick', cat: 'production', size: 2, cost: { steel: 25, stone: 30, tools: 12 }, work: 120, job: 'miner', slots: 3, tech: 'industrialextraction', hp: 160,
     prod: { out: 'oil', amt: 2.4, time: 60, mod: 'industry', gather: 'deposit', deps: ['oil'], radius: 4 }, desc: 'Draws oil from seeps for industry.', site: 'deposit:oil' },
   gatherer: { name: 'Forager Camp', cat: 'production', size: 2, cost: { wood: 8 }, work: 20, job: 'gatherer', slots: 5, hp: 60,
     prod: { out: 'fruit', amt: 1.8, time: 45, mod: 'farm', gather: 'wild', radius: 10, byproduct: 'fibre' }, desc: 'Gatherers collect berries, roots, fibres and herbs.' },
@@ -59,7 +59,7 @@ export const BUILDINGS = {
     prod: { recipes: [{ out: 'goods', amt: 1.4, in: { silver: 1 } }, { out: 'goods', amt: 1, in: { fibre: 3 } }, { out: 'goods', amt: 1, in: { herbs: 2, clay: 1 } }], time: 70, mod: 'craft' }, desc: 'Turns fibre, herbs and silver into valuable trade goods.' },
   mint: { name: 'Mint', cat: 'production', size: 2, cost: { stone: 60, steel: 5 }, work: 100, job: 'craftsman', slots: 2, tech: 'currency', hp: 200,
     prod: { recipes: [{ out: 'coins', amt: 14, in: { gold: 1 } }, { out: 'coins', amt: 7, in: { silver: 1 } }, { out: 'coins', amt: 3, in: { copper: 2 } }], time: 70, mod: 'craft' }, desc: 'Strikes coinage from precious metals.' },
-  factory: { name: 'Manufactory', cat: 'production', size: 3, cost: { steel: 60, stone: 80, machinery: 6 }, work: 260, job: 'craftsman', slots: 6, tech: 'mechanisation', hp: 320, smoke: true,
+  factory: { name: 'Manufactory', cat: 'production', size: 3, cost: { steel: 60, stone: 80, tools: 25 }, work: 260, job: 'craftsman', slots: 6, tech: 'mechanisation', hp: 320, smoke: true,
     prod: { recipes: [{ out: 'machinery', amt: 1, in: { steel: 2, oil: 1 } }, { out: 'machinery', amt: 0.7, in: { steel: 2, coal: 2 } }, { out: 'tools', amt: 4, in: { steel: 1, wood: 2 } }, { out: 'goods', amt: 4, in: { fibre: 3, coal: 1 } }], time: 70, mod: 'industry' }, desc: 'Powered production. Makes machinery and mass-produced goods.' },
 
   // ---------------- Infrastructure

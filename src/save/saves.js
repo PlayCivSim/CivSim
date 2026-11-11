@@ -118,7 +118,7 @@ export async function renameRun(runId, name) {
 // ---------------------------------------------------------------- settings
 const SETTINGS_KEY = 'civsim.settings';
 export const DEFAULT_SETTINGS = {
-  master: 0.8, music: 0.5, sfx: 0.7, ambience: 0.6,
+  master: 0.8, music: 0.5, sfx: 0.7, ambience: 0.6, ui: 0.6,
   quality: 'high', particles: true, animations: true, territory: true, uiScale: 1,
   camSpeed: 1, edgePan: false, autosaveMin: 3, pauseOnEvent: true, defaultSpeed: 1,
 };

@@ -124,7 +124,7 @@ export const STAGES = [
 import { LAW } from '../data/laws.js';
 const defaultLaw = k => LAW[k]?.options[0].key;
 
-export const MAX_SETTLEMENTS = [0, 1, 1, 2, 3, 5, 7];
+export const MAX_SETTLEMENTS = [0, 1, 2, 2, 3, 5, 7];
 
 export function stageProgress(game, tribe) {
   const next = STAGES[tribe.stage + 1];

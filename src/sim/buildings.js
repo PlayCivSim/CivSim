@@ -118,6 +118,7 @@ export function placeBuilding(game, tribe, type, x, y, opts = {}) {
   for (let dy = 0; dy < def.size; dy++) for (let dx = 0; dx < def.size; dx++) {
     const i = w.idx(x + dx, y + dy);
     w.occ[i] = b.id + 1;
+    if (w.road[i]) { w.road[i] = 0; game.pathDirty = true; }
     if (w.trees[i]) { wood += w.trees[i] / 40; w.trees[i] = 0; w.treeMax[i] = 0; }
     if (def.field) w.field[i] = 1;
   }
@@ -274,7 +275,7 @@ export function scoreSpot(game, tribe, s, type, x, y) {
   return score;
 }
 
-export function findSpot(game, tribe, s, type, maxEval = 260, tight = false) {
+export function findSpot(game, tribe, s, type, maxEval = 260, tight = false, overRoads = false) {
   const def = BUILDINGS[type]; const w = game.world;
   const R = territoryRadius(game, s) + 4;
   let best = null, bestScore = -1e9, evals = 0;
@@ -289,7 +290,7 @@ export function findSpot(game, tribe, s, type, maxEval = 260, tight = false) {
   const pool = cands.length > maxEval * 2 ? cands.filter((_, i) => i < maxEval || game.rng.next() < maxEval / cands.length) : cands;
   for (const [x, y] of pool) {
     if (evals > maxEval) break;
-    const c = placementCheck(game, tribe, type, x, y, { margin: !tight, free: true });
+    const c = placementCheck(game, tribe, type, x, y, { margin: !tight, free: true, allowRoad: overRoads });
     if (!c.ok) continue;
     evals++;
     const sc = scoreSpot(game, tribe, s, type, x, y);
@@ -297,6 +298,8 @@ export function findSpot(game, tribe, s, type, maxEval = 260, tight = false) {
   }
   // crowded towns: allow buildings to touch rather than fail outright
   if (!best && !tight) return findSpot(game, tribe, s, type, maxEval, true);
+  // last resort for important buildings: build over our own road tiles
+  if (!best && tight && !overRoads && BUILDINGS[type].cat !== 'housing') return findSpot(game, tribe, s, type, maxEval, true, true);
   return best;
 }
 

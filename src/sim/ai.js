@@ -14,6 +14,8 @@ import { launchCampaign, militaryStrength } from './military.js';
 import { siteStats } from '../world/worldgen.js';
 import { BIOMES } from '../world/biomes.js';
 import { makeAgent, isAdult } from './agents.js';
+import { planProgress, executePlan, checkStagnation } from './planner.js';
+import { acceptProposalLocal } from './diplomacy.js';
 
 const countB = (g, t, type, includeSites = true) => { let n = 0; for (const b of g.buildings.values()) if (b.tribe === t.id && b.type === type && (includeSites || b.built)) n++; return n; };
 const countCat = (g, t, pred) => { let n = 0; for (const b of g.buildings.values()) if (b.tribe === t.id && pred(BUILDINGS[b.type], b)) n++; return n; };
@@ -40,6 +42,10 @@ export function autoAllocate(game, t) {
   for (const k of order) { if (foodNeed <= 0) break; const n = Math.ceil(foodNeed / per[k]); const before = alloc[k]; give(k, n); foodNeed -= (alloc[k] - before) * per[k]; }
   if (foodNeed > 0) give('gatherer', Math.ceil(foodNeed / 2));
   give('soldier', Math.min(wantSoldiers, t.adults * (days < 3 ? 0.12 : 0.35)) - alloc.soldier);
+  const pj = t.plan?.jobs || {};
+  if (pj.miner) give('miner', jobCap(t, 'miner'));
+  if (pj.researcher) give('researcher', jobCap(t, 'researcher'));
+  if (pj.craftsman) give('craftsman', jobCap(t, 'craftsman'));
   const sites = (t._sites || []).length;
   give('builder', Math.min(t.adults * 0.3, Math.max(2, t.adults * 0.08) + sites * 1.5));
   give('woodcutter', Math.max(2, t.adults * 0.12 * scarcity(t, 'wood')));
@@ -121,6 +127,17 @@ function buildUtilities(game, t) {
   if (idleAdults > 3) {
     for (const [type, j] of [['lumber', 'woodcutter'], ['hunter', 'hunter'], ['gatherer', 'gatherer'], ['school', 'researcher'], ['fishery', 'fisher'], ['farm', 'farmer'], ['quarry', 'miner'], ['workshop', 'craftsman']]) if (avail.has(type)) add(type, 3 + idleAdults * 0.4 * (j === 'researcher' ? 0.5 + ai.research : 1), 'Idle workers need jobs');
   }
+  // the progression plan raises what the next stage (or a bottleneck) needs
+  const plan = t.plan;
+  if (plan) {
+    for (const [type, v] of Object.entries(plan.build)) {
+      if (!avail.has(type) || (BUILDINGS[type].unique && countB(game, t, type))) continue;
+      const ex = U.find(u => u.type === type);
+      const why = `Toward ${plan.goal || 'progress'}: ${plan.needs[0] || 'bottleneck'}`;
+      if (ex) { if (ex.u < v) { ex.u = v; ex.why = why; } } else add(type, v, why);
+    }
+    if (plan.production) for (const u of U) if (BUILDINGS[u.type].cat === 'production') u.u += 3;
+  }
   if (sites > 2 + (t.jobCounts.builder || 0) / 2) for (const u of U) u.u *= 0.3;
   return U.sort((a, b) => b.u - a.u);
 }
@@ -158,6 +175,8 @@ export function aiBuild(game, t, opts = {}) {
 // ---------------------------------------------------------------- research
 export function aiResearch(game, t) {
   if (t.research.current) return;
+  const planned = t.plan?.research?.find(k => availableTechs(t).some(x => x.key === k));
+  if (planned) { setResearch(game, t, planned); return; }
   const opts = availableTechs(t);
   if (!opts.length) return;
   const ai = t.def.ai;
@@ -188,7 +207,7 @@ const LAW_PREFS = {
 export function aiLaws(game, t) {
   if (t.lawCooldown > game.tick) return;
   // relieve misery first
-  if (t.happiness < 35) {
+  if (t.happiness < (t.plan?.actions.includes('mood') ? 52 : 35)) {
     for (const [lk, bad] of [['labour', 'long'], ['taxation', 'high'], ['rationing', 'strict'], ['recruitment', 'conscription']]) if (t.laws[lk] === bad) { enactLaw(game, t, lk, LAWS.find(l => l.key === lk).options[0].key); return; }
   }
   for (const g of ['technocracy', 'commonwealth', 'republic', 'monarchy', 'council']) {
@@ -250,9 +269,11 @@ export function foundSettlement(game, t, x, y) {
 
 function aiExpand(game, t) {
   if (!canFound(game, t).ok) return;
-  if (t.pop < t.settlements.length * 40 || t.atWar) return;
+  const planned = t.plan?.actions.includes('expand') || !!t.plan?.expandToward;
+  if ((t.pop < t.settlements.length * (planned ? 25 : 40)) || t.atWar) return;
   const ai = t.def.ai;
-  if (game.rng.next() > 0.3 + ai.expansion * 0.5) return;
+  if (game.rng.next() > 0.3 + ai.expansion * 0.5 + (planned ? 0.3 : 0)) return;
+  const toward = t.plan?.expandToward;
   let best = null, bv = -1e9;
   for (let k = 0; k < 160; k++) {
     const from = game.settlements.get(game.rng.pick(t.settlements));
@@ -262,6 +283,7 @@ function aiExpand(game, t) {
     const st = siteStats(game.world, x, y, 8);
     let v = st.fert * 1.2 + Math.min(st.trees, 40) * 0.4 + st.stone * 2 + st.minerals * (1 + (t.key === 'vaelith' ? 1.5 : 0)) + st.build * 0.1 + (st.water + st.coast) * 0.5;
     for (const [k2, w] of Object.entries(t.def.biome)) v += (st.aff[k2] || 0) * w * 0.1;
+    if (toward) v += Math.max(0, 40 - Math.hypot(x - toward.x, y - toward.y) * 2.5);
     if (v > bv) { bv = v; best = { x, y }; }
   }
   if (best && bv > 30) foundSettlement(game, t, best.x, best.y);
@@ -284,6 +306,10 @@ function aiWar(game, t) {
     for (const sid of et.settlements) {
       const s = game.settlements.get(sid);
       const home = game.settlements.get(t.capital);
+      // no pointless raids: skip freshly sacked capitals, recently failed targets and newly founded towns
+      if ((t.raidCooldown?.[sid] || 0) > game.tick) continue;
+      if (s.capital && (s.sackedUntil || 0) > game.tick) continue;
+      if (!s.capital && game.tick - (s.founded || 0) < 360 * 12 && et.settlements.length > 1) continue;
       const d = Math.hypot(s.x - home.x, s.y - home.y);
       const defense = et.strength / Math.max(1, et.settlements.length) * (s.capital ? 1.4 : 0.8);
       const v = myPow / Math.max(1, defense) - d / 80 + (s.capital ? -0.2 : 0.2);
@@ -291,7 +317,7 @@ function aiWar(game, t) {
     }
   }
   const already = game.armies.some(ar => ar.tribe === t.id && ar.state !== 'return');
-  if (target && !already && tv > 1.1 - t.def.ai.aggression * 0.3) launchCampaign(game, t, target.id, 0.75);
+  if (target && !already && tv > 1.1 - t.def.ai.aggression * 0.3) { launchCampaign(game, t, target.id, 0.75); t.raidCooldown = t.raidCooldown || {}; t.raidCooldown[target.id] = game.tick + 360 * 3; }
 }
 
 // ---------------------------------------------------------------- main
@@ -302,6 +328,9 @@ export function aiThink(game, t, phase) {
     aiBuild(game, t);
     aiResearch(game, t);
   } else {
+    t.plan = planProgress(game, t);
+    if (t.lastPlanDay !== game.day) { t.lastPlanDay = game.day; checkStagnation(game, t); }
+    executePlan(game, t, t.plan, PLAN_HELPERS);
     aiLaws(game, t);
     aiExpand(game, t);
     aiWar(game, t);
@@ -309,30 +338,25 @@ export function aiThink(game, t, phase) {
   }
 }
 
+const PLAN_HELPERS = {
+  upgrade: (game, t, b) => upgradeBuilding(game, t, b),
+  place: (game, t, type, x, y) => {
+    const c = placementCheck(game, t, type, x, y, { margin: true });
+    if (!c.ok) return false;
+    placeBuilding(game, t, type, x, y); return true;
+  },
+};
+
 // Player steward: optional automation for the player's tribe.
 export function stewardThink(game, t) {
+  if ((t.steward?.build || t.steward?.research || t.steward?.work) && game.tick - (t._planAt || 0) >= 180) { t._planAt = game.tick; t.plan = planProgress(game, t); }
   if (t.steward?.work) autoAllocate(game, t);
   if (t.steward?.housing) aiBuild(game, t, { only: ['housing'] });
   if (t.steward?.build) aiBuild(game, t);
   if (t.steward?.research) aiResearch(game, t);
-  if (t.steward?.diplomacy && game.tick % 180 === (t.id * 40) % 180) {
-    // the envoy answers foreign proposals as an AI ruler of this tribe would
-    for (const pr of game.pendingProposals.filter(p => p.to === t.id)) {
-      const ev = game.dip.evaluate(pr.from, t.id, pr.p);
-      game.pendingProposals = game.pendingProposals.filter(x => x !== pr);
-      if (ev.accept) acceptProposal(game, pr);
-    }
-    game.dip.aiThink(t, { noWar: true });
-  }
+  if (t.steward?.diplomacy && game.tick - (t._envoyAt || 0) >= 180) { t._envoyAt = game.tick; game.dip.envoyThink(t); }
 }
 
-export function acceptProposal(game, pr) {
-  const D = game.dip;
-  switch (pr.p.type) {
-    case 'trade': case 'nap': case 'alliance': D.sign(pr.p.type, pr.from, pr.to); break;
-    case 'peace': D.makePeace(pr.from, pr.to, pr.p.terms || 'white'); break;
-    case 'tribute': D.sign('tribute', pr.from, pr.to, { payer: pr.to, until: game.tick + 360 * 10 }); D.addMod(pr.from, pr.to, 'submitted', 8, { label: 'Paid us tribute', decay: 0.2 }); break;
-  }
-}
+export function acceptProposal(game, pr) { acceptProposalLocal(game, pr); }
 
 export const ENVOY_DEFAULTS = { answer: true, trade: true, peace: true, alliances: true, appease: true, gifts: true };

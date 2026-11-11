@@ -155,9 +155,11 @@ export function captureSettlement(game, tribe, s) {
     // capitals are sacked rather than taken while other towns stand
     for (const [r, v] of Object.entries(loser.stock)) { const take = v * 0.15; loser.stock[r] -= take; addRes(game, tribe, r, take); }
     centre.hp = centre.maxHp * 0.7;
-    s.sackedUntil = game.tick + 360 * 6;
+    s.sackedUntil = game.tick + 360 * 10;
     game.dip.warScore(tribe.id, loser.id, 30);
     loser.stabilityShock = (loser.stabilityShock || 0) + 15;
+    for (const o of game.tribes) if (o.alive && o.id !== tribe.id && o.id !== loser.id) game.dip.addMod(o.id, tribe.id, 'plunderer', -4, { label: 'Sacks foreign capitals', decay: 0.15, min: -16 });
+    tribe.raidCooldown = tribe.raidCooldown || {}; tribe.raidCooldown[s.id] = game.tick + 360 * 8;
     game.log(tribe, 'war', `${tribe.name} sacked ${s.name}, the ${loser.name} capital!`, 3);
     game.bus.emit('sacked', { tribe, s });
     for (const ar of game.armies) if (ar.tribe === tribe.id && ar.target === s.id) ar.state = 'return';
@@ -173,6 +175,9 @@ export function captureSettlement(game, tribe, s) {
     a.tribe = tribe.id; a.job = 'idle'; a.workId = null; a.partner = null;
   }
   game.dip.warScore(tribe.id, loser.id, 45);
+  game.dip.reputation[tribe.id] -= 3;
+  for (const o of game.tribes) if (o.alive && o.id !== tribe.id && o.id !== loser.id) game.dip.addMod(o.id, tribe.id, 'conqueror', -8, { label: 'Conquers its neighbours', decay: 0.1, min: -24 });
+  tribe.stabilityShock = (tribe.stabilityShock || 0) + 4;
   game.log(tribe, 'war', `${tribe.name} captured ${s.name} from the ${loser.name}!`, 3);
   for (const ar of game.armies) if (ar.target === s.id) ar.state = 'return';
   if (!loser.settlements.length) eliminate(game, loser, tribe);
@@ -272,7 +277,7 @@ export function updateDefences(game) {
     if (alive === 0) { ar.state = 'done'; continue; }
     const t = game.tribes[ar.tribe];
     const breakAt = 0.55 + (t.key === 'kharvak' ? 0.15 : 0);
-    if (ar.losses / ar.size > breakAt) { ar.state = 'return'; game.log(t, 'war', `The ${t.name} army fell back from ${game.settlements.get(ar.target)?.name || 'the field'}.`, 1); }
+    if (ar.losses / ar.size > breakAt) { ar.state = 'return'; t.raidCooldown = t.raidCooldown || {}; t.raidCooldown[ar.target] = game.tick + 360 * 5; game.log(t, 'war', `The ${t.name} army fell back from ${game.settlements.get(ar.target)?.name || 'the field'}.`, 1); }
     if (game.tick - ar.start > 360 * 4) ar.state = 'return';
   }
   game.armies = game.armies.filter(ar => ar.state !== 'done' && [...game.agents.values()].some(a => a.army === ar.id));

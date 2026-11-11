@@ -1,3 +1,11 @@
+/* Bundled fonts (SIL Open Font License, see fonts/OFL.txt). Loaded locally
+   so typography is identical online and offline; no remote font requests. */
+@font-face { font-family: 'Pixelify Sans'; font-style: normal; font-weight: 400 700; font-display: block; src: url(../fonts/pixelify-sans-latin.woff2) format('woff2'); }
+@font-face { font-family: 'Silkscreen'; font-style: normal; font-weight: 400; font-display: block; src: url(../fonts/silkscreen-latin.woff2) format('woff2'); }
+@font-face { font-family: 'Jacquarda Bastarda 9'; font-style: normal; font-weight: 400; font-display: block; src: url(../fonts/jacquarda-bastarda-9-latin.woff2) format('woff2'); }
+@font-face { font-family: 'Alegreya'; font-style: normal; font-weight: 400 900; font-display: block; src: url(../fonts/alegreya-latin.woff2) format('woff2'); }
+@font-face { font-family: 'Alegreya'; font-style: italic; font-weight: 400 900; font-display: block; src: url(../fonts/alegreya-italic-latin.woff2) format('woff2'); }
+
 /* CivSim — interface design system
    An "illuminated chronicle" aesthetic: lacquered ink panels in gilded pixel
    frames, parchment insets, blackletter display type over pixel labels. */
@@ -42,7 +50,7 @@ input, select { font: inherit; }
 .frame::before { content: ''; position: absolute; inset: -6px; pointer-events: none; }
 .frame > .inner { image-rendering: auto; }
 .frame.thin { border-width: 10px; border-image-width: 10px; }
-.parch { border: 10px solid transparent; border-image: var(--parchment) 6 fill / 10px stretch; image-rendering: pixelated; color: var(--parch-ink); }
+.parch { border: 10px solid transparent; border-image: var(--parchment) 6 / 10px stretch; image-rendering: pixelated; color: var(--parch-ink); background: #ecdeba; background-clip: padding-box; }
 .inset { border: 6px solid transparent; border-image: var(--inset) 4 fill / 6px stretch; image-rendering: pixelated; }
 .divider { height: 14px; background: var(--divider) center / 128px 14px no-repeat; image-rendering: pixelated; margin: 8px 0; }
 
@@ -199,8 +207,8 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .tribe-card .swatches { display: flex; justify-content: center; gap: 4px; } .tribe-card .swatches i { width: 14px; height: 14px; border: 2px solid #07080c; }
 .trait-list { display: flex; flex-direction: column; gap: 3px; font-size: 0.86em; }
 .trait-list div { display: flex; gap: 6px; align-items: baseline; }
-.trait-list div::before { content: '◆'; font-size: 0.7em; }
-.trait-list.plus div::before { color: var(--good); } .trait-list.minus div::before { color: var(--bad); }
+.trait-list div::before { content: ''; flex: none; width: 5px; height: 5px; transform: translateY(-2px) rotate(45deg); background: currentColor; }
+.trait-list.plus div::before { background: var(--good); } .trait-list.minus div::before { background: var(--bad); }
 .newrun-foot { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
 
 /* load run */
@@ -386,7 +394,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 400; }
 .tnode.stage { filter: saturate(0.5) brightness(0.75); }
 .tnode.available { box-shadow: 0 0 0 2px #07080c, 0 0 0 3px var(--bc), 0 0 0 5px #07080c, 0 0 14px color-mix(in srgb, var(--bc) 50%, transparent); }
 .tnode.done { background: color-mix(in srgb, var(--bc) 28%, #14161f); }
-.tnode.done .tname::after { content: ' ✓'; color: var(--good); }
+.tnode.done .tico::after { content: ''; position: absolute; width: 8px; height: 8px; margin: 22px 0 0 22px; background: var(--good); box-shadow: 0 0 0 2px #07080c; }
 .tnode.current { box-shadow: 0 0 0 2px #07080c, 0 0 0 3px var(--gold-hi), 0 0 0 5px #07080c, 0 0 22px var(--gold); animation: pulse 1.6s infinite; }
 .tnode.queued { box-shadow: 0 0 0 2px #07080c, 0 0 0 3px var(--gold), 0 0 0 5px #07080c; }
 .tnode .prog { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--gold-hi); }

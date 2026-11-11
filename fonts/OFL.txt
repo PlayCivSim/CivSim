@@ -1,0 +1,10 @@
+Bundled fonts (Latin subsets, WOFF2), all licensed under the SIL Open Font License 1.1
+(https://openfontlicense.org):
+
+- Pixelify Sans   — Copyright 2021 The Pixelify Sans Project Authors
+- Silkscreen      — Copyright 2001 The Silkscreen Project Authors (Jason Kottke)
+- Jacquarda Bastarda 9 — Copyright 2024 The Jacquard Project Authors
+- Alegreya        — Copyright 2011 The Alegreya Project Authors (Juan Pablo del Peral, Huerta Tipográfica)
+
+The fonts may be used, bundled and redistributed with the software provided they are
+not sold by themselves. Full license text: https://openfontlicense.org/open-font-license-official-text/

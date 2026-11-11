@@ -235,7 +235,7 @@ export class Game {
     if (this.pendingEvents.length && tk % 100 === 0) {
       for (const pe of this.pendingEvents.slice()) if (tk - pe.tick > DAY_TICKS * 1.5) resolveChoice(this, pe, EVENTS.find(e => e.key === pe.key).choices.length - 1);
     }
-    this.pendingProposals = this.pendingProposals.filter(p => tk - p.tick < DAY_TICKS * 2);
+    this.pendingProposals = this.pendingProposals.filter(p => p.p.ultimatum ? tk - p.tick < DAY_TICKS * 3 : tk - p.tick < DAY_TICKS * 2);
   }
 
   newDay() {
