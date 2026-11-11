@@ -5,6 +5,7 @@
 //   every 10 ticks  – census, territory refresh, AI fast/steward (staggered)
 //   every 50 ticks  – job + housing assignment, needs/happiness, stage checks
 //   every day       – economy ledger, demographics, regrowth, diplomacy, events, AI strategy
+import { updateMissions, updateExplore, exploreTerritory, dailyIntel, revealCircle } from './intel.js';
 import { DAY_TICKS, DAYS_PER_YEAR, TICK_DT, SPEEDS, MAP_SIZES, DIFFICULTIES, STARTS, SEASONS } from '../core/constants.js';
 import { RNG, hashString } from '../core/rng.js';
 import { Bus } from '../core/bus.js';
@@ -25,7 +26,7 @@ import { rollEvents, resolveChoice, EVENTS } from './events.js';
 import { aiThink, stewardThink, autoAllocate } from './ai.js';
 import { isWater, BIOMES } from '../world/biomes.js';
 
-export const SAVE_VERSION = 4; // 4: event records carry cat/with/alert; seenSeq
+export const SAVE_VERSION = 5; // 4: event records carry cat/with/alert; seenSeq. 5: fog, intel, missions (all optional)
 
 // The shared event record keeps up to HISTORY_CAP entries. When full, minor
 // news about other peoples goes first; anything major or involving the player
@@ -62,6 +63,7 @@ export class Game {
     this.grid = new Map();
     this.weather = null;
     this.perf = { tickMs: 0, ticks: 0 };
+    this.fog = false; this.fogNew = [];
   }
 
   get day() { return Math.floor(this.tick / DAY_TICKS); }
@@ -85,6 +87,7 @@ export class Game {
     g.playerId = opts.playerTribe ?? 0;
     g.observer = !!opts.observer;
     g.tutorial = !!opts.tutorial; // scripted tutorial world: rivals never attack the player
+    g.fog = !g.tutorial && opts.intel !== 'open'; // Hard Mode: fog of war, uncertain intelligence, travelling envoys
     g.rng = new RNG(g.seed ^ 0xbeef);
     g.world = generateWorld(g.seed, g.sizeKey, MAP_SIZES[g.sizeKey]);
     g.pf = new Pathfinder(g.world);
@@ -114,8 +117,10 @@ export class Game {
     census(g);
     for (const t of g.tribes) { assignHousing(g, t); autoAllocate(g, t); assignJobs(g, t); t._cap = storageCap(g, t); }
     recomputeTerritory(g);
+    if (g.fog) { g.world.explored = new Uint8Array(g.world.n); const c = g.settlements.get(g.player.capital); revealCircle(g, c.x, c.y, 16); exploreTerritory(g); g.fogNew.length = 0; }
     g.log(null, 'world', `A new world awakens (seed ${g.seedText}). Four peoples light their first fires.`, 3);
     for (const t of g.tribes) g.log(t, 'settlement', `The ${t.name} founded ${g.settlements.get(t.capital).name}.`, 1);
+    if (g.fog) g.log(g.player, 'diplomacy', 'Hard intelligence: beyond your borders lies the unknown. Reports of other peoples are rumours until scouts, envoys or agents confirm them; envoys take days to travel and can be delayed or lost. The Diplomacy panel shows how reliable and how old each piece of knowledge is.', 2);
     return g;
   }
 
@@ -225,9 +230,11 @@ export class Game {
     for (const t of this.tribes) if (t.modsDirty) computeMods(this, t);
     if (tk % 3 === 0) { this.rebuildGrid(); updateDefences(this); }
     updateAgents(this);
+    if (tk % 10 === 5) updateMissions(this);
+    if (tk % 20 === 7) updateExplore(this);
     if (tk % 10 === 0) {
       census(this);
-      if (this.territoryDirty) recomputeTerritory(this);
+      if (this.territoryDirty) { recomputeTerritory(this); exploreTerritory(this); }
       const ti = (tk / 10) % 4;
       const t = this.tribes[ti];
       if (t.alive) {
@@ -290,6 +297,7 @@ export class Game {
     }
     // seedlings: stumps regrow into saplings slowly
     this.dip.daily();
+    dailyIntel(this);
     rollEvents(this);
     if (this.weather && this.tick > this.weather.until) this.weather = null;
     if (!this.weather && this.rng.chance(0.18)) this.weather = { kind: this.season === 3 ? 'snow' : 'rain', until: this.tick + this.rng.int(80, 220) };
@@ -307,7 +315,8 @@ export class Game {
       v: SAVE_VERSION, runId: this.runId, runName: this.runName, seed: this.seed, seedText: this.seedText,
       sizeKey: this.sizeKey, difficulty: this.difficulty, startKey: this.startKey, playerId: this.playerId, observer: this.observer, tutorial: this.tutorial || false,
       created: this.created, saved: Date.now(), tick: this.tick, nextId: this.nextId, rng: this.rng.s, speed: this.speed,
-      world: { trees: enc(w.trees), treeMax: enc(w.treeMax), deposit: enc(w.deposit), depAmt: enc(w.depAmt), fauna: enc(w.fauna), road: enc(w.road), biome: enc(w.biome) },
+      fog: this.fog || undefined,
+      world: { explored: this.fog && w.explored ? enc(w.explored) : undefined, trees: enc(w.trees), treeMax: enc(w.treeMax), deposit: enc(w.deposit), depAmt: enc(w.depAmt), fauna: enc(w.fauna), road: enc(w.road), biome: enc(w.biome) },
       logSeq: this.logSeq || 0, seenSeq: this.seenSeq || 0, territoryVersion: this.territoryVersion,
       tribes, agents, buildings: [...this.buildings.values()], settlements: [...this.settlements.values()],
       armies: this.armies, history: this.history, dip: this.dip.toJSON(), pendingEvents: this.pendingEvents, weather: this.weather,
@@ -326,6 +335,8 @@ export class Game {
     w.deposit.set(dec(d.world.deposit, Uint8Array)); w.depAmt.set(dec(d.world.depAmt, Uint16Array));
     w.fauna.set(dec(d.world.fauna, Uint8Array)); w.road.set(dec(d.world.road, Uint8Array));
     if (d.world.biome) w.biome.set(dec(d.world.biome, Uint8Array));
+    g.fog = !!d.fog; g.fogNew = [];
+    if (g.fog) { w.explored = new Uint8Array(w.n); if (d.world.explored) w.explored.set(dec(d.world.explored, Uint8Array)); }
     g.pf = new Pathfinder(w);
     g.tribes = d.tribes.map((t, i) => ({ ...t, def: TRIBES[i], mods: {}, modsDirty: true }));
     for (const b of d.buildings) {

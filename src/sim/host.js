@@ -1,6 +1,7 @@
 // Simulation host: owns the authoritative Game, runs the fixed-tick loop and
 // streams batched state to the main thread. Runs inside a Web Worker
 // (worker.js) or, as a fallback, in-thread behind the same message protocol.
+import { sendMission, setCounter } from './intel.js';
 import { checksum } from '../save/checksum.js';
 import { Game } from './game.js';
 import { BUILDINGS, JOB_KEYS } from '../data/buildings.js';
@@ -85,7 +86,7 @@ export function createHost(post) {
         tribes: g.tribes.map(t => tribeSnapshot(t, full)),
         buildings: buildingDelta(now), settlements: [...g.settlements.values()], armies: g.armies,
         dip: g.dip.toJSON(), pendingEvents: g.pendingEvents, pendingProposals: g.pendingProposals,
-        history: g.history.filter(e => e.seq > histSent), nextId: g.nextId,
+        history: g.history.filter(e => e.seq > histSent), nextId: g.nextId, fog: g.fogNew.length ? g.fogNew.splice(0) : null,
       };
       histSent = g.logSeq || histSent;
     }
@@ -171,7 +172,13 @@ export function createHost(post) {
       }
       return true;
     },
-    propose(to, p) { const r = game.dip.propose(game.playerId, to, p); return { accept: r.accept, reasons: r.reasons }; },
+    propose(to, p) {
+      // Hard Mode: proposals travel with an envoy; the answer comes when they arrive
+      if (game.fog && !['war', 'cancel'].includes(p.type)) { const r = sendMission(game, game.playerId, to, 'envoy', p); return { sent: true, ...r }; }
+      const r = game.dip.propose(game.playerId, to, p); return { accept: r.accept, reasons: r.reasons };
+    },
+    mission(to, kind) { return sendMission(game, game.playerId, to, kind); },
+    counterIntel(n) { return setCounter(game, game.playerId, n); },
     cancelTreaty(to, treaty) { game.dip.cancel(treaty, game.playerId, to, game.playerId, false); const t = P(); t.envoyBlock = t.envoyBlock || {}; t.envoyBlock[to + ':' + treaty] = game.tick + 360 * 12; return true; },
     declareWar(to) { game.dip.declareWar(game.playerId, to); return true; },
     enactLaw(law, opt) { return enactLaw(game, P(), law, opt); },

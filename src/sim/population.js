@@ -69,6 +69,7 @@ export function assignJobs(game, tribe) {
     if (a.tribe !== tribe.id) continue;
     if (!isAdult(a)) { if (a.job !== 'idle') { a.job = 'idle'; a.workId = null; } continue; }
     if (a.army) { working.soldier = (working.soldier || 0) + 1; continue; }
+    if (a.mission) continue; // away on a mission
     adults.push(a);
   }
   const byJob = {};

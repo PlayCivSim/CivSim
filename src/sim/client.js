@@ -110,6 +110,7 @@ export class SimClient {
     Object.assign(g.dip, s.dip);
     g.pendingEvents = s.pendingEvents; g.pendingProposals = s.pendingProposals;
     g.nextId = s.nextId;
+    if (s.fog) { const ex = g.world.explored; if (ex) { for (const i of s.fog) ex[i] = 1; g.fogDirty = true; } }
     if (s.history.length) { g.history.push(...s.history); if (g.history.length > HISTORY_CAP) trimHistory(g.history, g.playerId); }
   }
 

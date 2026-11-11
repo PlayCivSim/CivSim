@@ -621,3 +621,27 @@ body.cb .bar.green i { background: #6ab0ff; } body.cb .bar.red i { background: #
 .recover-note { font-size: 0.78em; color: var(--warn); display: flex; gap: 4px; align-items: center; }
 .save-ind.failed { color: var(--bad); }
 .slot-group .btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; }
+
+/* ================= Stage 3: intelligence ================= */
+.intel-row { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0 2px; }
+.intel-chip { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-caps); font-size: 0.58em; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 6px 2px 4px; background: rgba(7,8,12,0.6); border: 1px solid #07080c; color: var(--text-dim); cursor: help; }
+.intel-chip i { width: 14px; height: 6px; background: linear-gradient(90deg, var(--c) 0 var(--f), rgba(255,255,255,0.08) var(--f)); box-shadow: 0 0 0 1px #07080c; }
+.intel-chip.lv0 { --c: #555; --f: 0%; } .intel-chip.lv1 { --c: #b8a070; --f: 34%; } .intel-chip.lv2 { --c: var(--info); --f: 67%; } .intel-chip.lv3 { --c: var(--good); --f: 100%; color: var(--text); }
+.intel-chip.exposed { color: var(--bad); text-decoration: line-through; }
+.intel-actions { border-top: 1px dashed rgba(216,178,90,0.25); padding-top: 4px; margin-top: 4px; }
+.mission-list { display: flex; flex-direction: column; gap: 4px; }
+.mission { display: flex; gap: 8px; padding: 6px 8px; background: rgba(255,255,255,0.03); border-left: 3px solid var(--gold-deep); }
+.mission.late { border-left-color: var(--warn); } .mission.lost { border-left-color: var(--bad); opacity: 0.75; }
+.mission .m-main { flex: 1; min-width: 0; font-size: 0.9em; }
+.mission .m-st { font-family: var(--font-caps); font-size: 0.66em; letter-spacing: 0.06em; color: var(--text-dim); text-transform: uppercase; }
+.mission .m-bar { height: 4px; background: rgba(7,8,12,0.7); margin: 3px 0; } .mission .m-bar i { display: block; height: 100%; background: var(--gold); }
+.mission .m-note { font-size: 0.85em; color: var(--text-dim); font-style: italic; }
+.counter-box { padding: 4px 6px; margin: 10px 0; }
+.rep-line { font-size: 0.88em; margin-bottom: 8px; display: flex; gap: 6px; align-items: center; }
+.rep-honourable b { color: var(--good); } .rep-doubted b { color: var(--warn); } .rep-oathbreaker b { color: var(--bad); }
+.inbox { display: flex; flex-direction: column; gap: 2px; font-size: 0.88em; }
+.dispatch { display: grid; grid-template-columns: 86px 1fr; gap: 8px; padding: 3px 6px; background: rgba(255,255,255,0.025); }
+.dispatch .d-when { font-family: var(--font-caps); font-size: 0.72em; color: var(--gold); text-transform: uppercase; padding-top: 2px; }
+.dispatch.old { opacity: 0.6; } .dispatch.alert { background: rgba(255,90,80,0.08); }
+.kvbox { margin-top: 8px; padding: 6px 8px; background: rgba(7,8,12,0.5); box-shadow: 0 0 0 1px var(--gold-deep) inset; display: flex; flex-direction: column; gap: 3px; }
+.kvbox .tt-row { display: flex; justify-content: space-between; gap: 12px; }

@@ -132,6 +132,7 @@ export class Renderer {
     this.drawFx(ctx, dt, z);
     this.drawOverlays(ctx, z);
     this.drawClouds(ctx, z);
+    this.drawFog(ctx);
     // screen-space passes
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.drawLighting(ctx, s, ox, oy, vx0, vy0, vx1, vy1);
@@ -385,6 +386,23 @@ export class Renderer {
     }
   }
 
+  // Fog of war (Hard Mode): a one-pixel-per-tile mask scaled up with smoothing
+  // gives soft edges for the cost of a single drawImage.
+  drawFog(ctx) {
+    const g = this.game, w = g.world;
+    if (!g.fog || !w.explored) return;
+    if (!this.fogCv || g.fogDirty || this.fogFor !== g) {
+      g.fogDirty = false; this.fogFor = g; this.miniDirty = true;
+      const c = this.fogCv || (this.fogCv = document.createElement('canvas')); c.width = w.w; c.height = w.h;
+      const x = c.getContext('2d'); const img = x.createImageData(w.w, w.h); const D = img.data;
+      for (let i = 0; i < w.n; i++) { D[i * 4] = 10; D[i * 4 + 1] = 12; D[i * 4 + 2] = 20; D[i * 4 + 3] = w.explored[i] ? 0 : 255; }
+      x.putImageData(img, 0, 0);
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.fogCv, 0, 0, w.w * TILE, w.h * TILE);
+    ctx.imageSmoothingEnabled = false;
+  }
+
   drawCloudShadows(ctx, dt) {
     const g = this.game, w = g.world;
     for (const c of this.clouds) { c.x += c.v * dt * 3; if (c.x > w.w * TILE + 80) c.x = -80; }
@@ -476,6 +494,7 @@ export class Renderer {
     const ctx = mm.getContext('2d'); const img = ctx.createImageData(w.w, w.h); const D = img.data;
     const cols = BIOMES.map(b => hex(b.cols[0]));
     const tcol = TRIBES.map(t => hex(t.color));
+    const fog = g.fog && w.explored;
     for (let i = 0; i < w.n; i++) {
       let [r, gg, b] = cols[w.biome[i]];
       if (w.trees[i] > 20) { r *= 0.8; gg *= 0.88; b *= 0.8; }
@@ -483,6 +502,7 @@ export class Renderer {
       if (o >= 0) { const c = tcol[o]; const k = isWater(w.biome[i]) ? 0.25 : 0.45; r += (c[0] - r) * k; gg += (c[1] - gg) * k; b += (c[2] - b) * k; }
       if (w.occ[i]) { const bb = g.buildings.get(w.occ[i] - 1); if (bb) { const c = tcol[bb.tribe]; r = c[0] * 0.7 + 60; gg = c[1] * 0.7 + 60; b = c[2] * 0.7 + 60; } }
       if (w.road[i]) { r = 190; gg = 160; b = 120; }
+      if (fog && !w.explored[i]) { r = 12; gg = 14; b = 22; }
       D[i * 4] = r; D[i * 4 + 1] = gg; D[i * 4 + 2] = b; D[i * 4 + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);

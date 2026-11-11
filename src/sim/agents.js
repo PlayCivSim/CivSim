@@ -106,6 +106,7 @@ export function updateAgents(game) {
       case 'build': doBuild(game, a, dt); break;
       case 'sleep': a.moving = false; if ((a.wounded || 0) > game.tick) break; if (!isNight(game) || (a.job === 'soldier' && game.tribes[a.tribe].threat)) { a.hidden = false; a.state = 'think'; } break;
       case 'fight': updateSoldier(game, a, dt); break;
+      case 'mission': a.moving = false; break; // away on an envoy, scout or agent mission (intel.js)
       case 'travel': a.timer -= dt * 10; if (a.timer <= 0) { a.hidden = false; a.state = 'think'; finishTravel(game, a); } break;
       default: think(game, a); break;
     }

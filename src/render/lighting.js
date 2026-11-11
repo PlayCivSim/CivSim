@@ -121,8 +121,10 @@ export class Lighting {
   collect(game, view, s, ox, oy, time, agentsVisible) {
     const lights = [], occ = [];
     const toS = (x, y) => [x * s + ox, y * s + oy];
+    const ex = game.fog && game.world.explored, ww = game.world.w;
     for (const b of game.buildings.values()) {
       if (!b.built) continue;
+      if (ex && !ex[b.y * ww + b.x]) continue; // hidden by fog of war
       const bx = b.x * TILE, by = b.y * TILE, sz = b.size * TILE;
       if (bx > view.x1 + 160 || bx + sz < view.x0 - 160 || by > view.y1 + 160 || by + sz < view.y0 - 160) continue;
       const def = BUILDINGS[b.type];
@@ -135,7 +137,7 @@ export class Lighting {
     if (agentsVisible) {
       let n = 0;
       for (const a of game.agents.values()) {
-        if (a.hidden) continue;
+        if (a.hidden || (ex && !ex[(a.y | 0) * ww + (a.x | 0)])) continue;
         const ax = a.x * TILE, ay = a.y * TILE;
         if (ax < view.x0 || ax > view.x1 || ay < view.y0 || ay > view.y1) continue;
         const [x, y] = toS(ax, ay - 4);

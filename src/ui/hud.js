@@ -21,6 +21,7 @@ import { SLOT_NAMES, MANUAL_SLOTS, getRun, slotLabel } from '../save/saves.js';
 import { techCost } from '../sim/progress.js';
 import { unread, openHappiness, manpower, manpowerTip, openHudCustomise, hudHidden } from './notices.js';
 import { isAlert } from '../sim/records.js';
+import { fogged } from '../sim/intel.js';
 
 const SPEED_INFO = ['Paused: the world holds still, but you can still give orders', 'Normal: 1x speed', 'Fast: 3x speed', 'Very fast: 8x speed'];
 
@@ -367,6 +368,7 @@ export class Hud {
   hoverBuilding(w, e) {
     let b = null;
     if (!this.placing) { const g = this.game, wd = g.world; for (const dy of [0, 1]) { const x = w.x | 0, y = (w.y + dy) | 0; if (wd.inb(x, y) && wd.occ[wd.idx(x, y)] > 0) { b = g.buildings.get(wd.occ[wd.idx(x, y)] - 1); break; } } }
+    if (b && fogged(this.game, b.x, b.y)) b = null;
     if (!b) { this.hoverB = null; mapTip(null); return; }
     if (this.hoverB !== b.id) mapTip(null); // a different building: show it afresh beside the pointer
     this.hoverB = b.id;
@@ -410,7 +412,8 @@ export class Hud {
       if (this.panel === 'build') this.renderPanel(true);
       return;
     }
-    // selection: agents first, then buildings, then the tile
+    // selection: agents first, then buildings, then the tile (nothing under the fog of war)
+    if (fogged(g, w.x, w.y)) { this.select(null); return; }
     const a = g.agentAt(w.x, w.y, 0.8);
     if (a) { this.select({ kind: 'agent', id: a.id }); return; }
     const i = g.world.inb(w.x | 0, w.y | 0) ? g.world.idx(w.x | 0, w.y | 0) : -1;
@@ -577,7 +580,10 @@ export function proposalText(p) {
   switch (p.type) {
     case 'trade': return 'They propose a Trade Agreement.';
     case 'nap': return 'They propose a Non-Aggression Pact.';
-    case 'alliance': return 'They seek an Alliance.';
+    case 'alliance': return 'They seek a Military Alliance.';
+    case 'access': return 'They propose Border Access.';
+    case 'exclusive': return 'They propose Trade Exclusivity.';
+    case 'offerTribute': return 'They offer to pay you tribute.';
     case 'peace': return p.terms === 'tribute_a' ? 'They sue for peace and offer tribute.' : p.terms === 'tribute_b' ? 'They offer peace — if you pay tribute.' : 'They offer a white peace.';
     case 'gift': return `They send a gift of ${p.amt} ${RESOURCES[p.res].name}.`;
     case 'tribute': return p.ultimatum ? `Ultimatum: pay tribute for ten days or face war (${p.reason || 'they covet your lands'}).` : 'They demand that you pay tribute.';

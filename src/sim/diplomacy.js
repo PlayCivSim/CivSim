@@ -15,7 +15,8 @@ const COMPAT = {
 };
 const compat = (a, b) => COMPAT[[a, b].sort().join('-')] || 0;
 
-export const TREATY_NAMES = { trade: 'Trade Agreement', nap: 'Non-Aggression Pact', alliance: 'Alliance', tribute: 'Tribute' };
+export const TREATY_NAMES = { trade: 'Trade Agreement', nap: 'Non-Aggression Pact', alliance: 'Military Alliance', tribute: 'Tribute', access: 'Border Access', exclusive: 'Trade Exclusivity' };
+import { repTier } from './intel.js';
 
 export class Diplomacy {
   constructor(game, data) {
@@ -86,7 +87,7 @@ export class Diplomacy {
     if (this.atWar(a, b) || a === b) return;
     if (this.game.tutorial && a !== this.game.playerId && b === this.game.playerId) return;
     const g = this.game, ta = g.tribes[a], tb = g.tribes[b];
-    for (const type of ['nap', 'alliance', 'trade']) if (this.has(type, a, b)) this.cancel(type, a, b, a, type !== 'trade');
+    for (const type of ['nap', 'alliance', 'trade', 'access', 'exclusive']) if (this.has(type, a, b)) this.cancel(type, a, b, a, type === 'nap' || type === 'alliance');
     this.treaties = this.treaties.filter(t => !(t.type === 'tribute' && ((t.a === a && t.b === b) || (t.a === b && t.b === a))));
     this.wars.push({ a, b, start: g.tick, score: { [a]: 0, [b]: 0 }, reason });
     // aggression has diplomatic consequences: unprovoked wars alarm everyone
@@ -198,13 +199,38 @@ export class Diplomacy {
     let score = 0;
     const add = (v, label) => { score += v; if (Math.abs(v) >= 1) reasons.push({ v: Math.round(v), label }); };
     if (!this.contact[from][to]) return { accept: false, score: -100, reasons: [{ v: -100, label: 'They have not met you' }] };
+    const tier = repTier(this.reputation[from]);
+    if (tier.key === 'honourable' && ['nap', 'alliance', 'access', 'exclusive', 'trade'].includes(p.type)) add(6, 'Your word is trusted');
+    if (tier.key === 'doubted' && ['nap', 'alliance', 'access', 'exclusive'].includes(p.type)) add(-10, 'They doubt your word');
+    if (tier.key === 'oathbreaker' && p.type === 'nap') add(-25, 'You are an oathbreaker');
+    if (tier.key === 'oathbreaker' && p.type === 'alliance') return { accept: false, score: -100, reasons: [{ v: -100, label: 'You are an oathbreaker' }] };
     add(op * 0.5, 'Opinion of you');
     const rs = (tf.strength + 1) / (tt.strength + 1);
     switch (p.type) {
       case 'trade':
         if (!tt.techs.includes('barter') || !tf.techs.includes('barter')) return { accept: false, score: -100, reasons: [{ v: -100, label: 'Both must know Barter' }] };
         if (this.atWar(from, to)) return { accept: false, score: -100, reasons: [{ v: -100, label: 'You are at war' }] };
+        if (this.treaties.some(x => x.type === 'exclusive' && (x.a === to || x.b === to) && x.a !== from && x.b !== from)) return { accept: false, score: -100, reasons: [{ v: -100, label: 'Bound by an exclusive trade deal' }] };
+        if (this.treaties.some(x => x.type === 'exclusive' && (x.a === from || x.b === from) && x.a !== to && x.b !== to)) return { accept: false, score: -100, reasons: [{ v: -100, label: 'You are bound by an exclusive trade deal' }] };
         add(10 + ai.trade * 15, 'Values commerce'); break;
+      case 'access': {
+        if (this.atWar(from, to)) return { accept: false, score: -100, reasons: [{ v: -100, label: 'You are at war' }] };
+        if (tier.key === 'oathbreaker') return { accept: false, score: -100, reasons: [{ v: -100, label: 'You are an oathbreaker' }] };
+        add(-8, 'Wary of foreign travellers'); add(ai.diplomacy * 10 + ai.trade * 6, 'Open temperament'); add(-ai.caution * 10, 'Cautious');
+        if (this.has('trade', from, to)) add(8, 'Trading partners');
+        break;
+      }
+      case 'exclusive': {
+        if (!this.has('trade', from, to)) return { accept: false, score: -100, reasons: [{ v: -100, label: 'Needs a Trade Agreement first' }] };
+        if (tier.key === 'oathbreaker') return { accept: false, score: -100, reasons: [{ v: -100, label: 'You are an oathbreaker' }] };
+        const others = this.partners(to).filter(x => x !== from).length, mine = this.partners(from).filter(x => x !== to).length;
+        if (mine) return { accept: false, score: -100, reasons: [{ v: -100, label: 'End your other trade agreements first' }] };
+        add(-6 - others * 14, others ? `Would give up ${others} other partner${others > 1 ? 's' : ''}` : 'A binding commitment');
+        add(ai.trade * 14, 'Values commerce'); add(op * 0.15, '');
+        break;
+      }
+      case 'offerTribute':
+        add(30, 'Welcomes tribute'); break;
       case 'nap':
         if (this.atWar(from, to)) return { accept: false, score: -100, reasons: [{ v: -100, label: 'You are at war — propose peace instead' }] };
         add(5 + (rs > 1.2 ? 12 : 0), rs > 1.2 ? 'Wary of your strength' : 'Values security');
@@ -266,11 +292,17 @@ export class Diplomacy {
     const ev = this.evaluate(from, to, p);
     this.lastProposal[from][to] = g.tick;
     if (!ev.accept) {
+      // pestering a people that just refused wears thin
+      this.refusedAt = this.refusedAt || {};
+      const rk = from * 8 + to;
+      if (g.tick - (this.refusedAt[rk] || -1e9) < DAY_TICKS * 5) this.addMod(to, from, 'pester', -3, { label: 'Pesters us with proposals', decay: 0.3, min: -12 });
+      this.refusedAt[rk] = g.tick;
       if (p.type === 'tribute') this.addMod(to, from, 'demand', -10, { label: 'Made insulting demands', decay: 0.4 });
       return ev;
     }
     switch (p.type) {
-      case 'trade': case 'nap': case 'alliance': this.sign(p.type, from, to); break;
+      case 'trade': case 'nap': case 'alliance': case 'access': case 'exclusive': this.sign(p.type, from, to); break;
+      case 'offerTribute': this.sign('tribute', from, to, { payer: from, until: g.tick + DAY_TICKS * 10 }); g.log(tf, 'diplomacy', `The ${tf.name} agreed to pay tribute to the ${tt.name}.`, 2, { with: to }); break;
       case 'peace': this.makePeace(from, to, p.terms || 'white'); break;
       case 'gift': {
         takeRes(tf, p.res, p.amt); addRes(g, tt, p.res, p.amt);
@@ -550,7 +582,7 @@ export function tradeTrip(game, a, t) {
     if (!partner || !partner.alive || !game.dip.has('trade', tribe.id, partner.id)) { a.state = 'think'; return; }
     const wb = a.workId != null ? game.buildings.get(a.workId) : null;
     const bonus = wb?.type === 'harbor' ? 0.4 : 0;
-    const base = 5 * (1 + mod(tribe, 'trade') + bonus) * (tribe.productivity || 1);
+    const base = 5 * (1 + mod(tribe, 'trade') + bonus) * (tribe.productivity || 1) * (game.dip.has('exclusive', tribe.id, partner.id) ? 1.5 : 1);
     if (tribe.techs.includes('currency')) addRes(game, tribe, 'coins', base * 1.6 * (1 + mod(tribe, 'tariff')));
     else addRes(game, tribe, 'goods', base * 0.25);
     // exchange surpluses: each side receives something the other has in excess
