@@ -1,6 +1,6 @@
 // In-game HUD: top bar, navigation rail, side panels, minimap, inspector,
 // build placement, notifications and the escape menu.
-import { h, $, $$, esc, fmt, sign, toast, modal, closeModal, modalOpen, confirmDialog, refreshTip, tip, bar } from './dom.js';
+import { h, $, $$, esc, fmt, sign, toast, modal, closeModal, modalOpen, confirmDialog, refreshTip, tip, bar, mapTip } from './dom.js';
 import { ico, emblemURL, spriteURL } from './icons.js';
 import { PANELS, ACTIONS, buildingTip } from './panels.js';
 import { TRIBES } from '../data/tribes.js';
@@ -315,6 +315,13 @@ export class Hud {
       html = `<div class="place-hint frame thin">${ico('build')}<div class="ph-text"><div style="color:var(--gold-hi)">${def.name}</div><div class="cost">${Object.entries(cost).map(([r, v]) => `<span class="${(t.stock[r] || 0) < v ? 'lack' : ''}">${ico(r, 'sm')}${v}</span>`).join('')}${why ? `<span class="bad">· ${esc(why)}</span>` : `<span class="faint">· ${touch ? 'Tap the map to move it, then Place' : 'Shift-click to place several'}</span>`}</div></div>${buttons}</div>`;
     }
     if (html !== this.lastHintHTML || !host.firstElementChild) { host.innerHTML = html; this.lastHintHTML = html; }
+  }
+
+  // desktop: hovering a building shows its info and who is inside
+  hoverBuilding(w, e) {
+    let b = null;
+    if (!this.placing) { const g = this.game, wd = g.world; for (const dy of [0, 1]) { const x = w.x | 0, y = (w.y + dy) | 0; if (wd.inb(x, y) && wd.occ[wd.idx(x, y)] > 0) { b = g.buildings.get(wd.occ[wd.idx(x, y)] - 1); break; } } }
+    if (b && !this.game.agentAt(w.x, w.y, 0.8)) mapTip(() => `<div class="inspector" style="--tribe:${TRIBES[b.tribe].color}">${buildingTip(this, b, null)}</div>`, e.clientX, e.clientY); else mapTip(null);
   }
 
   onHover(w, e) {

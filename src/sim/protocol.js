@@ -19,8 +19,8 @@ import { RES_KEYS } from '../data/resources.js';
 
 export const JOBS = ['idle', ...JOB_KEYS];
 export const STATES = ['think', 'walk', 'pathWait', 'wait', 'work', 'build', 'sleep', 'fight', 'travel'];
-export const STRIDE = 14;
-// layout: 0 id, 1 x, 2 y, 3 tribe, 4 flags, 5 job, 6 state, 7 carry, 8 age, 9 look, 10 hp, 11 health, 12 sid, 13 army
+export const STRIDE = 15;
+// layout: 0 id, 1 x, 2 y, 3 tribe, 4 flags, 5 job, 6 state, 7 carry, 8 age, 9 look, 10 hp, 11 health, 12 sid, 13 army, 14 building id+1 the agent is inside (0 = none)
 export const F = { HIDDEN: 1, MOVING: 2, FEMALE: 4, LEFT: 8, ATTACK: 16, HAMMER: 32, BUBBLE: 64 };
 
 const jobIdx = Object.fromEntries(JOBS.map((k, i) => [k, i]));
@@ -43,6 +43,7 @@ export function packAgents(game) {
     arr[o] = a.id; arr[o + 1] = a.x; arr[o + 2] = a.y; arr[o + 3] = a.tribe; arr[o + 4] = f;
     arr[o + 5] = jobIdx[a.job] ?? 0; arr[o + 6] = stateIdx[a.state] ?? 0; arr[o + 7] = carry ? resIdx[carry] : -1;
     arr[o + 8] = a.age; arr[o + 9] = a.look; arr[o + 10] = a.hp; arr[o + 11] = a.health; arr[o + 12] = a.sid ?? -1; arr[o + 13] = a.army ?? 0;
+    arr[o + 14] = a.hidden ? (a.inB || (a.homeId != null ? a.homeId + 1 : 0)) : 0;
     o += STRIDE;
   }
   return arr;
@@ -66,7 +67,7 @@ export function unpackAgents(mirror, arr) {
     a.job = JOBS[arr[o + 5]]; a.state = STATES[arr[o + 6]];
     const c = arr[o + 7]; if (c >= 0) { const k = RES_KEYS[c]; if (!a.carry || !(k in a.carry)) a.carry = { [k]: 1 }; } else a.carry = null;
     a.age = arr[o + 8]; a.look = arr[o + 9]; a.hp = arr[o + 10]; a.health = arr[o + 11];
-    a.sid = arr[o + 12] < 0 ? null : arr[o + 12]; a.army = arr[o + 13] || null;
+    a.sid = arr[o + 12] < 0 ? null : arr[o + 12]; a.army = arr[o + 13] || null; a.inB = arr[o + 14];
   }
   for (const id of mirror.agents.keys()) if (!seen.has(id)) mirror.agents.delete(id);
 }

@@ -226,7 +226,7 @@ class App {
         r.cam.x -= (n.mx - pinch.mx) / r.cam.zoom; r.cam.y -= (n.my - pinch.my) / r.cam.zoom;
         pinch = n; return;
       }
-      if (e.pointerType === 'mouse') { const wpos = r.screenToWorld(e.clientX, e.clientY); r.hover = wpos; if (!this.touch) this.hud.onHover(wpos, e); }
+      if (e.pointerType === 'mouse') { const wpos = r.screenToWorld(e.clientX, e.clientY); r.hover = wpos; if (!this.touch) { this.hud.onHover(wpos, e); this.hud.hoverBuilding(wpos, e); } }
       if (!drag) return;
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (!drag.moved && Math.hypot(dx, dy) > (drag.touch ? 10 : 5)) { drag.moved = true; cv.classList.add('grab'); }

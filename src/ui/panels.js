@@ -420,6 +420,15 @@ export function buildingTip(hud, b, inspector) {
   const s = g.settlements.get(b.sid);
   const spr = spriteURL('building', b.type, tribe.key, tribe.stage, d.size);
   let info = '';
+  let inside = '';
+  if (b.built) {
+    const m = new Map();
+    for (const a of g.agents.values()) if (a.hidden && a.inB === b.id + 1) {
+      const what = a.state === 'sleep' ? 'sleeping' : a.job === 'researcher' ? 'researching' : a.job === 'craftsman' ? 'crafting' : a.job === 'miner' ? 'mining' : 'working';
+      const k = (a.state === 'sleep' ? 'Resident' : JOBS[a.job]?.name || 'Citizen') + ' · ' + what; m.set(k, (m.get(k) || 0) + 1);
+    }
+    if (m.size) inside = `<span>Inside</span><span>${[...m].map(([k, n]) => `${n} × ${k}`).join('<br>')}</span>`;
+  }
   if (!b.built) info += `<span>Construction</span><span>${bar(b.progress / (d.work || 30))}</span><span>Builders</span><span>${b._builders || 0} working</span>`;
   else {
     if (d.housing) info += `<span>Residents</span><span>${b.residentCount || 0} / ${d.housing}</span>`;
@@ -436,14 +445,14 @@ export function buildingTip(hud, b, inspector) {
   }
   const effect = d.effect ? Object.entries(d.effect).map(([k, v]) => `${modName(k)} ${sign(Math.abs(v) < 2 ? v * 100 : v, 0)}${Math.abs(v) < 2 ? '%' : ''}`).join(', ') : '';
   let ctl = '';
-  if (mine && b.built) {
+  if (mine && b.built && inspector !== null) {
     if (d.prod?.deps) { const acc = accessibleDeposits(tribe, d.prod.deps); ctl += `<div class="row" style="flex-wrap:wrap;gap:3px;margin-top:6px"><span class="caps" style="color:var(--gold)">Focus</span><button class="btn xs ${!b.focus ? 'on' : ''}" data-act="b-focus" data-id="${b.id}" data-k="">Auto</button>${acc.map(k => `<button class="btn xs ${b.focus === k ? 'on' : ''}" data-act="b-focus" data-id="${b.id}" data-k="${k}">${ico(DEPOSITS[DEP[k]].res, 'sm')}</button>`).join('')}</div>`; }
     if (d.prod?.recipes) ctl += `<div class="row" style="flex-wrap:wrap;gap:3px;margin-top:6px"><span class="caps" style="color:var(--gold)">Recipe</span><button class="btn xs ${b.recipe < 0 ? 'on' : ''}" data-act="b-recipe" data-id="${b.id}" data-r="-1">Auto</button>${d.prod.recipes.map((r, i) => `<button class="btn xs ${b.recipe === i ? 'on' : ''}" data-act="b-recipe" data-id="${b.id}" data-r="${i}" data-tip="${esc(Object.entries(r.in).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(' + ') + ' › ' + r.amt + ' ' + RESOURCES[r.out].name)}">${Object.keys(r.in).map(k => ico(k, 'sm')).join('')}›${ico(r.out, 'sm')}</button>`).join('')}</div>`;
     const up = upgradeTarget(tribe, b);
     ctl += `<div class="row" style="margin-top:8px;gap:4px">${up ? `<button class="btn xs" data-act="b-upgrade" data-id="${b.id}" data-tip="${esc('Upgrade to ' + BUILDINGS[up].name + ': ' + Object.entries(buildingCost(tribe, up)).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', '))}">${ico('plus', 'sm')} Upgrade</button>` : ''}${b.type !== 'centre' ? `<button class="btn xs danger" data-act="b-demolish" data-id="${b.id}">${ico('close', 'sm')} Demolish</button>` : ''}</div>`;
   }
   return `<div class="insp-head"><div class="portrait" style="width:64px"><img src="${spr}" style="width:${Math.min(60, d.size * 16)}px"></div><div style="flex:1"><div class="insp-name">${d.name}</div><div class="dim" style="font-size:0.85em">${tribe.def.adjective} · ${esc(s?.name || '')}${b.built ? '' : ' · under construction'}</div><div class="faint" style="font-size:0.8em;font-family:var(--font-prose)">${esc(d.desc)}</div></div>${inspector ? `<span class="close-x" data-act="insp-close">${ico('close', 'sm')}</span>` : ''}</div>
-    <div class="kv">${info}${effect ? `<span>Effects</span><span>${effect}</span>` : ''}</div>${ctl}`;
+    <div class="kv">${info}${inside}${effect ? `<span>Effects</span><span>${effect}</span>` : ''}</div>${ctl}`;
 }
 
 // ================================================================= ACTIONS

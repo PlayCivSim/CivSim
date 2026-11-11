@@ -145,8 +145,8 @@ function arrive(game, a) {
   if (!t) { a.state = 'think'; return; }
   const tribe = game.tribes[a.tribe];
   switch (t.act) {
-    case 'gather': a.state = 'work'; a.timer = t.time; a.task = t; a.hidden = !!t.hide; break;
-    case 'atWork': a.state = 'work'; a.timer = t.time; a.task = t; a.hidden = !!t.hide; break;
+    case 'gather': a.state = 'work'; a.timer = t.time; a.task = t; a.hidden = !!t.hide; a.inB = t.b != null ? t.b + 1 : 0; break;
+    case 'atWork': a.state = 'work'; a.timer = t.time; a.task = t; a.hidden = !!t.hide; a.inB = t.b != null ? t.b + 1 : 0; break;
     case 'deliver': {
       if (a.carry) { for (const [r, v] of Object.entries(a.carry)) addRes(game, tribe, r, v); game.fx.push({ kind: 'pop', x: a.x, y: a.y - 1, t: 0, life: 0.8, res: Object.keys(a.carry)[0], tribe: a.tribe }); }
       a.carry = null; wait(a, 4); break;

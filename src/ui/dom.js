@@ -58,7 +58,15 @@ function renderTip() {
   tipEl.innerHTML = html;
   tipEl.classList.add('show');
 }
-export function refreshTip() { if (tipTarget && document.body.contains(tipTarget)) renderTip(); else if (tipTarget) { tipTarget = null; tipEl.classList.remove('show'); } }
+const mapTipEl = {}; let mapHTML = '';
+// tooltip for things drawn on the map (no DOM element): fn() -> html, or null to hide
+export function mapTip(fn, x, y) {
+  if (!fn) { if (tipTarget === mapTipEl) { tipTarget = null; tipEl.classList.remove('show'); } return; }
+  mapTipEl._tip = fn; tipTarget = mapTipEl;
+  const h = fn(); if (h !== mapHTML) { mapHTML = h; renderTip(); }
+  placeTip(x, y);
+}
+export function refreshTip() { if (tipTarget === mapTipEl) { mapHTML = ''; return; } if (tipTarget && document.body.contains(tipTarget)) renderTip(); else if (tipTarget) { tipTarget = null; tipEl.classList.remove('show'); } }
 function placeTip(x, y) {
   const r = tipEl.getBoundingClientRect();
   let nx = x + 18, ny = y + 18;

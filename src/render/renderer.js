@@ -182,10 +182,11 @@ export class Renderer {
       if (bx > vx1 || bx + sz < vx0 || by - 30 > vy1 || by + sz < vy0) continue;
       items.push({ y: by + sz - 1, k: 1, b });
     }
-    // agents
+    // agents (below 0.9 zoom nobody is drawn at all; hidden ones are inside buildings and counted on the door)
+    this.inside = new Map();
     if (z >= 0.9) {
       for (const a of g.agents.values()) {
-        if (a.hidden) continue;
+        if (a.hidden) { if (a.inB && z >= 1.6) this.inside.set(a.inB, (this.inside.get(a.inB) || 0) + 1); continue; }
         const ax = a.x * TILE, ay = a.y * TILE;
         if (ax < vx0 - 8 || ax > vx1 + 8 || ay < vy0 - 8 || ay > vy1 + 12) continue;
         items.push({ y: ay, k: 2, a });
@@ -244,6 +245,8 @@ export class Renderer {
         }
       }
     }
+    const n = b.built && this.inside?.get(b.id + 1);
+    if (n) { ctx.fillStyle = tribe.color; for (let k = 0; k < Math.min(n, 6); k++) ctx.fillRect(x + 2 + k * 3, y - 2, 2, 2); }
     if (sel && sel.kind === 'building' && sel.id === b.id) {
       ctx.strokeStyle = '#ffe9a8'; ctx.lineWidth = 1 / this.cam.zoom * 1.5;
       ctx.strokeRect(b.x * TILE - 0.5, b.y * TILE - 0.5, b.size * TILE + 1, b.size * TILE + 1);
