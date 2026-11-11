@@ -71,7 +71,9 @@ function moveToward(game, a, x, y, dt, speed = 1.7) {
   if (d < 0.05) { a.moving = false; return true; }
   // follow a coarse path if far, else steer directly
   if (d > 3) {
-    if (!a.path || a.pi >= a.path.length || a.pathGoal !== ((y | 0) * w.w + (x | 0))) {
+    const gx0 = a.pathGoal != null ? a.pathGoal % w.w : -99, gy0 = a.pathGoal != null ? (a.pathGoal / w.w) | 0 : -99;
+    const goalMoved = Math.abs(gx0 - x) + Math.abs(gy0 - y) > Math.max(3, d * 0.25);
+    if (!a.path || a.pi >= a.path.length || goalMoved) {
       const goal = w.idx(Math.max(0, Math.min(w.w - 1, x | 0)), Math.max(0, Math.min(w.h - 1, y | 0)));
       const p = game.pf.find(w.idx(a.x | 0, a.y | 0), goal, { maxNodes: 9000 });
       if (p === undefined) return false;

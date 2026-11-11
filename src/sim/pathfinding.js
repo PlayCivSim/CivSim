@@ -20,7 +20,7 @@ export class Pathfinder {
     this.stats = { searches: 0, hits: 0, fails: 0 };
     this.allowRiver = () => true;
   }
-  resetBudget(n) { this.budget = n; }
+  resetBudget(n) { this.budget = n; this.nodeBudget = 6000; }
   invalidate() { this.cache.clear(); }
 
   // Returns: array of tile indices (excluding start), [] if same tile,
@@ -30,7 +30,7 @@ export class Pathfinder {
     const key = from * 1e6 + to;
     const c = this.cache.get(key);
     if (c !== undefined) { this.stats.hits++; return c; }
-    if (this.budget <= 0 && !opts.force) return undefined;
+    if ((this.budget <= 0 || this.nodeBudget <= 0) && !opts.force) return undefined;
     this.budget--;
     this.stats.searches++;
     const p = this.search(from, to, opts.maxNodes || 3000, opts.bridges);
@@ -50,19 +50,27 @@ export class Pathfinder {
     let size = 0;
     const heap = this.heap, hf = this.hf, g = this.g, stamp = this.stamp, closed = this.closed, parent = this.parent;
     const push = (i, f) => {
-      let k = size++; heap[k] = i; hf[k] = f;
-      while (k > 0) { const pk = (k - 1) >> 1; if (hf[pk] <= hf[k]) break; [heap[pk], heap[k]] = [heap[k], heap[pk]]; [hf[pk], hf[k]] = [hf[k], hf[pk]]; k = pk; }
+      let k = size++;
+      while (k > 0) { const pk = (k - 1) >> 1; if (hf[pk] <= f) break; heap[k] = heap[pk]; hf[k] = hf[pk]; k = pk; }
+      heap[k] = i; hf[k] = f;
     };
     const pop = () => {
       const top = heap[0]; size--;
       if (size > 0) {
-        heap[0] = heap[size]; hf[0] = hf[size];
+        const li = heap[size], lf = hf[size];
         let k = 0;
-        for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; if (l < size && hf[l] < hf[m]) m = l; if (r < size && hf[r] < hf[m]) m = r; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; [hf[m], hf[k]] = [hf[k], hf[m]]; k = m; }
+        for (;;) {
+          const l = 2 * k + 1; if (l >= size) break;
+          const r = l + 1; const m = r < size && hf[r] < hf[l] ? r : l;
+          if (hf[m] >= lf) break;
+          heap[k] = heap[m]; hf[k] = hf[m]; k = m;
+        }
+        heap[k] = li; hf[k] = lf;
       }
       return top;
     };
-    const hfn = (i) => { const dx = Math.abs(i % w - tx), dy = Math.abs(((i / w) | 0) - ty); return (dx + dy + (1.414 - 2) * Math.min(dx, dy)) * 0.45; };
+    // weighted heuristic: slightly greedy, far fewer expansions, near-optimal routes
+    const hfn = (i) => { const dx = Math.abs(i % w - tx), dy = Math.abs(((i / w) | 0) - ty); return (dx + dy + (1.414 - 2) * Math.min(dx, dy)) * 1.05; };
     g[from] = 0; stamp[from] = cur; parent[from] = -1;
     push(from, hfn(from));
     let expanded = 0;
@@ -71,7 +79,7 @@ export class Pathfinder {
       if (closed[i] === cur) continue;
       closed[i] = cur;
       if (i === to) break;
-      if (++expanded > maxNodes) return null;
+      if (++expanded > maxNodes) { this.nodeBudget -= expanded; return null; }
       const x = i % w, y = (i / w) | 0;
       for (const [dx, dy, dc] of DIRS) {
         const nx = x + dx, ny = y + dy;
@@ -91,6 +99,7 @@ export class Pathfinder {
         }
       }
     }
+    this.nodeBudget -= expanded;
     if (stamp[to] !== cur || closed[to] !== cur) return null;
     const path = [];
     let i = to;
