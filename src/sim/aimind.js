@@ -1,3 +1,4 @@
+import { exploredBy } from './vision.js';
 // AI minds: per-run personalities, long memories of specific interactions,
 // coalitions against a dominant power, and what a ruler believes about
 // others (respecting Hard Mode intelligence). Kept free of imports from
@@ -63,14 +64,16 @@ export function memoryBreakdown(g, a, b) {
 // assume an even match and add caution.
 export function perceivedStrength(g, a, b, intelFn) {
   const t = g.tribes[b];
-  if (!g.fog || !intelFn) return { v: t.strength, sure: true };
+  if (!g.hardIntel || !intelFn) return { v: t.strength, sure: true };
   const r = intelFn(g, a, b, 'military');
   if (r.lv === 0 || r.val == null) return { v: g.tribes[a].strength, sure: false };
   return { v: r.val, sure: r.lv >= 2 };
 }
 // Whether `a` knows where settlement `s` is.
 export function knowsSettlement(g, a, s, intelFn) {
-  if (!g.fog || !intelFn) return true;
+  if (g.vis === 'open' || !g.vis) return true;
+  if (!exploredBy(g, a, s.x, s.y)) return false;   // never found it
+  if (g.vis === 'explore' || !intelFn) return true;
   const lv = intelFn(g, a, s.tribe, 'land').lv;
   return s.capital ? lv >= 1 : lv >= 2;
 }
@@ -96,8 +99,9 @@ export function coalitionTick(g) {
   for (let i = 0; i < members.length; i++) for (let j = i + 1; j < members.length; j++) {
     const a = members[i], b = members[j];
     if (d.atWar(a, b) || d.opinion(a, b) < -15 || d.opinion(b, a) < -15) continue;
-    if (!d.has('nap', a, b)) d.sign('nap', a, b);
-    if (!d.has('alliance', a, b) && d.opinion(a, b) > 5 && g.rng.chance(0.35)) d.sign('alliance', a, b);
+    if (g.tick - d.lastProposal[a][b] < 360 * 3) continue;
+    if (!d.has('nap', a, b)) d.dispatch(a, b, { type: 'nap', coalition: true });
+    else if (!d.has('alliance', a, b) && d.opinion(a, b) > 5 && g.rng.chance(0.35)) d.dispatch(a, b, { type: 'alliance', coalition: true });
   }
   if (!was.length || members.some(m => !was.includes(m))) {
     g.log(null, 'diplomacy', `Fearing the might of the ${g.tribes[D].name}, the ${members.map(m => g.tribes[m].name).join(' and the ')} draw together in a coalition.`, 3, { with: [D, ...members], alert: g.tribes[D].isPlayer || undefined });

@@ -1,7 +1,8 @@
 // Utility-based AI. Every choice is a weighted score built from observable
 // state (shortages, threats, opportunities) times personality, so behaviour is
 // explainable. The same allocation/planning helpers power the player's steward.
-import { aiOf, knowsSettlement, perceivedStrength } from './aimind.js';
+import { aiOf, knowsSettlement, perceivedStrength, inCoalitionAgainst } from './aimind.js';
+import { estimateCampaign } from './logistics.js';
 import { intel } from './intel.js';
 import { BUILDINGS, JOB_KEYS } from '../data/buildings.js';
 import { TECH } from '../data/techs.js';
@@ -101,14 +102,14 @@ function buildUtilities(game, t) {
   if (!avail.has('farm') && slotsFull('gatherer') && days < 6) add('gatherer', 7, 'Need more foragers');
   if (countB(game, t, 'gatherer') === 0) add('gatherer', 6, 'Forage the wilds');
   if (countB(game, t, 'hunter') === 0) add('hunter', 5, 'Hunt game');
-  if (avail.has('fishery') && countB(game, t, 'fishery') < 1 + t.pop / 50) add('fishery', 4.5 + (t.key === 'oruvai' ? 2 : 0), 'Fish the waters');
+  if (avail.has('fishery') && countB(game, t, 'fishery') < 1 + t.pop / 50) add('fishery', 4.5 + (t.def?.quirks?.fishing || 0), 'Fish the waters');
   if (avail.has('pasture') && countB(game, t, 'pasture') < 1 + t.pop / 60) add('pasture', 3.5, 'Raise livestock');
   if (avail.has('orchard') && countB(game, t, 'orchard') < 1 + t.pop / 50) add('orchard', 3.5 + ai.agriculture, 'Food variety');
   if (countB(game, t, 'lumber') === 0 || ((t.stock.wood || 0) < 60 && slotsFull('woodcutter') && countB(game, t, 'lumber') < 1 + t.pop / 30)) add('lumber', 6.5, 'Need timber');
   const stores = countB(game, t, 'storehouse');
   if (stores < 1 + Math.floor(t.pop / 35)) add('storehouse', stores === 0 ? 8 : 4.5, 'More storage & shorter hauls');
   if (avail.has('quarry') && countB(game, t, 'quarry') < 1 + Math.floor(t.pop / 60)) add('quarry', (t.stock.stone || 0) < 80 ? 7 : 3, 'Stone is needed');
-  if (avail.has('mine') && countB(game, t, 'mine') < 1 + Math.floor(t.pop / 70)) add('mine', 6 + (t.key === 'vaelith' || t.key === 'kharvak' ? 2 : 0), 'Ore deposits nearby');
+  if (avail.has('mine') && countB(game, t, 'mine') < 1 + Math.floor(t.pop / 70)) add('mine', 6 + (t.def?.quirks?.mining || 0), 'Ore deposits nearby');
   if (avail.has('school') && countB(game, t, 'school') < 1 + Math.floor(t.pop / 80)) add('school', 5 * (0.5 + ai.research), 'Research');
   if (avail.has('library') && countB(game, t, 'library') < 1 + Math.floor(t.pop / 120)) add('library', 5 * (0.5 + ai.research), 'Research');
   if (avail.has('academy') && !countB(game, t, 'academy')) add('academy', 6 * (0.5 + ai.research), 'Higher learning');
@@ -118,7 +119,7 @@ function buildUtilities(game, t) {
   if (avail.has('market') && countB(game, t, 'market') < 1 + Math.floor(t.pop / 120)) add('market', 5 * (0.5 + ai.trade), 'Trade');
   if (avail.has('harbor') && !countB(game, t, 'harbor')) add('harbor', 3 * (0.5 + ai.trade), 'Sea trade');
   if (avail.has('workshop') && countB(game, t, 'workshop') < 1 + Math.floor(t.pop / 70)) add('workshop', (t.stock.tools || 0) < t.pop * 0.3 ? 6 : 3, 'Tools');
-  if (avail.has('smelter') && !countB(game, t, 'smelter') && ((t.stock.iron || 0) > 15)) add('smelter', 5 + (t.key === 'vaelith' ? 2 : 0), 'Refine iron');
+  if (avail.has('smelter') && !countB(game, t, 'smelter') && ((t.stock.iron || 0) > 15)) add('smelter', 5 + (t.def?.quirks?.smelting || 0), 'Refine iron');
   if (avail.has('armory') && countB(game, t, 'armory') < 1 && (ai.military > 0.6 || t.atWar)) add('armory', 5 * (0.5 + ai.military), 'Arm soldiers');
   if (avail.has('artisan') && !countB(game, t, 'artisan')) add('artisan', 3, 'Trade goods');
   if (avail.has('mint') && !countB(game, t, 'mint') && ((t.stock.gold || 0) + (t.stock.silver || 0) > 5)) add('mint', 4, 'Coinage');
@@ -202,7 +203,7 @@ export function aiResearch(game, t) {
     if (k === 'formalleadership' || k === 'barter' && t.stage >= 3) v *= 2;
     if (k === 'mining' && hasNearbyOre(game, t)) v *= 1.8;
     if ((k === 'militaryorganisation' || k === 'palisades' || k === 'bronzeweapons') && (t.atWar || t.threat)) v *= 2.5;
-    if (k === 'fishing' && t.key === 'oruvai') v *= 1.5;
+    v *= t.def?.quirks?.techLikes?.[k] ?? 1;
     if (TECH[k].unlocks?.includes('w_' + t.key)) v *= 1.4;
     v *= 0.85 + game.rng.next() * 0.3;
     if (v > bv) { bv = v; best = tech; }
@@ -295,7 +296,7 @@ function aiExpand(game, t) {
     const x = Math.round(from.x + Math.cos(ang) * d), y = Math.round(from.y + Math.sin(ang) * d);
     if (!siteCheck(game, t, x, y).ok) continue;
     const st = siteStats(game.world, x, y, 8);
-    let v = st.fert * 1.2 + Math.min(st.trees, 40) * 0.4 + st.stone * 2 + st.minerals * (1 + (t.key === 'vaelith' ? 1.5 : 0)) + st.build * 0.1 + (st.water + st.coast) * 0.5;
+    let v = st.fert * 1.2 + Math.min(st.trees, 40) * 0.4 + st.stone * 2 + st.minerals * (1 + (t.def?.quirks?.mineralSites || 0)) + st.build * 0.1 + (st.water + st.coast) * 0.5;
     for (const [k2, w] of Object.entries(t.def.biome)) v += (st.aff[k2] || 0) * w * 0.1;
     if (toward) v += Math.max(0, 40 - Math.hypot(x - toward.x, y - toward.y) * 2.5);
     if (v > bv) { bv = v; best = { x, y }; }
@@ -327,12 +328,22 @@ function aiWar(game, t) {
       if (!knowsSettlement(game, t.id, s, intel)) continue; // cannot attack what they have not found
       const d = Math.hypot(s.x - home.x, s.y - home.y);
       const defense = perceivedStrength(game, t.id, e, intel).v / Math.max(1, et.settlements.length) * (s.capital ? 1.4 : 0.8);
-      const v = myPow / Math.max(1, defense) - d / 80 + (s.capital ? -0.2 : 0.2);
+      let v = myPow / Math.max(1, defense) - d / 80 + (s.capital ? -0.2 : 0.2);
+      // logistics: food for the march, upkeep, terrain, expected losses — weighed against how much this war matters
+      const est = estimateCampaign(game, t, sid, 0.75, intel);
+      if (!est) continue;
+      const existential = game.armies.some(ar => ar.tribe === e && game.settlements.get(ar.target)?.tribe === t.id) || inCoalitionAgainst(game, t.id, e) || /alliance/.test(game.dip.war(t.id, e)?.reason || '');
+      const foodShare = est.food / Math.max(1, est.foodHave);
+      if (foodShare > 0.6 && !existential) continue;                        // would starve the people at home
+      if (t.foodSat < 0.95 && !existential) continue;                       // already hungry
+      v -= foodShare * 1.2 + (est.losses[1] / Math.max(1, est.n)) * 1.2 + Math.max(0, est.days - 2) * 0.12 + est.ambush * 0.8;
+      if (existential) v += 0.6;
+      s._est = est;
       if (v > tv) { tv = v; target = s; }
     }
   }
   const already = game.armies.some(ar => ar.tribe === t.id && ar.state !== 'return');
-  if (target && !already && tv > 1.1 - aiOf(t).aggression * 0.3) { launchCampaign(game, t, target.id, 0.75); t.raidCooldown = t.raidCooldown || {}; t.raidCooldown[target.id] = game.tick + 360 * 3; }
+  if (target && !already && tv > 1.1 - aiOf(t).aggression * 0.3) { launchCampaign(game, t, target.id, 0.75, target._est?.food); t.lastDecision = `Marching on ${target.name}: ${target._est ? Math.round(target._est.days) + ' days away, carrying ' + target._est.food + ' food' : ''}`; t.raidCooldown = t.raidCooldown || {}; t.raidCooldown[target.id] = game.tick + 360 * 3; }
 }
 
 // ---------------------------------------------------------------- main

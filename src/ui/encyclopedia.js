@@ -11,6 +11,7 @@ import { TRIBES } from '../data/tribes.js';
 import { STAGES } from '../sim/progress.js';
 import { LEVELS, LEVEL_DESC, MISSIONS, COUNTER_COST } from '../sim/intel.js';
 import { SPECS, ERAS } from '../sim/logistics.js';
+import { VIS_MODES } from '../sim/vision.js';
 import { TREATY_NAMES } from '../sim/diplomacy.js';
 import { t } from '../i18n.js';
 
@@ -33,8 +34,10 @@ const TOPICS = [
     'Soldiers are adults taken from the workforce. Each costs 0.15 wood a day (and 0.12 coins once you have Currency). Barracks raise the soldier cap; a Military town holds 50% more.',
     'A soldier’s power = 1 + equipment tier × 0.28 (if armed) × happiness, stability, skill, experience and health factors. Towers add defence.',
     '<b>Supply</b>: an army is supplied on its own, allied or border-access land. Elsewhere supply falls once it is more than 16 tiles (+6 on roads, +6 with Roads tech, ×0.6 in winter, +10 from a Military town) from your nearest town, reaching zero 30 tiles further. Effectiveness = 60% + 40% × supply. Below 50% supply, soldiers lose health each day and some die or desert.',
-    'Under Hard intelligence, enemy army sizes and town defences are hidden unless your people are close or your reports are Verified.') },
-  { key: 'intel', name: 'Intelligence', icon: 'eye', body: () => P('Under <b>Hard</b> intelligence the map is covered by fog and knowledge of other peoples comes from sources:') +
+    'Under Hard visibility, enemy armies and towns are hidden unless they are in sight, and their strength is only as good as your reports.',
+    '<b>Campaigns</b>: before marching, the planner estimates distance, days on the road (terrain slows the march: mountains ×3.5, forests ×1.5–2), food to carry (0.6 per soldier per day, more in harsh land, mountains and winter), upkeep, supply, sickness and battle losses, and the chance of interception. The army carries its food from your stores; leftovers return home. Each day a soldier may die of natural causes: 0.15% plus up to 0.6% in mountains, 0.3% in harsh land, more after six days on the march, in winter and on poor supply.') },
+  { key: 'vis', name: 'Map visibility', icon: 'eye', body: () => kv(Object.values(VIS_MODES).map(m => [m.name, esc(m.desc)])) + P('Sight: people see 6 tiles, soldiers 7, armies 8, towns 11, towers 10; a scout watches a foreign homeland for about a day. Rival rulers follow the same rules: they explore with their own people and scouts and cannot attack a town they have not found.') },
+  { key: 'intel', name: 'Intelligence', icon: 'eye', body: () => P('On <b>Hard</b> visibility, knowledge of other peoples comes from sources:') +
     kv(LEVELS.map((l, i) => [l, LEVEL_DESC[i]])) +
     P('Reports age: Verified becomes Reported after 12 days, Reported becomes Rumoured after 25, Rumoured fades after 60.', 'Sources: contact gives rumours; a trade agreement reports their economy and lands; an alliance reports their army and intentions; war reveals their army; scouts verify lands and military; agents verify everything and expose planted reports.') +
     kv(Object.entries(MISSIONS).map(([, m]) => [`${ico(m.icon, 'sm')} ${esc(m.name)}`, `${esc(m.desc)} Cost ${cost(m.cost)}${m.tech ? ' · needs ' + esc(TECH[m.tech]?.name || m.tech) : ''}`])) +

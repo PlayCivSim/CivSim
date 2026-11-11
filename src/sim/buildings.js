@@ -236,7 +236,7 @@ export function scoreSpot(game, tribe, s, type, x, y) {
   const cat = def.cat;
   const wDist = cat === 'housing' ? 1.0 : cat === 'government' || cat === 'research' || type === 'market' || type === 'shrine' || type === 'well' ? 1.3 : cat === 'military' ? 0.4 : 0.35;
   score -= d * wDist;
-  const style = tribe.key;
+  const style = tribe.def?.style || tribe.key;
   if (STYLE_GRID[style]) {
     const g = STYLE_GRID[style];
     const ox = Math.round(x - s.x), oy = Math.round(y - s.y);

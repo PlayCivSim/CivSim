@@ -6,12 +6,18 @@
 //
 //   { id, resources: { key: def }, buildings: { key: def }, techs: [def],
 //     laws: [def], governments: { key: def }, events: [def],
-//     missions: { key: def }, specs: { key: def } }
+//     missions: { key: def }, specs: { key: def },
+//     tribes: { oruvai: { name, pal, ai, mods, quirks, … } } }
 //
 // Packs listed in PACKS are applied once, in order, by both the simulation
 // worker and the main thread (they must see identical content). Definitions
 // are validated so a mistake fails loudly at start-up instead of mid-game.
-// Tribes are not extensible yet: the game assumes exactly four peoples.
+// Tribes: a pack can change any of the four peoples (by their slot key:
+// oruvai, kharvak, thalori, vaelith) — rename them, recolour them, change their
+// temperament, bonuses, weaknesses, starting land or quirks, or give a slot a
+// wholly new people that reuses one of the four visual styles. Nested objects
+// (pal, ai, mods, quirks, names, affinity, techBias, biome) are merged; other
+// fields are replaced. The slot key itself never changes, so saves stay valid.
 import { RESOURCES, RES_KEYS, FOOD_KEYS } from './resources.js';
 import { BUILDINGS } from './buildings.js';
 import { TECHS, TECH, BRANCHES } from './techs.js';
@@ -19,6 +25,7 @@ import { LAWS, LAW, GOVERNMENTS } from './laws.js';
 import { EVENTS } from '../sim/events.js';
 import { MISSIONS } from '../sim/intel.js';
 import { SPECS } from '../sim/logistics.js';
+import { TRIBES, TRIBE_BY_KEY } from './tribes.js';
 
 export const PACKS = [
   // Add content packs here, e.g. import { pack } from './packs/example.js'; then list `pack`.
@@ -45,6 +52,16 @@ export function applyPack(pack) {
   for (const [k, d] of Object.entries(pack.governments || {})) { need(id, 'government', k, d, ['name', 'lawSlots', 'mods']); GOVERNMENTS[k] = d; }
   for (const d of pack.events || []) { need(id, 'event', d.key, d, ['key', 'title']); const i = EVENTS.findIndex(x => x.key === d.key); if (i >= 0) EVENTS[i] = d; else EVENTS.push(d); }
   for (const [k, d] of Object.entries(pack.missions || {})) { need(id, 'mission', k, d, ['name', 'speed', 'cost', 'desc']); MISSIONS[k] = d; }
+  const MERGE = ['pal', 'ai', 'mods', 'quirks', 'names', 'affinity', 'techBias', 'biome'];
+  const STYLES = ['oruvai', 'kharvak', 'thalori', 'vaelith'];
+  for (const [k, d] of Object.entries(pack.tribes || {})) {
+    const t = TRIBES.find(x => x.key === k);
+    if (!t) throw new Error(`Content pack "${id}": unknown tribe slot "${k}" (use oruvai, kharvak, thalori or vaelith)`);
+    if (d.key && d.key !== k) throw new Error(`Content pack "${id}": tribe "${k}" cannot change its key`);
+    if (d.style && !STYLES.includes(d.style)) throw new Error(`Content pack "${id}": tribe "${k}" has unknown style "${d.style}"`);
+    for (const [f, v] of Object.entries(d)) t[f] = MERGE.includes(f) && v && typeof v === 'object' && !Array.isArray(v) ? { ...(t[f] || {}), ...v } : v;
+    TRIBE_BY_KEY[k] = { ...t, index: TRIBES.indexOf(t) };
+  }
   for (const [k, d] of Object.entries(pack.specs || {})) { need(id, 'settlement focus', k, d, ['name', 'desc']); SPECS[k] = d; }
 }
 

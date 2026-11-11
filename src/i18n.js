@@ -7,6 +7,8 @@ const EN = {
   // contextual hints
   'hint.fog.title': 'The world beyond your borders',
   'hint.fog.text': 'Dark land is unexplored. Your people uncover it as they move; scouts reveal distant homelands. What you know of other peoples starts as rumour: the badges in Diplomacy show how reliable and how old each report is.',
+  'hint.sight.title': 'Live line of sight',
+  'hint.sight.text': 'You only see what your people, towns, towers, armies and scouts can see right now. Land you have explored but cannot see is greyed, and shows no foreign people, armies or buildings. Scouts and soldiers extend your sight; reports of other peoples grow outdated.',
   'hint.envoy.title': 'Envoys take time',
   'hint.envoy.text': 'Your envoy is on the road. Their answer arrives only when the envoy does. Follow the journey under Missions abroad in Diplomacy; roads through hostile lands are slower and riskier.',
   'hint.delay.title': 'An envoy is delayed',

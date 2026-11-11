@@ -1,5 +1,6 @@
 // Main menu, new-run setup (world + tribe selection), load-run browser,
 // settings and credits.
+import { VIS_MODES } from '../sim/vision.js';
 import { h, $, $$, esc, toast, modal, closeModal, confirmDialog, promptDialog, toggleHTML } from './dom.js';
 import { ico, emblemURL, spriteURL } from './icons.js';
 import { TRIBES } from '../data/tribes.js';
@@ -49,7 +50,7 @@ export class MainMenu {
       sfx('click');
       const a = b.dataset.act;
       if (a === 'continue') this.app.loadRun(last.runId);
-      else if (a === 'tutorial') this.app.startTutorial();
+      else if (a === 'tutorial') this.chooseTutorialVis().then(vis => vis && this.app.startTutorial(vis));
       else if (a === 'new') this.offerTutorial().then(go => go && this.newRun());
       else if (a === 'load') this.loadRuns();
       else if (a === 'settings') openSettings(this.app, () => {});
@@ -71,8 +72,17 @@ export class MainMenu {
       <div class="prose">CivSim has a lot of systems, so we strongly recommend the short guided tutorial first. It takes about 15 minutes, introduces one feature at a time and shows how they connect. You can leave it at any time.</div>
       <div class="modal-actions"><button class="btn" data-v="skip">Skip, I know what I'm doing</button><button class="btn primary" data-v="tut">${ico('play', 'sm')} Play the tutorial</button></div>`,
     { dismissable: false, onMount: m => m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { sfx('click'); closeModal(b.dataset.v); }) });
-    if (v === 'tut') { this.app.startTutorial(); return false; }
+    if (v === 'tut') { const vis = await this.chooseTutorialVis(); if (vis) this.app.startTutorial(vis); return false; }
     s.tutorialSkipped = true; storeSettings(s); return true;
+  }
+
+  // Which map visibility the tutorial should teach.
+  chooseTutorialVis() {
+    return modal(`<div class="modal-head">${ico('eye', 'lg')}<div class="panel-title" style="font-size:1.8em">Which map do you want to learn?</div></div>
+      <div class="prose">The tutorial teaches the visibility rules of the difficulty you plan to play.</div>
+      <div class="col" style="margin-top:8px">${Object.values(VIS_MODES).map(m => `<button class="btn choice" data-v="${m.key}"><span>${m.name}</span><small>${esc(m.desc)}</small></button>`).join('')}</div>
+      <div class="modal-actions"><button class="btn" data-v="">Cancel</button></div>`,
+    { onMount: m => m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { sfx('click'); closeModal(b.dataset.v || null); }) });
   }
 
   tick(e) {
@@ -96,7 +106,7 @@ export class MainMenu {
 
   // ---------------------------------------------------------------- new run
   newRun() {
-    const st = { name: '', seedText: FLAVOR_SEEDS[(Math.random() * FLAVOR_SEEDS.length) | 0] + ' ' + ((Math.random() * 900 + 100) | 0), size: 'medium', difficulty: 'balanced', start: 'standard', tribe: 0, intel: 'hard' };
+    const st = { name: '', seedText: FLAVOR_SEEDS[(Math.random() * FLAVOR_SEEDS.length) | 0] + ' ' + ((Math.random() * 900 + 100) | 0), size: 'medium', difficulty: 'balanced', start: 'standard', tribe: 0, vis: 'explore', visTouched: false };
     const p = this.openPage(`<div class="page">
       <div class="page-head">${ico('flag', 'lg')}<div class="panel-title">A New Chronicle</div><div class="grow"></div><button class="btn" data-act="back">${ico('close', 'sm')} Back</button></div>
       <div class="page-body">
@@ -107,7 +117,7 @@ export class MainMenu {
             <div class="field"><label>World seed</label><div class="seed-row"><input class="text-input" id="seed" maxlength="40"><button class="btn icon" data-act="dice" data-tip="Roll a new seed">${ico('dice')}</button></div></div>
             <div class="field"><label>Map size</label><div class="seg" id="size">${Object.entries(MAP_SIZES).map(([k, v]) => `<button class="btn sm" data-size="${k}" data-tip="${esc(v.desc + ` (${v.w}×${v.h})`)}">${v.label}</button>`).join('')}</div></div>
             <div class="field"><label>World difficulty</label><div class="seg" id="diff">${Object.entries(DIFFICULTIES).map(([k, v]) => `<button class="btn sm" data-diff="${k}" data-tip="${esc(v.desc)}">${v.label}</button>`).join('')}</div></div>
-            <div class="field"><label>Intelligence</label><div class="seg" id="intel">${[['hard', 'Hard', 'Fog of war. Reports on rivals are uncertain and age; envoys travel and can be delayed or lost; agents can deceive.'], ['open', 'Open', 'The whole map is visible and all information about rivals is exact. Envoys arrive instantly.']].map(([k, n, d]) => `<button class="btn sm" data-intel="${k}" data-tip="${esc(d)}">${n}</button>`).join('')}</div></div>
+            <div class="field"><label>Map visibility</label><div class="seg" id="vis">${Object.values(VIS_MODES).map(m => `<button class="btn sm" data-vis="${m.key}" data-tip="${esc(m.desc)}">${m.name}</button>`).join('')}</div></div>
             <div class="field"><label>Starting conditions</label><div class="seg" id="start">${Object.entries(STARTS).map(([k, v]) => `<button class="btn sm" data-start="${k}" data-tip="${esc(v.desc)}">${v.label.split(' ')[0]}</button>`).join('')}</div></div>
           </div>
         </div>
@@ -122,26 +132,26 @@ export class MainMenu {
       $$('[data-size]', p).forEach(b => b.classList.toggle('on', b.dataset.size === st.size));
       $$('[data-diff]', p).forEach(b => b.classList.toggle('on', b.dataset.diff === st.difficulty));
       $$('[data-start]', p).forEach(b => b.classList.toggle('on', b.dataset.start === st.start));
-      $$('[data-intel]', p).forEach(b => b.classList.toggle('on', b.dataset.intel === st.intel));
+      $$('[data-vis]', p).forEach(b => b.classList.toggle('on', b.dataset.vis === st.vis));
       $$('.tribe-card', p).forEach((c, i) => c.classList.toggle('sel', i === st.tribe));
       $$('.pin', p).forEach((pin, i) => pin.classList.toggle('me', i === st.tribe));
       const t = TRIBES[st.tribe];
-      $('#summary', p).innerHTML = `Lead the <em>${t.name}</em> on a <em>${MAP_SIZES[st.size].label.toLowerCase()}</em> world · <em>${DIFFICULTIES[st.difficulty].label}</em> · ${STARTS[st.start].label} · ${st.intel === 'hard' ? 'Hard intelligence' : 'Open map'}`;
+      $('#summary', p).innerHTML = `Lead the <em>${t.name}</em> on a <em>${MAP_SIZES[st.size].label.toLowerCase()}</em> world · <em>${DIFFICULTIES[st.difficulty].label}</em> · ${STARTS[st.start].label} · ${VIS_MODES[st.vis].name} visibility`;
       document.documentElement.style.setProperty('--tribe', t.color);
     };
     let pvTimer = 0;
     const preview = () => { clearTimeout(pvTimer); pvTimer = setTimeout(() => this.drawPreview(p, st), 120); };
     seedIn.oninput = () => { st.seedText = seedIn.value; preview(); };
     p.onclick = e => {
-      const b = e.target.closest('[data-act],[data-size],[data-diff],[data-start],[data-intel],.tribe-card'); if (!b) return;
+      const b = e.target.closest('[data-act],[data-size],[data-diff],[data-start],[data-vis],.tribe-card'); if (!b) return;
       sfx('click');
       if (b.dataset.act === 'back') { this.closePage(); return; }
       if (b.dataset.act === 'dice') { st.seedText = seedIn.value = FLAVOR_SEEDS[(Math.random() * FLAVOR_SEEDS.length) | 0] + ' ' + ((Math.random() * 900 + 100) | 0); preview(); return; }
       if (b.dataset.act === 'begin') { this.begin(st, nameIn.value.trim()); return; }
       if (b.dataset.size) { st.size = b.dataset.size; preview(); }
-      if (b.dataset.diff) st.difficulty = b.dataset.diff;
+      if (b.dataset.diff) { st.difficulty = b.dataset.diff; if (!st.visTouched) st.vis = { gentle: 'open', balanced: 'explore', harsh: 'los' }[st.difficulty]; }
       if (b.dataset.start) st.start = b.dataset.start;
-      if (b.dataset.intel) st.intel = b.dataset.intel;
+      if (b.dataset.vis) { st.vis = b.dataset.vis; st.visTouched = true; }
       if (b.classList.contains('tribe-card')) { st.tribe = +b.dataset.i; sfx('diplomacy'); }
       sync();
     };
@@ -193,7 +203,7 @@ export class MainMenu {
     await new Promise(r => setTimeout(r, 60));
     ld.querySelector('i').style.width = '75%';
     try {
-      await this.app.newRun({ seed: st.seed ?? hashString(st.seedText), seedText: st.seedText, size: st.size, difficulty: st.difficulty, start: st.start, playerTribe: st.tribe, intel: st.intel, runName });
+      await this.app.newRun({ seed: st.seed ?? hashString(st.seedText), seedText: st.seedText, size: st.size, difficulty: st.difficulty, start: st.start, playerTribe: st.tribe, vis: st.vis, runName });
     } catch (e) { console.error(e); toast('World generation failed', e.message, { kind: 'bad' }); }
     ld.remove();
   }

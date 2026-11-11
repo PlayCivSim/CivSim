@@ -250,10 +250,9 @@ function seekTrade(game, t, plan) {
     const [gr, gv] = giveable[0];
     const giveAmt = Math.ceil(Math.min(gv * 0.4, getAmt * (RESOURCES[r].value / RESOURCES[gr].value) * 1.4));
     const p = { type: 'exchange', give: { [gr]: giveAmt }, get: { [r]: getAmt } };
-    if (o.isPlayer) { if (!game.pendingProposals.some(x => x.from === t.id && x.to === o.id)) { game.pendingProposals.push({ from: t.id, to: o.id, p, tick: game.tick }); game.bus.emit('proposal', { from: t.id, to: o.id, p }); } return; }
-    const res = D.propose(t.id, o.id, p);
-    if (res.accept) { t.lastDecision = `Traded ${gr} for ${r}: ${plan.bottlenecks[r] || 'bottleneck'}`; return; }
-    if (!D.has('trade', t.id, o.id) && t.techs.includes('barter') && o.techs.includes('barter')) D.propose(t.id, o.id, { type: 'trade' });
+    if (game.tick - D.lastProposal[t.id][o.id] < 360 * 2) continue;
+    if (o.isPlayer && game.pendingProposals.some(x => x.from === t.id && x.to === o.id)) return;
+    if (D.dispatch(t.id, o.id, p)) { t.lastDecision = `Sent an envoy to trade ${gr} for ${r}`; return; }
   }
 }
 

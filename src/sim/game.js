@@ -9,7 +9,8 @@ import '../data/registry.js'; // content packs (see docs/MODDING.md)
 import { updateSupply, checkEra, aiSpecialise } from './logistics.js';
 import { TECH } from '../data/techs.js';
 import { rollPersonality } from './aimind.js';
-import { updateMissions, updateExplore, exploreTerritory, dailyIntel, revealCircle } from './intel.js';
+import { updateMissions, dailyIntel } from './intel.js';
+import { initVision, updateVision, exploreOwned, revealFor, serializeVision, restoreVision } from './vision.js';
 import { DAY_TICKS, DAYS_PER_YEAR, TICK_DT, SPEEDS, MAP_SIZES, DIFFICULTIES, STARTS, SEASONS } from '../core/constants.js';
 import { RNG, hashString } from '../core/rng.js';
 import { Bus } from '../core/bus.js';
@@ -30,7 +31,7 @@ import { rollEvents, resolveChoice, EVENTS } from './events.js';
 import { aiThink, stewardThink, autoAllocate } from './ai.js';
 import { isWater, BIOMES } from '../world/biomes.js';
 
-export const SAVE_VERSION = 5; // 4: event records carry cat/with/alert; seenSeq. 5: fog, intel, missions (all optional)
+export const SAVE_VERSION = 6; // 4: event records carry cat/with/alert; seenSeq. 5: fog, intel, missions (all optional)
 
 // The shared event record keeps up to HISTORY_CAP entries. When full, minor
 // news about other peoples goes first; anything major or involving the player
@@ -76,6 +77,7 @@ export class Game {
   get seasonName() { return SEASONS[this.season]; }
   get dayFrac() { return (this.tick % DAY_TICKS) / DAY_TICKS; }
   get player() { return this.tribes[this.playerId]; }
+  get hardIntel() { return this.vis === 'los'; }
   get difficultyDef() { return DIFFICULTIES[this.difficulty] || DIFFICULTIES.balanced; }
 
   // ---------------------------------------------------------------- creation
@@ -91,7 +93,9 @@ export class Game {
     g.playerId = opts.playerTribe ?? 0;
     g.observer = !!opts.observer;
     g.tutorial = !!opts.tutorial; // scripted tutorial world: rivals never attack the player
-    g.fog = !g.tutorial && opts.intel !== 'open';
+    // map visibility by difficulty: open (Easy) / explore (Medium) / los (Hard)
+    g.vis = opts.vis || (opts.intel === 'open' ? 'open' : opts.intel === 'hard' ? 'los' : g.tutorial ? 'open' : 'explore');
+    g.fog = g.vis !== 'open';
     g._personalitySeed = typeof g.seed === 'number' ? g.seed : [...String(g.seed)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7); // Hard Mode: fog of war, uncertain intelligence, travelling envoys
     g.rng = new RNG(g.seed ^ 0xbeef);
     g.world = generateWorld(g.seed, g.sizeKey, MAP_SIZES[g.sizeKey]);
@@ -123,10 +127,11 @@ export class Game {
     census(g);
     for (const t of g.tribes) { assignHousing(g, t); autoAllocate(g, t); assignJobs(g, t); t._cap = storageCap(g, t); }
     recomputeTerritory(g);
-    if (g.fog) { g.world.explored = new Uint8Array(g.world.n); const c = g.settlements.get(g.player.capital); revealCircle(g, c.x, c.y, 16); exploreTerritory(g); g.fogNew.length = 0; }
+    if (g.fog) { initVision(g); for (const t of g.tribes) { const c = g.settlements.get(t.capital); revealFor(g, t.id, c.x, c.y, 16); } exploreOwned(g); updateVision(g); g.fogNew.length = 0; }
     g.log(null, 'world', `A new world awakens (seed ${g.seedText}). Four peoples light their first fires.`, 3);
     for (const t of g.tribes) g.log(t, 'settlement', `The ${t.name} founded ${g.settlements.get(t.capital).name}.`, 1);
-    if (g.fog) g.log(g.player, 'diplomacy', 'Hard intelligence: beyond your borders lies the unknown. Reports of other peoples are rumours until scouts, envoys or agents confirm them; envoys take days to travel and can be delayed or lost. The Diplomacy panel shows how reliable and how old each piece of knowledge is.', 2);
+    if (g.vis === 'explore') g.log(g.player, 'world', 'Beyond your borders lies unexplored land. Your people uncover the map as they travel, and scouts reveal distant homelands. Once discovered, land stays on your map.', 2);
+    if (g.vis === 'los') g.log(g.player, 'world', 'Hard visibility: you see only what your people, towns, armies and scouts see right now; land out of sight is greyed and shows nobody. Reports of other peoples are rumours until confirmed, and they grow outdated.', 2);
     return g;
   }
 
@@ -237,10 +242,10 @@ export class Game {
     if (tk % 3 === 0) { this.rebuildGrid(); updateDefences(this); }
     updateAgents(this);
     if (tk % 10 === 5) updateMissions(this);
-    if (tk % 20 === 7) updateExplore(this);
+    if (tk % 20 === 7) updateVision(this);
     if (tk % 10 === 0) {
       census(this);
-      if (this.territoryDirty) { recomputeTerritory(this); exploreTerritory(this); }
+      if (this.territoryDirty) { recomputeTerritory(this); exploreOwned(this); }
       const ti = (tk / 10) % 4;
       const t = this.tribes[ti];
       if (t.alive) {
@@ -324,8 +329,8 @@ export class Game {
       v: SAVE_VERSION, runId: this.runId, runName: this.runName, seed: this.seed, seedText: this.seedText,
       sizeKey: this.sizeKey, difficulty: this.difficulty, startKey: this.startKey, playerId: this.playerId, observer: this.observer, tutorial: this.tutorial || false,
       created: this.created, saved: Date.now(), tick: this.tick, nextId: this.nextId, rng: this.rng.s, speed: this.speed,
-      fog: this.fog || undefined,
-      world: { explored: this.fog && w.explored ? enc(w.explored) : undefined, trees: enc(w.trees), treeMax: enc(w.treeMax), deposit: enc(w.deposit), depAmt: enc(w.depAmt), fauna: enc(w.fauna), road: enc(w.road), biome: enc(w.biome) },
+      fog: this.fog || undefined, vis: this.vis, vision: serializeVision(this),
+      world: { trees: enc(w.trees), treeMax: enc(w.treeMax), deposit: enc(w.deposit), depAmt: enc(w.depAmt), fauna: enc(w.fauna), road: enc(w.road), biome: enc(w.biome) },
       logSeq: this.logSeq || 0, seenSeq: this.seenSeq || 0, territoryVersion: this.territoryVersion,
       tribes, agents, buildings: [...this.buildings.values()], settlements: [...this.settlements.values()],
       armies: this.armies, history: this.history, dip: this.dip.toJSON(), pendingEvents: this.pendingEvents, weather: this.weather,
@@ -344,10 +349,11 @@ export class Game {
     w.deposit.set(dec(d.world.deposit, Uint8Array)); w.depAmt.set(dec(d.world.depAmt, Uint16Array));
     w.fauna.set(dec(d.world.fauna, Uint8Array)); w.road.set(dec(d.world.road, Uint8Array));
     if (d.world.biome) w.biome.set(dec(d.world.biome, Uint8Array));
-    g.fog = !!d.fog; g.fogNew = [];
-    if (g.fog) { w.explored = new Uint8Array(w.n); if (d.world.explored) w.explored.set(dec(d.world.explored, Uint8Array)); }
+    // older saves: Hard-intelligence runs (fog) become Hard, everything else Easy
+    g.vis = d.vis || (d.fog ? 'los' : 'open'); g.fog = g.vis !== 'open'; g.fogNew = [];
     g.pf = new Pathfinder(w);
     g.tribes = d.tribes.map((t, i) => ({ ...t, def: TRIBES[i], mods: {}, modsDirty: true }));
+    if (g.fog) { restoreVision(g, d.vision); if (!d.vision && d.world.explored) w.explored.set(dec(d.world.explored, Uint8Array)); }
     for (const b of d.buildings) {
       g.buildings.set(b.id, b);
       for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) { const i = w.idx(b.x + dx, b.y + dy); w.occ[i] = b.id + 1; if (BUILDING_FIELD(b.type)) w.field[i] = 1; }

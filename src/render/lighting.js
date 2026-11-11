@@ -7,6 +7,7 @@
 //     lit areas keep their true colours, then added back softly as bloom.
 // Both passes render at reduced resolution and are upscaled with filtering,
 // which gives soft penumbrae at low cost.
+import { playerSees } from '../sim/vision.js';
 import { TILE } from '../core/constants.js';
 import { BUILDINGS } from '../data/buildings.js';
 import { TRIBES } from '../data/tribes.js';
@@ -121,23 +122,23 @@ export class Lighting {
   collect(game, view, s, ox, oy, time, agentsVisible) {
     const lights = [], occ = [];
     const toS = (x, y) => [x * s + ox, y * s + oy];
-    const ex = game.fog && game.world.explored, ww = game.world.w;
+    const hide = game.fog, P = game.playerId;
     for (const b of game.buildings.values()) {
       if (!b.built) continue;
-      if (ex && !ex[b.y * ww + b.x]) continue; // hidden by fog of war
+      if (hide && b.tribe !== P && !playerSees(game, b.x + 1, b.y + 1)) continue; // hidden by fog of war
       const bx = b.x * TILE, by = b.y * TILE, sz = b.size * TILE;
       if (bx > view.x1 + 160 || bx + sz < view.x0 - 160 || by > view.y1 + 160 || by + sz < view.y0 - 160) continue;
       const def = BUILDINGS[b.type];
       if (!def.field && b.type !== 'training' && b.type !== 'well') { const [x0, y0] = toS(bx + 1, by + sz * 0.3); const [x1, y1] = toS(bx + sz - 1, by + sz - 1); occ.push({ x0, y0, x1, y1, id: b.id }); }
-      const violet = TRIBES[b.tribe].key === 'vaelith';
+      const tint = TRIBES[b.tribe].lightTint;
       if (b.type === 'centre') { const [x, y] = toS(bx + sz - 5, by + sz - 3); const fl = 0.9 + Math.sin(time * 11 + b.id) * 0.06 + Math.sin(time * 23) * 0.04; lights.push({ x, y, r: 58 * s * fl, col: [255, 176, 96], k: 1, cast: true, id: -1 }); }
-      else if ((def.housing || def.job || def.tower) && hash2(b.id, (time / 9) | 0, 3) > 0.22) { const [x, y] = toS(bx + sz / 2, by + sz + 1); lights.push({ x, y, r: (def.tower ? 30 : 22) * s, col: violet ? [196, 160, 255] : [255, 204, 138], k: 0.85, cast: true, id: b.id }); }
+      else if ((def.housing || def.job || def.tower) && hash2(b.id, (time / 9) | 0, 3) > 0.22) { const [x, y] = toS(bx + sz / 2, by + sz + 1); lights.push({ x, y, r: (def.tower ? 30 : 22) * s, col: tint || [255, 204, 138], k: 0.85, cast: true, id: b.id }); }
     }
     // people out after dark carry torches
     if (agentsVisible) {
       let n = 0;
       for (const a of game.agents.values()) {
-        if (a.hidden || (ex && !ex[(a.y | 0) * ww + (a.x | 0)])) continue;
+        if (a.hidden || (hide && a.tribe !== P && !playerSees(game, a.x, a.y))) continue;
         const ax = a.x * TILE, ay = a.y * TILE;
         if (ax < view.x0 || ax > view.x1 || ay < view.y0 || ay > view.y1) continue;
         const [x, y] = toS(ax, ay - 4);

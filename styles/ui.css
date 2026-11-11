@@ -683,3 +683,7 @@ body.cb .bar.green i { background: #6ab0ff; } body.cb .bar.red i { background: #
 .tl-e .dot { width: 8px; height: 8px; display: inline-block; } .tl-e .when { font-family: var(--font-caps); font-size: 0.7em; color: var(--text-dim); text-transform: uppercase; }
 .tl-e.big .txt { color: var(--gold-hi); }
 .tl-e[data-act]:hover, .chron-entry[data-act]:hover { background: rgba(216,178,90,0.08); }
+
+/* campaign planner */
+.kvbox.plan .tt-row > span:last-child { text-align: right; }
+@media (max-width: 560px) { .kvbox.plan .tt-row { flex-direction: column; gap: 0; } .kvbox.plan .tt-row > span:last-child { text-align: left; color: var(--text); } }

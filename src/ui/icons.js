@@ -125,6 +125,7 @@ export function emblemURL(key, size = 24) {
   let u = urls.get(k); if (u) return u;
   const c = canvas(24, 24); const p = new Pen(c.getContext('2d'));
   const t = TRIBES.find(t => t.key === key); const P = t.pal;
+  key = t.style || key; // emblem shape follows the people's visual style
   // shield/banner base, shape differs per tribe
   if (key === 'oruvai') {
     p.ellipse(12, 12, 11, 11, P.dark); p.ellipse(12, 12, 10, 10, P.primary); p.ellipse(12, 12, 8, 8, P.dark);

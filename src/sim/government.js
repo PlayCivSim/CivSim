@@ -30,10 +30,9 @@ export function policyInteractions(tribe) {
   if (L.rationing === 'generous' && L.housing === 'family') out.push({ name: 'Fertile Times', desc: 'Generous rations with family homes: +10% births.', mods: { birth: 0.1 } });
   if (L.recruitment === 'conscription' && L.defence === 'high') out.push({ name: 'Militarised Society', desc: 'Conscription on a war footing: -4% productivity.', mods: { productivity: -0.04 } });
   if (L.taxation === 'high' && tribe.gov === 'republic') out.push({ name: 'Tax Revolt Brewing', desc: 'Citizens of a republic resent heavy taxes: -3 stability.', mods: { stability: -3 } });
-  if (L.forestry === 'sacred' && tribe.key === 'thalori') out.push({ name: 'Ancestral Groves', desc: 'The Thalori revere their forests: +2 happiness.', mods: { happiness: 2 } });
   if (L.works === 'funded' && L.labour === 'rest') out.push({ name: 'Civic Festivals', desc: 'Public works and rest days: +2 happiness.', mods: { happiness: 2 } });
-  if (L.trade === 'protect' && tribe.key === 'oruvai') out.push({ name: 'Closed Harbours', desc: 'Oruvai merchants chafe at protectionism: -2 stability.', mods: { stability: -2 } });
   if (L.education === 'public' && tribe.gov === 'technocracy') out.push({ name: 'Learned State', desc: 'Public schooling under a technocracy: +10% research.', mods: { research: 0.1 } });
+  for (const q of [...(tribe.def?.quirks?.lawLikes || []), ...(tribe.def?.quirks?.lawDislikes || [])]) if (L[q.law] === q.opt) out.push({ name: q.name, desc: q.desc, mods: q.mods });
   return out;
 }
 

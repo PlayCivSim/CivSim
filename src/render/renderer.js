@@ -1,6 +1,7 @@
 // World renderer: camera, terrain chunks, y-sorted sprites, effects, weather,
 // clouds and day/night lighting. Rendering is decoupled from simulation and
 // only reads game state.
+import { playerSees } from '../sim/vision.js';
 import { TILE, DAY_TICKS } from '../core/constants.js';
 import { BUILDINGS } from '../data/buildings.js';
 import { TRIBES } from '../data/tribes.js';
@@ -177,10 +178,12 @@ export class Renderer {
         items.push({ y: y * TILE + 7, k: 0, spr: treeSprite(type, (h * 4) | 0, frame, autumn && h > 0.3 ? (h > 0.7 ? 2 : 1) : 0, snowy && (BIOMES[w.biome[i]].key !== 'desert')), x: x * TILE - 1 + ((h * 3) | 0), yy: y * TILE - 6 + ((hash2(x, y, 6) * 2) | 0), small });
       }
     }
-    // buildings
+    // buildings (foreign ones only while your people can see them)
+    const P = g.playerId, hide = g.fog;
     for (const b of g.buildings.values()) {
       const bx = b.x * TILE, by = b.y * TILE, sz = b.size * TILE;
       if (bx > vx1 || bx + sz < vx0 || by - 30 > vy1 || by + sz < vy0) continue;
+      if (hide && b.tribe !== P && !playerSees(g, b.x + b.size / 2, b.y + b.size / 2)) continue;
       items.push({ y: by + sz - 1, k: 1, b });
     }
     // agents (below 0.9 zoom nobody is drawn at all; hidden ones are inside buildings and counted on the door)
@@ -190,6 +193,7 @@ export class Renderer {
         if (a.hidden) { if (a.inB && z >= 1.6) this.inside.set(a.inB, (this.inside.get(a.inB) || 0) + 1); continue; }
         const ax = a.x * TILE, ay = a.y * TILE;
         if (ax < vx0 - 8 || ax > vx1 + 8 || ay < vy0 - 8 || ay > vy1 + 12) continue;
+        if (hide && a.tribe !== P && !playerSees(g, a.x, a.y)) continue;
         items.push({ y: ay, k: 2, a });
       }
     }
@@ -382,8 +386,8 @@ export class Renderer {
       const X = sx / n * TILE, Y = sy / n * TILE;
       ctx.fillStyle = '#2a1e18'; ctx.fillRect(X, Y - 14, 1, 14);
       ctx.fillStyle = TRIBES[ar.tribe].color; ctx.fillRect(X + 1, Y - 14, 7, 5);
-      let seen = ar.tribe === g.playerId || !g.fog;
-      if (!seen) for (const a of g.agents.values()) if (a.tribe === g.playerId && !a.hidden && Math.abs(a.x - sx / n) + Math.abs(a.y - sy / n) < 12) { seen = true; break; }
+      const seen = ar.tribe === g.playerId || playerSees(g, sx / n, sy / n);
+      if (!seen && g.fog) continue; // enemy armies out of sight are not shown
       ctx.fillStyle = '#fff'; ctx.font = '5px monospace'; ctx.fillText(seen ? String(n) : '?', X + 2, Y - 10);
     }
   }
@@ -394,10 +398,11 @@ export class Renderer {
     const g = this.game, w = g.world;
     if (!g.fog || !w.explored) return;
     if (!this.fogCv || g.fogDirty || this.fogFor !== g) {
-      g.fogDirty = false; this.fogFor = g; this.miniDirty = true;
+      g.fogDirty = false; this.fogFor = g; this.miniDirty = true; this.lastMini = -9;
       const c = this.fogCv || (this.fogCv = document.createElement('canvas')); c.width = w.w; c.height = w.h;
       const x = c.getContext('2d'); const img = x.createImageData(w.w, w.h); const D = img.data;
-      for (let i = 0; i < w.n; i++) { D[i * 4] = 10; D[i * 4 + 1] = 12; D[i * 4 + 2] = 20; D[i * 4 + 3] = w.explored[i] ? 0 : 255; }
+      const sight = g.vis === 'los' ? g.visNow : null;
+      for (let i = 0; i < w.n; i++) { D[i * 4] = 10; D[i * 4 + 1] = 12; D[i * 4 + 2] = 20; D[i * 4 + 3] = !w.explored[i] ? 255 : sight && !sight[i] ? 150 : 0; }
       x.putImageData(img, 0, 0);
     }
     ctx.imageSmoothingEnabled = true;
@@ -460,7 +465,7 @@ export class Renderer {
         const sx = (bx + sz / 2) * s + ox, sy = (by + sz * 0.6) * s + oy;
         const k = s * d;
         if (bd.type === 'centre') { const w = 64 * k; ctx.globalAlpha = 0.9 + Math.sin(this.time * 9) * 0.1; ctx.drawImage(hearth, sx - w / 2 + 3 * s, sy - w / 2, w, w); }
-        else if (def.housing || def.job || def.tower) { if (hash2(bd.id, (this.time / 6) | 0, 3) > 0.25) { const w = 26 * k; ctx.globalAlpha = 0.8; ctx.drawImage(TRIBES[bd.tribe].key === 'vaelith' ? crystal : glow, sx - w / 2, sy - w / 2, w, w); } }
+        else if (def.housing || def.job || def.tower) { if (hash2(bd.id, (this.time / 6) | 0, 3) > 0.25) { const w = 26 * k; ctx.globalAlpha = 0.8; ctx.drawImage(TRIBES[bd.tribe].lightTint ? crystal : glow, sx - w / 2, sy - w / 2, w, w); } }
       }
       ctx.globalAlpha = 1;
     }
@@ -496,7 +501,7 @@ export class Renderer {
     const ctx = mm.getContext('2d'); const img = ctx.createImageData(w.w, w.h); const D = img.data;
     const cols = BIOMES.map(b => hex(b.cols[0]));
     const tcol = TRIBES.map(t => hex(t.color));
-    const fog = g.fog && w.explored;
+    const fog = g.fog && w.explored, sight = g.vis === 'los' ? g.visNow : null;
     for (let i = 0; i < w.n; i++) {
       let [r, gg, b] = cols[w.biome[i]];
       if (w.trees[i] > 20) { r *= 0.8; gg *= 0.88; b *= 0.8; }
@@ -505,6 +510,7 @@ export class Renderer {
       if (w.occ[i]) { const bb = g.buildings.get(w.occ[i] - 1); if (bb) { const c = tcol[bb.tribe]; r = c[0] * 0.7 + 60; gg = c[1] * 0.7 + 60; b = c[2] * 0.7 + 60; } }
       if (w.road[i]) { r = 190; gg = 160; b = 120; }
       if (fog && !w.explored[i]) { r = 12; gg = 14; b = 22; }
+      else if (sight && !sight[i]) { r *= 0.45; gg *= 0.45; b *= 0.5; }
       D[i * 4] = r; D[i * 4 + 1] = gg; D[i * 4 + 2] = b; D[i * 4 + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);

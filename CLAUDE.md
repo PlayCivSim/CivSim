@@ -8,4 +8,7 @@
 - Dev tools: `node tools/balance.mjs`, `node tools/aggression.mjs`, `node tools/profile.mjs [size] [days] [hard|open]`.
 - Shared event record: log through `game.log(tribe, type, text, imp, { with, cat, alert, at })` (see `src/sim/records.js`); notices, inbox, chronicle and timeline read it.
 - Systems: intel/fog/missions `src/sim/intel.js`, trade `src/sim/trade.js`, AI memory/personality/coalitions `src/sim/aimind.js`, supply/specialisation/eras `src/sim/logistics.js`. New save fields must be optional; bump `SAVE_VERSION`.
+- Visibility by difficulty: `game.vis` = open (Easy) / explore (Medium) / los (Hard) in `src/sim/vision.js`; `game.hardIntel` gates reliability levels. AI uses the same per-tribe explored/sight maps.
+- All diplomacy travels: use `dip.dispatch(a, b, p)` (envoy mission), never `dip.propose` directly, except in the tutorial.
+- Campaigns: `estimateCampaign` / `routeProfile` in logistics.js are shared by the planner UI, AI, envoys and caravans.
 - Content packs: `src/data/registry.js` (docs/MODDING.md). New UI text goes in `src/i18n.js`.

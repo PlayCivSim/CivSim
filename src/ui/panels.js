@@ -19,7 +19,7 @@ import { TREATY_NAMES } from '../sim/diplomacy.js';
 import { intelBadges, economyLine, strengthChip, intentLine, missionsSection, counterSection, reputationLine, inboxSection, intelActions, confirmJourney } from './intelui.js';
 import { route, intel } from '../sim/intel.js';
 import { traits } from '../sim/aimind.js';
-import { SPECS, SPEC_COOLDOWN_DAYS, ERAS, eraOf, supplyAt } from '../sim/logistics.js';
+import { SPECS, SPEC_COOLDOWN_DAYS, ERAS, eraOf, supplyAt, estimateCampaign } from '../sim/logistics.js';
 import { counterOffer, dealText, embargoed, TARIFFS } from '../sim/trade.js';
 import { proposalText } from './hud.js';
 import { sfx } from '../audio/audio.js';
@@ -302,7 +302,7 @@ const diplomacy = {
     const g = hud.game, t = g.player, D = g.dip;
     const props = g.pendingProposals.filter(p => p.to === t.id);
     const others = g.tribes.filter(o => o !== t);
-    return `${reputationLine(g)}${envoySection(t)}${missionsSection(g)}${props.length ? `<div class="section-title">Envoys awaiting your answer</div>${props.map((p, i) => `<div class="proposal" ${p.p.ultimatum ? 'style="border-left-color:var(--bad);background:rgba(255,90,80,0.08)"' : ''}><img src="${emblemURL(g.tribes[p.from].key)}" width="36" class="pix"><div style="flex:1"><div style="color:${p.p.ultimatum ? 'var(--bad)' : 'var(--gold-hi)'}">${p.p.ultimatum ? 'Ultimatum from the ' : 'The '}${g.tribes[p.from].name}</div><div class="prose" style="font-size:0.9em">${esc(proposalText(p.p))}${p.expires ? ` <span class="warn">Answer within ${Math.max(0, Math.ceil((p.expires - g.tick) / 360 * 10) / 10)} days.</span>` : ''}</div></div><button class="btn sm primary" data-act="prop-yes" data-i="${g.pendingProposals.indexOf(p)}">${p.p.ultimatum ? 'Pay tribute' : 'Accept'}</button><button class="btn sm ${p.p.ultimatum ? 'danger' : ''}" data-act="prop-no" data-i="${g.pendingProposals.indexOf(p)}">${p.p.ultimatum ? 'Refuse' : 'Decline'}</button></div>`).join('')}` : ''}
+    return `${reputationLine(g)}${envoySection(t)}${missionsSection(g)}${props.length ? `<div class="section-title">Envoys awaiting your answer</div>${props.map((p, i) => `<div class="proposal" ${p.p.ultimatum ? 'style="border-left-color:var(--bad);background:rgba(255,90,80,0.08)"' : ''}><img src="${emblemURL(g.tribes[p.from].key)}" width="36" class="pix"><div style="flex:1"><div style="color:${p.p.ultimatum ? 'var(--bad)' : 'var(--gold-hi)'}">${p.p.ultimatum ? 'Ultimatum from the ' : 'The '}${g.tribes[p.from].name}</div><div class="prose" style="font-size:0.9em">${esc(proposalText(p.p))}${p.sent != null ? ` <span class="faint" style="font-size:0.85em">Sent ${Math.max(0, Math.round((g.tick - p.sent) / 360))} day(s) ago · ${p.travel} day(s) on the road.</span>` : ''}${p.expires ? ` <span class="warn">Answer within ${Math.max(0, Math.ceil((p.expires - g.tick) / 360 * 10) / 10)} days.</span>` : ''}</div></div><button class="btn sm primary" data-act="prop-yes" data-i="${g.pendingProposals.indexOf(p)}">${p.p.ultimatum ? 'Pay tribute' : 'Accept'}</button><button class="btn sm ${p.p.ultimatum ? 'danger' : ''}" data-act="prop-no" data-i="${g.pendingProposals.indexOf(p)}">${p.p.ultimatum ? 'Refuse' : 'Decline'}</button></div>`).join('')}` : ''}
       ${others.map(o => {
         if (!o.alive) return `<div class="frame dip-card" style="opacity:0.5"><div class="dip-head"><img class="emb" src="${emblemURL(o.key)}" style="filter:grayscale(1)"><div><div class="dip-name">${o.name}</div><div class="dim">Fallen</div></div></div></div>`;
         const known = D.contact[t.id][o.id];
@@ -339,7 +339,7 @@ const diplomacy = {
             <button class="btn sm danger" data-act="dip-war" data-to="${o.id}">${ico('military', 'sm')} Declare war</button>`}</div>${intelActions(g, t.id, o)}</div>`;
       }).join('')}
       ${counterSection(g)}${inboxSection(g)}
-      <div class="prose" style="font-size:0.85em">Opinions shift with trade, gifts, borders, shared enemies and broken promises. Hover the relation bar for the full reasoning.${g.fog ? ' In this world information travels slowly: badges show how reliable and how old your knowledge of each people is.' : ''}</div>`;
+      <div class="prose" style="font-size:0.85em">Opinions shift with trade, gifts, borders, shared enemies and broken promises. Hover the relation bar for the full reasoning.${g.hardIntel ? ' In this world information travels slowly: badges show how reliable and how old your knowledge of each people is.' : ''}</div>`;
   },
 };
 
@@ -406,7 +406,7 @@ const military = {
       <div class="section-title">Wars</div>
       ${enemies.length ? enemies.map(e => { const o = g.tribes[e]; const w = D.war(t.id, e); return `<div class="frame" style="margin-bottom:10px;padding:2px 4px"><div class="row"><img src="${emblemURL(o.key)}" width="32" class="pix"><div style="flex:1"><div style="color:${o.def.pal.light};font-size:1.2em">War with the ${o.name}</div><div class="dim" style="font-size:0.8em">${Math.floor((g.tick - w.start) / 360)} days · war score ${Math.round(w.score[t.id] || 0)} : ${Math.round(w.score[e] || 0)}</div></div><button class="btn sm" data-act="dip" data-to="${e}" data-type="peace">${ico('peace', 'sm')} Sue for peace</button></div>
           <div class="caps" style="color:var(--gold);margin:8px 0 4px">Their settlements</div>
-          ${o.settlements.map(sid => { const s = g.settlements.get(sid); const c = g.buildings.get(s.centre); return `<div class="row between" style="padding:3px 0"><span>${s.capital ? ico('crown', 'sm') : ico('house', 'sm')} ${esc(s.name)} <span class="faint">· ${!g.fog || intel(g, t.id, o.id, 'military').lv >= 3 ? `${s.pop} people${c ? ' · walls ' + Math.round(c.hp / c.maxHp * 100) + '%' : ''}` : 'defences unknown'}${s.capital ? ' · capital (can be sacked)' : ''}</span></span><button class="btn xs" data-act="campaign" data-sid="${sid}" data-tip="Send ${Math.round(st.commit * 100)}% of idle soldiers">${ico('target', 'sm')} Attack</button></div>`; }).join('')}</div>`; }).join('')
+          ${o.settlements.map(sid => { const s = g.settlements.get(sid); const c = g.buildings.get(s.centre); return `<div class="row between" style="padding:3px 0"><span>${s.capital ? ico('crown', 'sm') : ico('house', 'sm')} ${esc(s.name)} <span class="faint">· ${!g.hardIntel || intel(g, t.id, o.id, 'military').lv >= 3 ? `${s.pop} people${c ? ' · walls ' + Math.round(c.hp / c.maxHp * 100) + '%' : ''}` : 'defences unknown'}${s.capital ? ' · capital (can be sacked)' : ''}</span></span><button class="btn xs" data-act="campaign" data-sid="${sid}" data-tip="Plan a campaign: route, food, supply and risks">${ico('target', 'sm')} Plan attack</button></div>`; }).join('')}</div>`; }).join('')
         + `<div class="row" style="gap:8px"><span class="dim" style="font-size:0.85em">Commit</span>${[0.5, 0.75, 1].map(f => `<button class="btn xs ${st.commit === f ? 'on' : ''}" data-act="commit" data-f="${f}">${f * 100}%</button>`).join('')}<span class="faint" style="font-size:0.8em">of idle soldiers to each attack</span></div>`
         : '<div class="prose" style="font-size:0.9em">You are at peace. Declare war from the Diplomacy panel.</div>'}
       ${armies.length ? `<div class="section-title">Armies in the field</div>${armies.map(a => `<div class="row between" style="padding:4px 0"><span>${ico('flag', 'sm')} ${a.alive ?? a.size} soldiers › ${esc(g.settlements.get(a.target)?.name || '?')} <span class="faint">· ${a.state} · ${a.kills} kills, ${a.losses} lost${a.attrition ? ` (${a.attrition} to attrition)` : ''}</span><span class="supply" data-tip="${esc(`Supply ${Math.round((a.supply ?? 1) * 100)}%: ${a.supplyWhy || 'within reach of your towns'}. Effectiveness ${Math.round((0.6 + 0.4 * (a.supply ?? 1)) * 100)}%. Below 50% soldiers fall sick and desert. Friendly or allied land, border access, roads and Military towns extend supply; winter shortens it.`)}">Supply ${bar(a.supply ?? 1, (a.supply ?? 1) < 0.5 ? 'red' : (a.supply ?? 1) < 0.8 ? '' : 'green')}</span></span><span class="row"><button class="btn xs" data-act="army-view" data-id="${a.id}">${ico('eye', 'sm')}</button>${a.state !== 'return' ? `<button class="btn xs" data-act="recall" data-id="${a.id}">Recall</button>` : ''}</span></div>`).join('')}` : ''}`;
@@ -426,7 +426,7 @@ const chronicle = {
     st.cf = st.cf || 'all'; st.ct = st.ct ?? 'all'; st.cv = st.cv || 'stats'; st.cs = st.cs || 'pop';
     const tabs = `<div class="seg" style="margin-bottom:8px">${[['stats', 'Statistics'], ['timeline', 'Timeline'], ['log', 'Full record']].map(([k, n]) => `<button class="btn sm ${st.cv === k ? 'on' : ''}" data-act="chron-v" data-v="${k}">${n}</button>`).join('')}</div>`;
     if (st.cv === 'stats') {
-      const others = g.fog ? 'Under Hard intelligence only your own history is charted; rivals keep their records to themselves.' : 'Every people is charted.';
+      const others = g.hardIntel ? 'Under Hard intelligence only your own history is charted; rivals keep their records to themselves.' : 'Every people is charted.';
       return tabs + `<div class="row" style="flex-wrap:wrap;gap:4px">${STATS.map(([k, n, ic]) => `<button class="btn xs ${st.cs === k ? 'on' : ''}" data-act="chron-s" data-s="${k}">${ico(ic, 'sm')}${n}</button>`).join('')}</div>
         <canvas class="chart" id="world-chart" height="200"></canvas>
         <div class="faint" style="font-size:0.8em">${others} Red bands mark times you were at war.</div>
@@ -447,7 +447,7 @@ const chronicle = {
   mount(hud, body) {
     const g = hud.game, st = hud.panelState;
     if (st.cv !== 'stats') return;
-    const shown = g.fog ? [g.player] : g.tribes;
+    const shown = g.hardIntel ? [g.player] : g.tribes;
     const tl = g.player.stats.timeline;
     lineChart(body.querySelector('#world-chart'), shown.map(t => ({ data: t.stats.timeline.map(p => p[st.cs] ?? 0), color: t.color, label: t.name })), tl.map(p => (p.war || 0) > 0));
   },
@@ -535,12 +535,12 @@ async function exchangeDialog(g, t, o) {
     const deal = () => kind === 'once' ? { type: 'exchange', give: { [gr.value]: +ga.value }, get: { [rr.value]: +ra.value } } : { type: 'contract', give: { [gr.value]: +ga.value }, get: { [rr.value]: +ra.value }, every: 5, times };
     const upd = () => {
       m.querySelector('#gh').textContent = `You have ${fmt(t.stock[gr.value] || 0)}`;
-      const know = !g.fog || intel(g, t.id, o.id, 'economy').lv >= 2;
+      const know = !g.hardIntel || intel(g, t.id, o.id, 'economy').lv >= 2;
       m.querySelector('#rh').textContent = know ? `They have ${(o.stock[rr.value] || 0) > 200 ? 'plenty' : (o.stock[rr.value] || 0) > 40 ? 'some' : 'little'}` : 'Their stores are unknown';
       m.querySelector('#terms').style.display = kind === 'contract' ? 'flex' : 'none';
       const p = deal(); const ev = g.dip.evaluate(t.id, o.id, p);
       counter = ev.accept ? null : counterOffer(g.dip, t.id, o.id, p);
-      const days = g.fog && r ? r.days : 0;
+      const days = !g.tutorial && r ? r.days : 0;
       m.querySelector('#sum').innerHTML = `<div class="tt-row"><span>You give</span><span>${fmt(+ga.value)} ${RESOURCES[gr.value].name}${kind === 'contract' ? ` × ${times}` : ''}</span></div>
         <div class="tt-row"><span>You receive</span><span>${fmt(+ra.value)} ${RESOURCES[rr.value].name}${kind === 'contract' ? ` × ${times}` : ''}</span></div>
         <div class="tt-row"><span>Delivery</span><span>${kind === 'contract' ? `every 5 days for ${5 * times} days` : days ? `${days} day${days === 1 ? '' : 's'} (the envoy carries the goods)` : 'immediate'}</span></div>
@@ -586,6 +586,43 @@ function tradeSection(g, t) {
     ${trips ? `<div class="faint" style="font-size:0.82em">Caravans completed — ${esc(trips)}${t.stats.raided ? ` · raided: ${t.stats.raided}` : ''}</div>` : ''}
     ${log.length ? `<div class="inbox">${log.map(e => `<div class="dispatch"><span class="d-when">${g.day - e.day <= 0 ? 'today' : (g.day - e.day) + ' days ago'}</span><span>${esc(LBL[e.kind] || e.kind)} · ${esc(other(e))}${e.by != null && e.kind.endsWith('end') ? ` · by ${e.by === P ? 'you' : 'them'}${e.why ? ` (${esc(e.why)})` : ''}` : ''}${e.give ? ` · ${esc(dealText({ type: e.every ? 'contract' : 'exchange', give: e.a === P ? e.give : e.get, get: e.a === P ? e.get : e.give, every: e.every, times: e.times }))}` : ''}</span></div>`).join('')}</div>` : '<div class="faint" style="font-size:0.85em">No deals recorded yet.</div>'}`;
 }
+// Campaign planning: the estimate the player sees before committing an army.
+function campaignPlanner(hud, sid) {
+  const g = hud.game, t = g.player;
+  let frac = hud.panelState.commit || 0.75;
+  const range = (a, b) => a === b ? `${a}` : `${a}–${b}`;
+  const pct = v => Math.round(v * 100) + '%';
+  const body = () => {
+    const e = estimateCampaign(g, t, sid, frac, intel); if (!e) return '<div class="prose">No route.</div>';
+    const cls = e.verdict === 'Favourable' ? 'good' : e.verdict === 'Risky' ? 'warn' : 'bad';
+    const unsure = e.known < 3 ? `<div class="faint" style="font-size:0.82em">${ico('eye', 'sm')} Your knowledge of their army is ${['none', 'rumour', 'a report', 'verified'][e.known]}; estimates are uncertain. Scouting narrows them.</div>` : '';
+    return `<div class="seg" style="margin:4px 0 8px">${[0.5, 0.75, 1].map(f => `<button class="btn sm ${frac === f ? 'on' : ''}" data-f="${f}">${f * 100}% of idle soldiers</button>`).join('')}</div>
+      <div class="kvbox plan">
+        <div class="tt-row"><span>${ico('soldier', 'sm')} Army</span><span>${e.n} soldiers from ${esc(e.home)}</span></div>
+        <div class="tt-row"><span>${ico('flag', 'sm')} Distance</span><span>${e.dist} tiles · about ${e.days} day${e.days === 1 ? '' : 's'} each way</span></div>
+        <div class="tt-row"><span>${ico('target', 'sm')} Terrain</span><span>${e.terrain.label}${e.terrain.mountain > 0.05 ? ` · ${pct(e.terrain.mountain)} hills/mountains` : ''}${e.terrain.harsh > 0.05 ? ` · ${pct(e.terrain.harsh)} harsh` : ''}${e.terrain.water > 0.1 ? ' · detours around water' : ''}${e.terrain.road > 0.1 ? ` · ${pct(e.terrain.road)} road` : ''}</span></div>
+        <div class="tt-row"><span>${ico('food', 'sm')} Food to carry</span><span class="${e.food > e.foodHave * 0.5 ? 'bad' : ''}">${e.food} of your ${e.foodHave} (${e.foodRate}/soldier/day)</span></div>
+        <div class="tt-row"><span>${ico('wood', 'sm')} Upkeep</span><span>${e.upkeep.wood} wood${e.upkeep.coins ? `, ${e.upkeep.coins} coins` : ''} over ~${e.totalDays} days</span></div>
+        <div class="tt-row"><span>${ico('house', 'sm')} Supply</span><span>${pct(e.friendlyFrac)} of the road on friendly or allied land · at the target: ${pct(e.supply.target)} (${esc(e.supply.why)})</span></div>
+        ${e.crossing.length ? `<div class="tt-row"><span>${ico('warning', 'sm')} Crosses</span><span>${e.crossing.map(o => esc(g.tribes[o].name)).join(', ')} lands${e.hostileCross ? ' (at war!)' : ' — Border Access would help'}</span></div>` : ''}
+        <div class="tt-row"><span>${ico('skull', 'sm')} Sickness &amp; exposure</span><span>${range(...e.natural)} soldiers</span></div>
+        <div class="tt-row"><span>${ico('military', 'sm')} Expected losses</span><span>${range(...e.losses)} of ${e.n}</span></div>
+        <div class="tt-row"><span>${ico('eye', 'sm')} Interception / ambush</span><span class="${e.ambush > 0.3 ? 'bad' : e.ambush > 0.15 ? 'warn' : ''}">${pct(e.ambush)}</span></div>
+      </div>${unsure}
+      <div style="margin-top:8px">Assessment: <b class="${cls}">${esc(e.verdict)}</b></div>`;
+  };
+  return modal(`<div class="modal-head">${ico('military', 'xl')}<div><div class="caps" style="color:var(--gold)">Campaign plan</div><div class="panel-title">${esc(g.settlements.get(sid)?.name || '')}</div></div></div>
+    <div class="plan-body">${body()}</div>
+    <div class="prose faint" style="font-size:0.82em">The army carries its food from your stores; anything left comes back. Armies far from friendly land lose supply, and sickness and exposure take a few soldiers each day, more in mountains, harsh land, winter and on long marches.</div>
+    <div class="modal-actions"><button class="btn" data-x="0">Cancel</button><button class="btn primary" data-x="1">${ico('target', 'sm')} March</button></div>`,
+  { wide: true, onMount: m => {
+    m.onclick = e => {
+      const f = e.target.closest('[data-f]'); if (f) { frac = +f.dataset.f; hud.panelState.commit = frac; m.querySelector('.plan-body').innerHTML = body(); return; }
+      const x = e.target.closest('[data-x]'); if (!x) return;
+      if (x.dataset.x === '1') { const est = estimateCampaign(g, t, sid, frac, intel); closeModal({ frac, food: est?.food }); } else closeModal(null);
+    };
+  } });
+}
 function reportProposal(g, o, res, what) {
   if (res.accept) { sfx('diplomacy'); toast(`The ${o.name} accept`, what, { kind: 'good', icon: 'diplomacy' }); }
   else { sfx('error'); toast(`The ${o.name} refuse`, res.reasons.filter(r => r.label).sort((a, b) => a.v - b.v).slice(0, 3).map(r => `${r.label} (${sign(r.v, 0)})`).join(' · '), { kind: 'bad', icon: 'diplomacy', ms: 7000 }); }
@@ -623,7 +660,7 @@ export const ACTIONS = {
     if (type === 'gift') { const r = await chooseResource(t, `A gift for the ${o.name}`, 'Choose a resource to send.'); if (!r) return; p = { type, ...r }; }
     if (type === 'exchange') { const r = await exchangeDialog(g, t, o); if (!r) return; p = r; }
     if (type === 'peace') { const r = await peaceDialog(g, t, o); if (!r) return; p = { type, terms: r }; }
-    if (g.fog && !(await confirmJourney(g, o.id, 'envoy', `<div class="prose" style="font-size:0.9em;margin-top:4px">Proposal: <em>${esc(ourProp(p))}</em>. Their answer comes when the envoy arrives.${p.type === 'gift' || p.type === 'exchange' ? ' <span class="warn">Goods travel with the envoy and are lost if the envoy is.</span>' : ''}</div>`))) return;
+    if (!g.tutorial && !(await confirmJourney(g, o.id, 'envoy', `<div class="prose" style="font-size:0.9em;margin-top:4px">Proposal: <em>${esc(ourProp(p))}</em>. Their answer comes when the envoy arrives.${p.type === 'gift' || p.type === 'exchange' ? ' <span class="warn">Goods travel with the envoy and are lost if the envoy is.</span>' : ''}</div>`))) return;
     const res = await hud.sim.call('propose', o.id, p);
     if (res.sent) { if (res.ok) { sfx('diplomacy'); toast('Envoy dispatched', `To the ${o.name}: about ${res.days} day${res.days === 1 ? '' : 's'} on the road, ${String(res.risk).toLowerCase()} risk. You will hear when they arrive.`, { icon: 'scroll' }); } else fail('Cannot send an envoy', res.why, 'scroll'); return; }
     if (!res.accept && res.counter) { const yes = await confirmAsync(`The ${o.name} make a counteroffer`, `They refused, but would agree to: <em>${esc(dealText(res.counter))}</em>.`, 'Accept their terms'); if (yes) { const r2 = await hud.sim.call('propose', o.id, res.counter); reportProposal(g, o, r2, 'The deal is agreed.'); } return; }
@@ -652,7 +689,12 @@ export const ACTIONS = {
     const g = hud.game; const c = canAdoptGov(g, g.player, b.dataset.k); if (!c.ok) { toast('Reform impossible', c.why, { kind: 'bad', icon: 'crown' }); return; }
     if (await confirmAsync(`Reform into a ${GOVERNMENTS[b.dataset.k].name}?`, 'Reforms shake the realm: stability will fall for a while, and some laws may lapse.', 'Reform')) hud.sim.call('adoptGov', b.dataset.k);
   },
-  campaign: async (hud, b) => { const g = hud.game; const r = await hud.sim.call('campaign', +b.dataset.sid, hud.panelState.commit || 0.75); if (!r.ok) fail('Cannot attack', r.why, 'military'); else { const s = g.settlements.get(+b.dataset.sid); if (s) hud.renderer.flyTo(s.x, s.y, 2.5); } },
+  campaign: async (hud, b) => {
+    const g = hud.game, sid = +b.dataset.sid;
+    const plan = await campaignPlanner(hud, sid); if (!plan) return;
+    const r = await hud.sim.call('campaign', sid, plan.frac, plan.food);
+    if (!r.ok) fail('Cannot attack', r.why, 'military'); else { const s = g.settlements.get(sid); if (s) hud.renderer.flyTo(s.x, s.y, 2.5); }
+  },
   commit: (hud, b) => { hud.panelState.commit = +b.dataset.f; },
   recall: (hud, b) => { hud.sim.call('recall', +b.dataset.id); },
   'army-view': (hud, b) => { const g = hud.game; let sx = 0, sy = 0, n = 0; for (const a of g.agents.values()) if (a.army === +b.dataset.id) { sx += a.x; sy += a.y; n++; } if (n) hud.renderer.flyTo(sx / n, sy / n, 3.5); },

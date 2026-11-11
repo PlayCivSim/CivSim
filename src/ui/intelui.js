@@ -19,14 +19,14 @@ export function levelChip(g, r, label) {
   return `<span class="intel-chip ${LV_CLS[r.lv]} ${r.exposed ? 'exposed' : ''}" data-tip="${esc(tip)}"><i></i>${esc(label)}</span>`;
 }
 export function intelBadges(g, P, o) {
-  if (!g.fog) return '';
+  if (!g.hardIntel) return '';
   return `<div class="intel-row">${Object.entries(INTEL_CATS).map(([k, n]) => levelChip(g, intel(g, P, o.id, k), n)).join('')}</div>`;
 }
 
 // One line about their people, as reliable as your intelligence allows.
 export function economyLine(g, P, o) {
   const r = intel(g, P, o.id, 'economy');
-  if (!g.fog || r.lv === 3) { const v = g.fog ? r.val : { pop: o.pop, stage: o.stage, towns: o.settlements.length }; return `${STAGES[v.stage].name} · ${v.pop} people · ${v.towns} town${v.towns === 1 ? '' : 's'}`; }
+  if (!g.hardIntel || r.lv === 3) { const v = g.hardIntel ? r.val : { pop: o.pop, stage: o.stage, towns: o.settlements.length }; return `${STAGES[v.stage].name} · ${v.pop} people · ${v.towns} town${v.towns === 1 ? '' : 's'}`; }
   if (r.lv === 0 || !r.val) return '<span class="faint">Little is known of their numbers.</span>';
   const v = r.val;
   if (r.lv === 1) return `<span class="faint">Rumoured: perhaps ${Math.max(5, Math.round(v.pop / 10) * 10)} people${when(g, r)}</span>`;
@@ -42,7 +42,7 @@ export function strengthChip(g, P, o) {
   return `<span class="chip ${r.exposed ? 'red' : ''}" data-tip="${esc(`Military: ${LEVELS[r.lv]}${srcText(r)}${r.day != null ? ', ' + ago(g, r.day) : ''}. ${LEVEL_DESC[r.lv]}${r.exposed ? ' This report was exposed as a lie.' : ''}`)}">${ico('military', 'sm')} ${esc(txt)}${g.fog && r.age > 10 ? ' <small class="faint">(old)</small>' : ''}</span>`;
 }
 export function intentLine(g, P, o, warRiskChip) {
-  if (!g.fog) return null;
+  if (!g.hardIntel) return null;
   const r = intel(g, P, o.id, 'intent');
   if (r.lv < 2 || !r.val) return { line: `<span class="faint">${ico('eye', 'sm')} Their plans are unknown. An envoy or agent would learn more.</span>`, risk: (g.dip.warRisk?.[o.id]?.[P] || -99) > 4 && r.lv === 1 ? '<span class="chip red" data-tip="Unconfirmed talk of hostility.">Rumours of hostility</span>' : '' };
   const v = r.val;
@@ -77,7 +77,6 @@ export function missionsSection(g) {
 }
 
 export function counterSection(g) {
-  if (!g.fog) return '';
   const t = g.player, n = g.dip.counter?.[t.id] || 0;
   const can = t.techs.includes('writing');
   return `<div class="frame counter-box"><div class="row between"><div><div style="color:var(--gold-hi)">${ico('target', 'sm')} Counter-intelligence</div>
@@ -103,7 +102,6 @@ export function inboxSection(g) {
 
 // ---------------------------------------------------------------- intel actions
 export function intelActions(g, P, o) {
-  if (!g.fog) return '';
   return `<div class="dip-actions intel-actions">${['scout', 'spy', 'sabotage', 'deceive'].map(k => {
     const s = MISSIONS[k]; const locked = s.tech && !g.player.techs.includes(s.tech);
     return `<button class="btn xs ${locked ? 'disabled' : ''}" data-act="intel-send" data-to="${o.id}" data-k="${k}" data-tip="${esc(s.desc + (locked ? ' Requires Writing.' : ''))}">${ico(s.icon, 'sm')} ${esc(s.name.replace('Agent: ', ''))}</button>`;

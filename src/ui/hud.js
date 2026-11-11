@@ -255,7 +255,7 @@ export class Hud {
     if (g.dip.coalition?.against === t.id) W.push({ bad: true, icon: 'diplomacy', text: `A coalition of the ${g.dip.coalition.members.map(m => g.tribes[m].name).join(' and ')} has formed against your growing power.` });
     if ((t.stock.wood || 0) < 15) W.push({ bad: false, icon: 'wood', text: 'Wood is nearly exhausted.' });
     // advisor: intelligence, supply, contracts and money
-    if (g.fog) for (const o of g.tribes) {
+    if (g.hardIntel) for (const o of g.tribes) {
       if (o === t || !o.alive || !g.dip.contact[t.id][o.id]) continue;
       const hostile = g.dip.atWar(t.id, o.id) || g.dip.opinion(o.id, t.id) < -25;
       if (!hostile) continue;

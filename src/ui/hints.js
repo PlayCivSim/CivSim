@@ -6,7 +6,7 @@ import { ico } from './icons.js';
 import { t } from '../i18n.js';
 import { sfx } from '../audio/audio.js';
 
-const ICON = { fog: 'eye', envoy: 'scroll', delay: 'scroll', lost: 'warning', intel: 'eye', scout: 'eye', supply: 'military', trade: 'coin', coalition: 'diplomacy', war: 'military', spec: 'house' };
+const ICON = { sight: 'eye', fog: 'eye', envoy: 'scroll', delay: 'scroll', lost: 'warning', intel: 'eye', scout: 'eye', supply: 'military', trade: 'coin', coalition: 'diplomacy', war: 'military', spec: 'house' };
 
 export class Hints {
   constructor(app) { this.app = app; this.queue = []; this.el = null; }
@@ -45,8 +45,9 @@ export class Hints {
   }
   // Called a few times a second while playing.
   check(g, panel) {
-    if (g.fog && g.day >= 0) this.show('fog');
-    if (panel === 'diplomacy' && g.fog) this.show('intel');
+    if (g.vis === 'explore') this.show('fog');
+    if (g.vis === 'los') this.show('sight');
+    if (panel === 'diplomacy' && g.hardIntel) this.show('intel');
     if (panel === 'economy' || (panel === 'diplomacy' && g.player.techs.includes('barter'))) { if (g.player.techs.includes('barter')) this.show('trade'); }
     if ((g.dip.missions || []).some(m => m.from === g.playerId && m.notes?.some(n => /Delayed/.test(n.text)))) this.show('delay');
   }

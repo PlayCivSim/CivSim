@@ -181,7 +181,7 @@ export const GLOBAL_EVENTS = [
   {
     key: 'comet', title: 'A Comet Appears', icon: 'star',
     weight: g => 0.15,
-    apply: g => { g.comet = g.tick + DAY_TICKS * 2; for (const t of g.tribes) if (t.alive) tmpMod(g, t, 'Comet omen', t.key === 'vaelith' ? { research: 0.2 } : { happiness: g.rng.chance(0.5) ? 3 : -3 }, 2); return 'A blazing comet crosses the night sky. Seers argue over its meaning; Vaelith astronomers race to study it.'; },
+    apply: g => { g.comet = g.tick + DAY_TICKS * 2; for (const t of g.tribes) if (t.alive) tmpMod(g, t, 'Comet omen', t.def?.quirks?.cometOmen ? t.def.quirks.cometOmen : { happiness: g.rng.chance(0.5) ? 3 : -3 }, 2); return 'A blazing comet crosses the night sky. Seers argue over its meaning; Vaelith astronomers race to study it.'; },
   },
   {
     key: 'goodyear', title: 'Gentle Seasons', icon: 'sun',

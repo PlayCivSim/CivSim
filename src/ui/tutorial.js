@@ -6,6 +6,7 @@
 import { esc } from './dom.js';
 import { ico } from './icons.js';
 import { storeSettings } from '../save/saves.js';
+import { playerSees } from '../sim/vision.js';
 
 export const TUTORIAL_WORLD = { seed: 'tutorial-3', size: 'small', start: 'bountiful', difficulty: 'gentle', playerTribe: 0, runName: 'Tutorial', tutorial: true };
 
@@ -21,6 +22,24 @@ export const STEPS = [
   { title: 'Moving the camera', text: 'Drag the map to pan and scroll or pinch to zoom. Zoom out far enough and people are hidden to keep things smooth. Press H, or the house button by the minimap, to return home.', to: ['.minimap'],
     enter: ({ app, mem }) => { const c = app.renderer.cam; mem.c = [c.x, c.y, c.zoom]; },
     done: ({ app, mem }) => { const c = app.renderer.cam; return Math.hypot(c.x - mem.c[0], c.y - mem.c[1]) > 40 || Math.abs(c.zoom - mem.c[2]) > 0.2; } },
+  // ---- map visibility lessons (only for the visibility being learned)
+  { when: g => g.vis === 'explore', title: 'Undiscovered land', text: 'The dark land is unexplored. Your people uncover the map as they work and travel, and once land is discovered it stays on your map. We have sent a scout toward the nearest people: watch the darkness lift around their homeland when the scout arrives.', to: ['.minimap'],
+    enter: ({ sim, mem, g }) => { sim.setSpeed(1); mem.n = g.world.explored?.reduce((a, b) => a + b, 0) || 0; sim.call('tut', 'scout').then(r => { mem.dest = r; }); },
+    done: ({ g, mem }) => (g.world.explored?.reduce((a, b) => a + b, 0) || 0) > mem.n + 250,
+    link: 'Rivals explore the same way: they cannot attack a town until they have found it.' },
+  { when: g => g.vis === 'explore', title: 'Discovered for good', text: 'Your scout has mapped their lands. On this difficulty, explored land stays visible, so you can watch their town even after the scout leaves. On Hard it would fade to grey.', next: true,
+    enter: ({ app, mem, g }) => { const s = g.settlements.get(g.tribes.find(o => o.id !== g.playerId && g.world.explored?.[g.settlements.get(o.capital).y * g.world.w + g.settlements.get(o.capital).x])?.capital); if (s) app.renderer.flyTo(s.x, s.y, 2.6); } },
+  { when: g => g.vis === 'los', title: 'Live line of sight', text: 'On Hard you see only what your people, towns, towers, armies and scouts can see right now. We have sent a scout toward the nearest people. When it arrives, their town appears; it is only visible while the scout is there.', to: ['.minimap'],
+    enter: ({ sim, mem }) => { sim.setSpeed(1); sim.call('tut', 'scout').then(r => { mem.dest = r; }); },
+    done: ({ g, app, mem }) => { if (!mem.dest?.ok) return false; const ok = playerSees(g, mem.dest.x, mem.dest.y); if (ok && !mem.flown) { mem.flown = 1; app.renderer.flyTo(mem.dest.x, mem.dest.y, 2.6); } return ok; },
+    link: 'Seeing a town with your own eyes verifies what you know of their lands.' },
+  { when: g => g.vis === 'los', title: 'Out of sight', text: 'Now the scout heads home. Watch: the land stays on your map but turns grey, and their people and buildings disappear. You only remember the ground, not what is happening on it.',
+    enter: ({ sim, mem, app }) => { sim.call('tut', 'leave'); },
+    done: ({ g }) => { const o = g.tribes.find(x => x.id !== g.playerId && g.world.explored?.[g.settlements.get(x.capital).y * g.world.w + g.settlements.get(x.capital).x]); if (!o) return true; const s = g.settlements.get(o.capital); return !playerSees(g, s.x, s.y); },
+    link: 'Enemy armies are hidden the same way until your sight reaches them.' },
+  { when: g => g.vis === 'los', title: 'Outdated intelligence', text: 'Reports age. We have moved the clock on your knowledge by a month: open Diplomacy and look at the four badges (lands, military, economy, intentions). Verified reports have slipped to Reported or Rumoured, and figures are marked as old. Send scouts or agents to refresh them.', to: [rail('diplomacy')],
+    enter: ({ sim }) => { sim.call('tut', 'goodwill'); sim.call('tut', 'age'); }, done: panel('diplomacy'),
+    link: 'Rival rulers face the same limits and can be fooled by false reports.' },
   { title: 'Your resources', text: 'The top bar shows what your tribe owns and how fast each stock is changing per day. Hover any item for production and use. Food is the sum of all edible goods. After population come soldiers (manpower) and happiness: tap or click happiness to see exactly what is raising or lowering it.', to: ['#tb-res'], next: true,
     link: 'Resources come from buildings, buildings need workers, and workers are your population.' },
   { title: 'Time', text: 'The world is paused. Press play (or Space) to start time. The other buttons run it faster. Pause whenever you want to think; you can still build and open panels while paused.', to: ['.speed'],
@@ -82,6 +101,7 @@ export class Tutorial {
 
   start() {
     this.stop();
+    this.steps = STEPS.filter(st => !st.when || st.when(this.app.game));
     this.el = document.createElement('div'); this.el.id = 'tutorial'; document.body.appendChild(this.el);
     this.ring = document.createElement('div'); this.ring.id = 'tut-ring'; document.body.appendChild(this.ring);
     this.el.addEventListener('click', e => {
@@ -100,17 +120,17 @@ export class Tutorial {
 
   go(i) {
     if (i < 0) return;
-    if (i >= STEPS.length) { this.finish(true); return; }
+    if (i >= this.steps.length) { this.finish(true); return; }
     this.i = i; this.mem = {}; this.doneAt = 0;
-    try { STEPS[i].enter?.(this.ctx); } catch (e) { console.error(e); }
+    try { this.steps[i].enter?.(this.ctx); } catch (e) { console.error(e); }
     this.render();
   }
 
   render() {
-    const s = STEPS[this.i]; if (!this.el) return;
+    const s = this.steps[this.i]; if (!this.el) return;
     const manual = !!s.next;
     this.el.innerHTML = `<div class="tut-card frame thin">
-      <div class="tut-head"><span class="caps">Tutorial ${this.i + 1} / ${STEPS.length}</span><button class="btn xs" data-t="exit">${ico('close', 'sm')} Exit</button></div>
+      <div class="tut-head"><span class="caps">Tutorial ${this.i + 1} / ${this.steps.length}</span><button class="btn xs" data-t="exit">${ico('close', 'sm')} Exit</button></div>
       <div class="tut-title">${esc(s.title)}</div><div class="tut-text">${esc(s.text)}</div>
       ${s.link ? `<div class="tut-link">${ico('scroll', 'sm')} <b>How it connects:</b> ${esc(s.link)}</div>` : ''}
       <div class="tut-foot"><button class="btn xs" data-t="back" ${this.i ? '' : 'disabled'}>Back</button><span class="tut-state">${manual ? '' : 'Do it to continue…'}</span>
@@ -118,7 +138,7 @@ export class Tutorial {
   }
 
   poll() {
-    const s = STEPS[this.i]; if (!s || !this.app.game || this.app.mode !== 'game') return;
+    const s = this.steps?.[this.i]; if (!s || !this.app.game || this.app.mode !== 'game') return;
     // spotlight the first visible target
     let r = null;
     for (const sel of s.to || []) { const el = document.querySelector(sel); if (el && el.offsetParent !== null) { const b = el.getBoundingClientRect(); if (b.width && b.height) { r = b; break; } } }
@@ -126,7 +146,7 @@ export class Tutorial {
     if (r && s.to?.[0] !== '#world') { ring.style.cssText = `display:block;left:${r.left - 5}px;top:${r.top - 5}px;width:${r.width + 10}px;height:${r.height + 10}px`; } else ring.style.display = 'none';
     if (s.done && !this.doneAt) {
       let ok = false; try { ok = s.done(this.ctx); } catch (e) { console.error(e); }
-      if (ok) { this.doneAt = performance.now(); const st = this.el.querySelector('.tut-state'); if (st) st.textContent = 'Done!'; setTimeout(() => { if (STEPS[this.i] === s) this.go(this.i + 1); }, 900); }
+      if (ok) { this.doneAt = performance.now(); const st = this.el.querySelector('.tut-state'); if (st) st.textContent = 'Done!'; setTimeout(() => { if (this.steps[this.i] === s) this.go(this.i + 1); }, 900); }
     }
   }
 }

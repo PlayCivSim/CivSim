@@ -1,6 +1,14 @@
 // The four civilisations. Traits feed the modifier system; `ai` weights feed the
 // utility AI. Weights bias behaviour but never forbid it.
 
+// The four peoples. Everything that makes a people distinct lives here as
+// data, so content packs (src/data/registry.js) can rename, recolour or
+// rebalance them without touching the simulation:
+//   name/adjective/title/motto/blurb, pal (colours), style (sprite & emblem
+//   look: oruvai | kharvak | thalori | vaelith), ai (temperament), mods
+//   (bonuses & weaknesses), strengths/weaknesses (text), start, biome,
+//   techBias, names, affinity (opinion of other peoples), warCry, lightTint,
+//   quirks (small behaviour tweaks read by the simulation).
 export const TRIBES = [
   {
     key: 'oruvai', name: 'Oruvai', adjective: 'Oruvan', title: 'The Tidebound Concord',
@@ -17,6 +25,8 @@ export const TRIBES = [
     techBias: { government: 1.6, economics: 1.5, agriculture: 1.0, construction: 1.0, extraction: 0.8, military: 0.6, innovation: 0.9 },
     biome: { coast: 2, river: 1.5, grass: 1, forest: 0.6, hills: 0.5 },
     names: { pre: ['A', 'Ae', 'O', 'Mi', 'Se', 'Lu', 'Va', 'Ri', 'Na', 'Ilo', 'Ce'], mid: ['ru', 'la', 'shen', 'ma', 've', 'ni', 'lo', 'ro', 'sa'], end: ['n', 'a', 'el', 'is', 'ai', 'on', 'ae', 'ra'] },
+    affinity: { thalori: 10, vaelith: 5, kharvak: -6 },
+    quirks: { fishing: 2, techLikes: { fishing: 1.5 }, lawDislikes: [{ law: 'trade', opt: 'protect', name: 'Closed Harbours', desc: 'Oruvai merchants chafe at protectionism: -2 stability.', mods: { stability: -2 } }] },
     leaderTitle: 'Speaker', capitalNames: ['Oru Tessar', 'Lumaren', 'Seravel', 'Aelon'], townNames: ['Mirashen', 'Calvae', 'Nimara', 'Ilosen', 'Vessaro', 'Ruvain'],
   },
   {
@@ -34,6 +44,9 @@ export const TRIBES = [
     techBias: { military: 1.8, extraction: 1.3, construction: 1.1, government: 0.8, agriculture: 0.8, economics: 0.6, innovation: 0.6 },
     biome: { hills: 2, mountainEdge: 1.5, grass: 1, forest: 0.8, coast: 0.4 },
     names: { pre: ['Gr', 'Kh', 'Dr', 'Vor', 'Ul', 'Bra', 'Kor', 'Th', 'Ska', 'Hro'], mid: ['a', 'o', 'u', 'ag', 'ar', 'ok', 'ur'], end: ['k', 'vak', 'dak', 'gar', 'rok', 'ash', 'nor', 'th', 'ga'] },
+    affinity: { oruvai: -6, thalori: -4, vaelith: -8 },
+    warCry: 'to prove Kharvaki might',
+    quirks: { warWeariness: 0.6, morale: 0.15, mining: 2 },
     leaderTitle: 'Warchief', capitalNames: ['Kharuth', 'Grom Hald', 'Vorgard', 'Skarn'], townNames: ['Drakmoor', 'Uldrek', 'Hrothgar', 'Brasskar', 'Korvash', 'Thundak'],
   },
   {
@@ -51,6 +64,8 @@ export const TRIBES = [
     techBias: { agriculture: 1.8, construction: 1.1, government: 1.0, economics: 0.9, extraction: 0.8, military: 0.7, innovation: 0.8 },
     biome: { forest: 2, valley: 2, grass: 1.2, swamp: 0.8, hills: 0.5 },
     names: { pre: ['Fen', 'Tha', 'Wy', 'Bra', 'Eli', 'Ro', 'Sy', 'Ma', 'Hal', 'Ty'], mid: ['l', 'lo', 'ri', 'we', 'an', 'el', 'ny'], end: ['wyn', 'lia', 'dra', 'ren', 'on', 'eth', 'a', 'is'] },
+    affinity: { oruvai: 10, kharvak: -4, vaelith: 0 },
+    quirks: { lawLikes: [{ law: 'forestry', opt: 'sacred', name: 'Ancestral Groves', desc: 'The Thalori revere their forests: +2 happiness.', mods: { happiness: 2 } }] },
     leaderTitle: 'Grove Keeper', capitalNames: ['Thalorwen', 'Elmhollow', 'Fennabra', 'Wyrlden'], townNames: ['Mossbrook', 'Rowanshade', 'Haldrel', 'Syrawen', 'Tyleth', 'Briarlen'],
   },
   {
@@ -68,6 +83,10 @@ export const TRIBES = [
     techBias: { innovation: 1.9, extraction: 1.4, construction: 1.2, economics: 1.0, government: 0.9, agriculture: 0.7, military: 0.7 },
     biome: { mountainEdge: 2, hills: 1.5, minerals: 2, grass: 0.8, desert: 0.6 },
     names: { pre: ['Vae', 'Ze', 'Ith', 'Qua', 'Sol', 'Yr', 'Ca', 'Xe', 'Ny', 'Aur'], mid: ['li', 'th', 'ra', 'ze', 'ven', 'si', 'qu'], end: ['ith', 'eth', 'ys', 'ion', 'ara', 'el', 'ix', 'yr'] },
+    affinity: { oruvai: 5, kharvak: -8, thalori: 0 },
+    warCry: 'to secure valuable resources',
+    lightTint: [196, 160, 255],
+    quirks: { mining: 2, smelting: 2, mineralSites: 1.5, cometOmen: { research: 0.2 } },
     leaderTitle: 'Archon', capitalNames: ['Vael Sirith', 'Zethara', 'Solquen', 'Ithrael'], townNames: ['Aurenith', 'Calyx', 'Nyvere', 'Xeradon', 'Quessil', 'Yrtheon'],
   },
 ];

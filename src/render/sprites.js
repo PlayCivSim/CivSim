@@ -42,9 +42,9 @@ export function personSprite(tribeKey, job, frame, female, child, look, carry, t
   return memo(key, () => {
     const c = canvas(9, 12); const p = new Pen(c.getContext('2d'));
     const def = TRIBES.find(t => t.key === tribeKey) || TRIBES[0];
-    const pal = def.pal;
+    const pal = def.pal, styleKey = def.style || def.key;
     const skin = pal.skin[look % 3], hair = pal.hair[(look >> 2) % 3];
-    const S = S_OF(tribeKey);
+    const S = S_OF(styleKey);
     const rich = tier >= 4;
     let body = pal.primary, bodyD = pal.dark, trim = pal.accent;
     if (job === 'idle' || child) { body = mix(pal.primary, '#9a8a70', 0.45); bodyD = shade(body, -0.3); }
@@ -66,24 +66,24 @@ export function personSprite(tribeKey, job, frame, female, child, look, carry, t
       else p.px(X, y0 + 1, hair);
       p.px(X + 2, y0 + 1, '#2a2020');
       // tribe headwear
-      if (tribeKey === 'oruvai' && (rich || job === 'trader' || job === 'researcher')) p.hline(X, y0, 3, S.metal);
-      if (tribeKey === 'kharvak' && job !== 'soldier') { p.hline(X, y0, 3, '#5a4030'); p.px(X - 1, y0, '#7a5a40'); }
-      if (tribeKey === 'thalori') { p.px(X - 1, y0 + 1, '#4f8a2a'); p.hline(X, y0, 3, '#4f8a2a'); p.px(X + 1, y0 - 1, '#7ab845'); }
-      if (tribeKey === 'vaelith' && (job === 'researcher' || rich)) { p.rect(X, y0 - 1, 3, 1, pal.dark); p.px(X + 1, y0 - 2, pal.primary); p.hline(X, y0, 3, pal.primary); }
+      if (styleKey === 'oruvai' && (rich || job === 'trader' || job === 'researcher')) p.hline(X, y0, 3, S.metal);
+      if (styleKey === 'kharvak' && job !== 'soldier') { p.hline(X, y0, 3, '#5a4030'); p.px(X - 1, y0, '#7a5a40'); }
+      if (styleKey === 'thalori') { p.px(X - 1, y0 + 1, '#4f8a2a'); p.hline(X, y0, 3, '#4f8a2a'); p.px(X + 1, y0 - 1, '#7ab845'); }
+      if (styleKey === 'vaelith' && (job === 'researcher' || rich)) { p.rect(X, y0 - 1, 3, 1, pal.dark); p.px(X + 1, y0 - 2, pal.primary); p.hline(X, y0, 3, pal.primary); }
       // torso
       const ty = y0 + 3;
       p.rect(X - 1, ty, 5, 1, body); // shoulders
       p.rect(X, ty + 1, 3, 2, body);
       p.px(X + 2, ty + 1, bodyD); p.px(X + 2, ty + 2, bodyD);
       p.px(X - 1, ty + 1, skin); p.px(X + 3, ty + 1, skin); // hands
-      if (tribeKey === 'kharvak') { p.px(X - 1, ty, S.metal); p.px(X + 3, ty, S.metal); }
-      if (tribeKey === 'oruvai') p.hline(X, ty + 2, 3, S.metal);
-      if (tribeKey === 'vaelith') { p.vline(X + 1, ty, 3, trim); }
-      if (tribeKey === 'thalori') p.hline(X, ty + 2, 3, '#7a5532');
+      if (styleKey === 'kharvak') { p.px(X - 1, ty, S.metal); p.px(X + 3, ty, S.metal); }
+      if (styleKey === 'oruvai') p.hline(X, ty + 2, 3, S.metal);
+      if (styleKey === 'vaelith') { p.vline(X + 1, ty, 3, trim); }
+      if (styleKey === 'thalori') p.hline(X, ty + 2, 3, '#7a5532');
       if (rich) p.px(X + 1, ty, def.pal.light);
       // legs / robe
       const ly = ty + 3;
-      if (tribeKey === 'vaelith' || (female && tribeKey === 'oruvai')) {
+      if (styleKey === 'vaelith' || (female && styleKey === 'oruvai')) {
         p.rect(X, ly, 3, 2, bodyD);
         p.px(X + (frame === 1 ? 0 : frame === 2 ? 2 : 1), ly + 2, boots);
         if (frame === 0 || frame === 3) { p.px(X, ly + 2, boots); p.px(X + 2, ly + 2, boots); }
@@ -109,11 +109,11 @@ export function personSprite(tribeKey, job, frame, female, child, look, carry, t
         case 'trader': p.rect(hx - 1, hy + 1, 2, 2, '#c89a5a'); p.px(hx, hy + 1, '#f2c84b'); break;
         case 'soldier': {
           // helmet, spear, shield
-          const helm = tribeKey === 'kharvak' ? '#5e5a5c' : S.metal;
+          const helm = styleKey === 'kharvak' ? '#5e5a5c' : S.metal;
           p.hline(X, y0, 3, helm); p.px(X + 1, y0 - 1, helm);
-          if (tribeKey === 'kharvak') { p.px(X - 1, y0 - 1, '#e8dcc0'); p.px(X + 3, y0 - 1, '#e8dcc0'); }
-          if (tribeKey === 'oruvai') p.px(X + 1, y0 - 2, pal.primary);
-          if (tribeKey === 'vaelith') p.px(X + 1, y0 - 2, pal.light);
+          if (styleKey === 'kharvak') { p.px(X - 1, y0 - 1, '#e8dcc0'); p.px(X + 3, y0 - 1, '#e8dcc0'); }
+          if (styleKey === 'oruvai') p.px(X + 1, y0 - 2, pal.primary);
+          if (styleKey === 'vaelith') p.px(X + 1, y0 - 2, pal.light);
           p.vline(hx, (up ? hy - 5 : hy - 4), 7, wood); p.px(hx, up ? hy - 6 : hy - 5, iron);
           p.rect(X - 2, ty, 2, 3, pal.primary); p.px(X - 2, ty, pal.light); p.px(X - 1, ty + 1, pal.accent);
           break;
@@ -312,7 +312,7 @@ export function buildingSprite(type, tribeKey, opts = {}) {
   return memo(key, () => {
     const W = size * 8, H = W + buildingPad(type);
     const c = canvas(W, H); const p = new Pen(c.getContext('2d'));
-    const S = S_OF(tribeKey); const k = tribeKey;
+    const k = TRIBES.find(t => t.key === tribeKey)?.style || tribeKey; const S = S_OF(k);
     const base = H - 1; const cx = W / 2;
     const T = tier >= 5 ? 3 : tier >= 3 ? 2 : 1;
     const gnd = (col) => { p.rect(1, base - W + 2, W - 2, W - 2, col); };

@@ -12,7 +12,9 @@
 // With game.fog off (older saves, the tutorial, "Open" runs) every query
 // returns live, verified information and missions resolve instantly.
 import { aiOf, remember } from './aimind.js';
+import { routeProfile } from './logistics.js';
 import { DAY_TICKS } from '../core/constants.js';
+import { revealFor, playerSees, updateVision, exploreOwned, exploredBy } from './vision.js';
 import { addRes, takeRes, foodTotal, eatFood } from './economy.js';
 import { RESOURCES } from '../data/resources.js';
 import { isAdult } from './agents.js';
@@ -48,13 +50,13 @@ const decayed = (rec, day) => { let lv = rec.lv, age = day - rec.day; while (lv 
 
 // What observer `a` currently knows about `b` in `cat`.
 export function intel(g, a, b, cat) {
-  if (!g.fog || a === b) return { lv: 3, day: g.day, val: liveVal(g, b, cat), src: 'open' };
+  if (!g.hardIntel || a === b) return { lv: 3, day: g.day, val: liveVal(g, b, cat), src: 'open' };
   const rec = g.dip.intel?.[a]?.[b]?.[cat];
   if (!rec) return { lv: 0, day: null, val: null, src: null };
   return { ...rec, lv: decayed(rec, g.day), age: g.day - rec.day };
 }
 export function learn(g, a, b, cat, lv, src, val, fake = false) {
-  if (!g.fog || a === b) return;
+  if (!g.hardIntel || a === b) return;
   const d = ensure(g); const cur = d.intel[a][b][cat];
   // never overwrite fresher, better knowledge with worse
   if (cur && !fake && decayed(cur, g.day) > lv && g.day - cur.day < 5) return;
@@ -63,46 +65,15 @@ export function learn(g, a, b, cat, lv, src, val, fake = false) {
   d.intel[a][b][cat] = { lv, day: g.day, val: lv === 1 && cat === 'military' ? Math.round(v * (0.65 + hash(a, b, g.day >> 3) * 0.7)) : v, src, fake: fake || undefined };
 }
 
-// ------------------------------------------------------------------ fog of war (player only)
-export function revealCircle(g, cx, cy, r) {
-  const w = g.world; if (!w.explored) return;
-  const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(w.w - 1, Math.ceil(cx + r));
-  const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(w.h - 1, Math.ceil(cy + r));
-  const r2 = r * r;
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    const dx = x - cx, dy = y - cy; if (dx * dx + dy * dy > r2) continue;
-    const i = y * w.w + x; if (!w.explored[i]) { w.explored[i] = 1; g.fogNew.push(i); }
-  }
-}
-export const fogged = (g, x, y) => { const w = g.world; return !!(g.fog && w.explored && !w.explored[(y | 0) * w.w + (x | 0)]); };
-
-// Called every few ticks: the player's people reveal what they see.
-export function updateExplore(g) {
-  if (!g.fog) return;
-  const P = g.playerId, seen = new Set();
-  for (const a of g.agents.values()) {
-    if (a.tribe !== P || a.hidden) continue;
-    const k = ((a.x >> 2) << 12) | (a.y >> 2); if (seen.has(k)) continue; seen.add(k);
-    revealCircle(g, a.x, a.y, a.army ? 8 : 6);
-  }
-  // spotting foreign settlements in sight verifies what is seen of their lands
-  for (const s of g.settlements.values()) {
-    if (s.tribe === P) continue;
-    const i = (s.y | 0) * g.world.w + (s.x | 0);
-    if (g.world.explored[i]) {
-      for (const a of g.agents.values()) if (a.tribe === P && !a.hidden && Math.abs(a.x - s.x) + Math.abs(a.y - s.y) < 12) { learn(g, P, s.tribe, 'land', 3, 'your people saw it'); break; }
-    }
-  }
-}
-export function exploreTerritory(g) {
-  if (!g.fog) return;
-  const w = g.world, P = g.playerId;
-  for (let i = 0; i < w.n; i++) if (w.owner[i] === P && !w.explored[i]) { w.explored[i] = 1; g.fogNew.push(i); }
-}
+// ------------------------------------------------------------------ fog of war (see vision.js)
+export const revealCircle = (g, cx, cy, r) => revealFor(g, g.playerId, cx, cy, r);
+export const fogged = (g, x, y) => !!(g.fog && !playerSees(g, x, y));
+export const updateExplore = g => updateVision(g);
+export const exploreTerritory = g => exploreOwned(g);
 
 // ------------------------------------------------------------------ passive knowledge
 export function dailyIntel(g) {
-  if (!g.fog) return;
+  if (!g.hardIntel) { aiIntelligenceOpen(g); return; }
   const d = ensure(g);
   for (const a of g.tribes) for (const b of g.tribes) {
     if (a === b || !a.alive || !b.alive || !d.contact[a.id][b.id]) continue;
@@ -137,7 +108,8 @@ export function route(g, from, to, kind) {
   const dist = Math.hypot(a.x - b.x, a.y - b.y);
   const access = d.has('access', from, to);
   const spec = MISSIONS[kind] || MISSIONS.envoy;
-  const days = Math.max(1, Math.ceil(dist / (spec.speed * (access ? 1.3 : 1))));
+  const prof = routeProfile(g, a.x, a.y, b.x, b.y);
+  const days = Math.max(1, Math.ceil(dist * Math.max(0.7, prof.avgCost) / (spec.speed * (access ? 1.3 : 1))));
   let p = 0.03; const why = [];
   if (dist > 80) { p += 0.05; why.push('a long road through wild country'); }
   if (d.atWar(from, to)) { p += kind === 'envoy' ? 0.12 : 0.3; why.push(kind === 'envoy' ? 'heralds are not always respected in war' : 'you are at war with them'); }
@@ -150,6 +122,7 @@ export function route(g, from, to, kind) {
   if (kind === 'spy' || kind === 'sabotage' || kind === 'deceive') { p += 0.02; }
   if (access) { p *= 0.5; why.push('border access keeps the roads open'); }
   if (g.weather?.kind === 'snow') { p += 0.03; why.push('winter weather'); }
+  if (prof.mountain > 0.3) { p += 0.03; why.push('mountain passes'); }
   p = Math.min(0.85, p);
   const label = p < 0.08 ? 'Low' : p < 0.2 ? 'Moderate' : p < 0.4 ? 'High' : 'Severe';
   return { dist: Math.round(dist), days, risk: p, label, why };
@@ -178,7 +151,8 @@ export function canSend(g, from, to, kind) {
   if (!g.dip.contact[from][to] && kind !== 'scout') return { ok: false, why: 'You have not met them' };
   if (!canPay(t, spec.cost)) return { ok: false, why: 'Not enough ' + Object.keys(spec.cost).filter(r => have(t, r) < spec.cost[r]).map(r => r === 'food' ? 'food' : RESOURCES[r].name).join(', ') };
   const busy = ensure(g).missions.filter(m => m.from === from && m.status !== 'done' && m.status !== 'lost').length;
-  if (busy >= 3 + Math.floor(t.stage / 2)) return { ok: false, why: 'Too many missions abroad already' };
+  const envoys = ensure(g).missions.filter(m => m.from === from && m.kind === 'envoy' && m.status !== 'done' && m.status !== 'lost').length;
+  if (kind === 'envoy' ? envoys >= 4 + Math.floor(t.stage / 2) : busy - envoys >= 3 + Math.floor(t.stage / 2)) return { ok: false, why: 'Too many missions abroad already' };
   if (!pickTraveller(g, t)) return { ok: false, why: 'No adult can be spared' };
   return { ok: true };
 }
@@ -273,9 +247,26 @@ function arrive(g, m) {
   if (!d.contact[m.from][m.to]) { d.contact[m.from][m.to] = d.contact[m.to][m.from] = true; }
   if (m.kind === 'envoy') {
     learn(g, m.from, m.to, 'intent', 2, 'your envoy');
-    if (m.p) {
+    if (m.p && to.isPlayer && !from.isPlayer && m.p.type !== 'gift') {
+      // a rival's proposal reaches you: it waits for your answer
+      for (const [r, v] of Object.entries(m.cargo || {})) addRes(g, from, r, v);
+      const pr = { from: m.from, to: m.to, p: m.p, tick: g.tick, sent: m.depart, travel: Math.max(1, Math.round((g.tick - m.depart) / DAY_TICKS)), mission: m.id };
+      if (m.p.ultimatum) pr.expires = g.tick + DAY_TICKS * 1.5;
+      g.pendingProposals.push(pr);
+      m.eta = g.tick + DAY_TICKS * 2 + m.days * DAY_TICKS;      // the envoy waits for your reply, then goes home
+      g.log(from, 'diplomacy', `An envoy of the ${from.name} arrived after ${pr.travel} day${pr.travel === 1 ? '' : 's'} on the road${m.p.ultimatum ? ' with an ultimatum' : ' with a proposal'}.`, m.p.ultimatum ? 2 : 1, { with: m.to, alert: !!m.p.ultimatum });
+      g.bus.emit('proposal', { from: m.from, to: m.to, p: m.p });
+    } else if (m.p) {
       for (const [r, v] of Object.entries(m.cargo || {})) addRes(g, from, r, v); // goods are handed over by propose()
-      const res = d.propose(m.from, m.to, m.p, true);
+      let res = d.propose(m.from, m.to, m.p, true);
+      if (m.p.ultimatum && !res.accept) d.onTributeRefused(m.from, m.to, m.p);
+      if (to.isPlayer && m.p.type === 'gift' && res.accept) g.bus.emit('proposal', { from: m.from, to: m.to, p: m.p });
+      // between rival rulers, a refusal with a counteroffer is negotiated on the spot by the envoy
+      if (!res.accept && res.counter && !from.isPlayer && !to.isPlayer && d.evaluate(m.to, m.from, { ...res.counter, give: res.counter.get, get: res.counter.give }).score > -15) {
+        const r2 = d.propose(m.from, m.to, res.counter, true);
+        if (r2.accept) { res = r2; m.notes.push({ day: g.day, text: 'Agreed on revised terms.' }); }
+      }
+      if (!from.isPlayer && !to.isPlayer) g.log(from, 'diplomacy', `A ${from.name} envoy reached the ${to.name} after ${Math.max(1, Math.round((g.tick - m.depart) / DAY_TICKS))} days: ${proposalName(m.p)} ${res.accept ? 'accepted' : 'refused'}.`, 0, { with: m.to });
       const why = (res.reasons || []).filter(x => x.label).sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 2).map(x => x.label.toLowerCase()).join('; ');
       m.result = { accept: res.accept, why };
       // a refused deal may come back with their counteroffer
@@ -287,7 +278,8 @@ function arrive(g, m) {
       tell(`Your envoy reached the ${to.name}: ${proposalName(m.p)} ${res.accept ? 'accepted' : 'refused'}${why ? ` (${why})` : ''}.`, { cat: m.p.type === 'exchange' || m.p.type === 'trade' || m.p.type === 'exclusive' ? 'trade' : undefined });
     }
   } else if (m.kind === 'scout') {
-    for (const s of g.settlements.values()) if (s.tribe === m.to) revealCircle(g, s.x, s.y, 14);
+    // the scout lingers about a day, watching their towns (live sight in Hard)
+    for (const s of g.settlements.values()) if (s.tribe === m.to) { revealFor(g, m.from, s.x, s.y, 14); (g.observers = g.observers || []).push({ t: m.from, x: s.x, y: s.y, r: 14, until: g.tick + DAY_TICKS }); }
     learn(g, m.from, m.to, 'land', 3, 'your scout'); learn(g, m.from, m.to, 'military', 3, 'your scout'); learn(g, m.from, m.to, 'economy', 2, 'your scout');
     tell(`Your scout mapped the lands of the ${to.name} and counted their warriors.`);
   } else {
@@ -325,13 +317,22 @@ export function exposeFakes(g, observer, subject) {
   const rec = g.dip.intel?.[observer]?.[subject]?.military;
   if (rec?.fake) { rec.exposed = true; rec.lv = 1; if (g.tribes[observer].isPlayer) g.log(g.tribes[observer], 'diplomacy', `The report of ${g.tribes[subject].name} strength was a lie planted by their agents.`, 2, { with: subject }); }
 }
-const proposalName = p => ({ trade: 'the Trade Agreement was', nap: 'the Non-Aggression Pact was', alliance: 'the Military Alliance was', access: 'Border Access was', exclusive: 'Trade Exclusivity was', peace: 'peace was', gift: 'your gift was', exchange: 'the exchange was', tribute: 'your demand for tribute was', offerTribute: 'your offer of tribute was' })[p.type] || 'the proposal was';
+const proposalName = p => ({ trade: 'the Trade Agreement was', nap: 'the Non-Aggression Pact was', alliance: 'the Military Alliance was', access: 'Border Access was', exclusive: 'Trade Exclusivity was', peace: 'peace was', gift: 'the gift was', exchange: 'the exchange was', contract: 'the supply contract was', tribute: 'the demand for tribute was', offerTribute: 'the offer of tribute was' })[p.type] || 'the proposal was';
 
 // ------------------------------------------------------------------ rival intelligence services
 function aiIntelligence(g) {
   const d = g.dip;
   for (const t of g.tribes) {
-    if (t.isPlayer || !t.alive || !t.techs.includes('writing')) continue;
+    if (t.isPlayer || !t.alive) continue;
+    // scouting: rivals must find a people's homeland before they can plan against it
+    if (g.vis !== 'open') for (const o of g.tribes) {
+      if (o === t || !o.alive) continue;
+      const cap = g.settlements.get(o.capital); if (!cap || exploredBy(g, t.id, cap.x, cap.y)) continue;
+      const busy = d.missions.some(m => m.from === t.id && m.to === o.id && m.kind === 'scout' && m.status !== 'done' && m.status !== 'lost');
+      const urgent = d.atWar(t.id, o.id) || (d.warRisk?.[t.id]?.[o.id] || -99) > 0;
+      if (!busy && g.rng.chance(urgent ? 0.25 : 0.04) && canSend(g, t.id, o.id, 'scout').ok) sendMission(g, t.id, o.id, 'scout');
+    }
+    if (!t.techs.includes('writing')) continue;
     const ai = aiOf(t);
     // counter-intelligence when neighbours are hostile
     const threatened = g.tribes.some(o => o !== t && o.alive && (d.atWar(t.id, o.id) || d.opinion(t.id, o.id) < -25));
@@ -354,4 +355,12 @@ export function repTier(r) {
   if (r >= -4) return { key: 'reliable', name: 'Reliable', desc: 'An ordinary reputation.' };
   if (r >= -15) return { key: 'doubted', name: 'Doubted', desc: 'Broken promises have made others wary. Pacts and alliances are harder to win.' };
   return { key: 'oathbreaker', name: 'Oathbreaker', desc: 'No one trusts you. Alliances, border access and exclusivity are refused outright.' };
+}
+
+// Outside Hard there are no reliability levels, but rival intelligence
+// services still spy, sabotage and keep counter-agents.
+function aiIntelligenceOpen(g) {
+  ensure(g);
+  for (const m of g.dip.missions || []) if (m.status === 'stationed') eatFood(g.tribes[m.from], COUNTER_COST);
+  aiIntelligence(g);
 }

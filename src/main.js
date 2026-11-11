@@ -128,8 +128,8 @@ class App {
     if (!quiet) toast(`The ${g.player.name} awaken`, `${g.settlements.get(g.player.capital).name} is founded. Guide your people.`, { icon: 'flag', ms: 7000 });
   }
 
-  async startTutorial() {
-    await this.newRun(TUTORIAL_WORLD, true);
+  async startTutorial(vis = 'open') {
+    await this.newRun({ ...TUTORIAL_WORLD, vis }, true);
     this.tutorial = new Tutorial(this); this.tutorial.start();
   }
 

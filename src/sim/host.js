@@ -1,6 +1,7 @@
 // Simulation host: owns the authoritative Game, runs the fixed-tick loop and
 // streams batched state to the main thread. Runs inside a Web Worker
 // (worker.js) or, as a fallback, in-thread behind the same message protocol.
+import { playerSightBits } from './vision.js';
 import { setSpec } from './logistics.js';
 import { remember } from './aimind.js';
 import { setEmbargo, setTariff, endContract } from './trade.js';
@@ -89,7 +90,7 @@ export function createHost(post) {
         tribes: g.tribes.map(t => tribeSnapshot(t, full)),
         buildings: buildingDelta(now), settlements: [...g.settlements.values()], armies: g.armies,
         dip: g.dip.toJSON(), pendingEvents: g.pendingEvents, pendingProposals: g.pendingProposals,
-        history: g.history.filter(e => e.seq > histSent), nextId: g.nextId, fog: g.fogNew.length ? g.fogNew.splice(0) : null,
+        history: g.history.filter(e => e.seq > histSent), nextId: g.nextId, fog: g.fogNew.length ? g.fogNew.splice(0) : null, sight: g.vis === 'los' && g.visDirty ? (g.visDirty = false, playerSightBits(g)) : null,
       };
       histSent = g.logSeq || histSent;
     }
@@ -148,6 +149,16 @@ export function createHost(post) {
         game.pendingProposals.push({ from: r.id, to: pid, p, tick: game.tick, ...(kind === 'ultimatum' ? { expires: game.tick + DAY_TICKS * 8 } : {}) });
         game.bus.emit('proposal', { from: r.id, to: pid, p }); return true;
       }
+      // visibility lessons: a fast scout to the nearest undiscovered people, then send it home
+      if (kind === 'scout') {
+        const r = rivals.map(o => ({ o, s: game.settlements.get(o.capital) })).filter(x => x.s).sort((a, b) => Math.hypot(a.s.x - game.settlements.get(P().capital).x, a.s.y - game.settlements.get(P().capital).y) - Math.hypot(b.s.x - game.settlements.get(P().capital).x, b.s.y - game.settlements.get(P().capital).y))[0];
+        if (!r) return false; addRes(game, P(), 'grain', 40);
+        const res = sendMission(game, pid, r.o.id, 'scout'); const m = game.dip.missions?.find(x => x.id === res.mission);
+        if (m) { m.eta = game.tick + 60; m.days = 1; m.doom = null; m.risk = 0; }
+        return { ok: res.ok, to: r.o.id, x: r.s.x, y: r.s.y };
+      }
+      if (kind === 'leave') { game.observers = (game.observers || []).filter(o => o.t !== pid); return true; }
+      if (kind === 'age') { const rec = game.dip.intel?.[pid]; if (rec) for (const row of rec) for (const c of Object.values(row || {})) if (c) c.day -= 30; return true; }
       // free the law slot and the council's cooldown so a law can always be enacted
       if (kind === 'law') { const t = P(); for (const l of LAWS) t.laws[l.key] = l.options[0].key; t.lawCooldown = 0; t.modsDirty = true; return true; }
       return false;
@@ -168,6 +179,8 @@ export function createHost(post) {
       if (i < 0) return false;
       const pr = game.pendingProposals.splice(i, 1)[0];
       const t = P(); t.envoyBlock = t.envoyBlock || {};
+      game.log(t, 'diplomacy', `You ${yes ? 'accepted' : 'declined'} the ${game.tribes[from].name} ${pr.p.ultimatum ? 'ultimatum' : 'proposal'}${pr.sent != null ? ` (sent ${Math.max(0, Math.round((game.tick - pr.sent) / 360))} days ago)` : ''}. Their envoy carries your answer home.`, 1, { with: from });
+      const m = game.dip.missions?.find(x => x.id === pr.mission); if (m && m.status === 'back') m.eta = Math.min(m.eta, game.tick + m.days * 360);
       if (yes) { if (pr.p.type === 'gift') game.dip.addMod(pr.to, pr.from, 'gift', 5, { label: 'Generous gifts', decay: 0.4 }); else acceptProposal(game, pr); }
       else {
         game.dip.addMod(pr.from, pr.to, 'rebuffed', -4, { label: 'Rebuffed our envoys', decay: 0.4 });
@@ -178,7 +191,7 @@ export function createHost(post) {
     },
     propose(to, p) {
       // Hard Mode: proposals travel with an envoy; the answer comes when they arrive
-      if (game.fog && !['war', 'cancel'].includes(p.type)) { const r = sendMission(game, game.playerId, to, 'envoy', p); return { sent: true, ...r }; }
+      if (!game.tutorial && !['war', 'cancel'].includes(p.type)) { const r = sendMission(game, game.playerId, to, 'envoy', p); return { sent: true, ...r }; }
       const r = game.dip.propose(game.playerId, to, p); return { accept: r.accept, reasons: r.reasons, counter: r.counter || null };
     },
     embargo(to, on) { return setEmbargo(game, game.playerId, to, !!on); },
@@ -191,7 +204,7 @@ export function createHost(post) {
     declareWar(to) { game.dip.declareWar(game.playerId, to); return true; },
     enactLaw(law, opt) { return enactLaw(game, P(), law, opt); },
     adoptGov(k) { return adoptGov(game, P(), k); },
-    campaign(sid, frac) { const r = launchCampaign(game, P(), sid, frac); return { ok: r.ok, why: r.why }; },
+    campaign(sid, frac, food) { const r = launchCampaign(game, P(), sid, frac, food); return { ok: r.ok, why: r.why }; },
     recall(id) { const a = game.armies.find(x => x.id === id && x.tribe === game.playerId); if (a) recallArmy(game, a); return !!a; },
     bFocus(id, k) { const b = game.buildings.get(id); if (b && b.tribe === game.playerId) { b.focus = k || null; b._rock = null; } return true; },
     bRecipe(id, r) { const b = game.buildings.get(id); if (b && b.tribe === game.playerId) b.recipe = r; return true; },

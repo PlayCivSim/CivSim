@@ -1,6 +1,7 @@
 // Diplomacy: opinions built from decaying modifiers, treaties, wars,
 // proposals with explainable acceptance, AI diplomatic reasoning and trade.
-import { specOf } from './logistics.js';
+import { TRIBES } from '../data/tribes.js';
+import { specOf, routeProfile, TILES_PER_DAY } from './logistics.js';
 import { aiOf, remember, memoryOpinion, memoryBreakdown, perceivedStrength, coalitionTick, inCoalitionAgainst } from './aimind.js';
 import { intel } from './intel.js';
 import { RESOURCES } from '../data/resources.js';
@@ -16,10 +17,12 @@ const stockWorth = t => { let v = 0; for (const [k, a] of Object.entries(t.stock
 const COMPAT = {
   'oruvai-thalori': 10, 'oruvai-vaelith': 5, 'kharvak-oruvai': -6, 'kharvak-thalori': -4, 'kharvak-vaelith': -8, 'thalori-vaelith': 0,
 };
-const compat = (a, b) => COMPAT[[a, b].sort().join('-')] || 0;
+// cultural affinity comes from tribe data (affinity), falling back to the old table
+const compat = (a, b) => { const A = TRIBE_DEF(a), B = TRIBE_DEF(b); return A?.affinity?.[b] ?? B?.affinity?.[a] ?? COMPAT[[a, b].sort().join('-')] ?? 0; };
+const TRIBE_DEF = k => TRIBES.find(t => t.key === k);
 
 export const TREATY_NAMES = { trade: 'Trade Agreement', nap: 'Non-Aggression Pact', alliance: 'Military Alliance', tribute: 'Tribute', access: 'Border Access', exclusive: 'Trade Exclusivity' };
-import { repTier } from './intel.js';
+import { repTier, sendMission } from './intel.js';
 import { tradeTerms, counterOffer, signContract, endContract, dailyTrade, ledger, caravanRisk, contractValue } from './trade.js';
 
 export class Diplomacy {
@@ -196,7 +199,7 @@ export class Diplomacy {
     for (const t of T) {
       if (!t.alive) continue;
       t.atWar = this.enemies(t.id).length > 0;
-      t.warWeariness = t.atWar ? Math.min(100, (t.warWeariness || 0) + 1.6 * (t.key === 'kharvak' ? 0.6 : 1)) : Math.max(0, (t.warWeariness || 0) - 3);
+      t.warWeariness = t.atWar ? Math.min(100, (t.warWeariness || 0) + 1.6 * (t.def?.quirks?.warWeariness ?? 1)) : Math.max(0, (t.warWeariness || 0) - 3);
     }
     for (let i = 0; i < T.length; i++) this.reputation[i] = this.reputation[i] * 0.99;
     dailyTrade(g);
@@ -256,6 +259,7 @@ export class Diplomacy {
         break;
       }
       case 'nap':
+        if (p.coalition && g.dip.coalition?.members?.includes(to)) add(25, 'United against a common threat');
         if (this.atWar(from, to)) return { accept: false, score: -100, reasons: [{ v: -100, label: 'You are at war — propose peace instead' }] };
         add(5 + (rs > 1.2 ? 12 : 0), rs > 1.2 ? 'Wary of your strength' : 'Values security');
         add(-ai.aggression * 12, 'Expansionist ambitions');
@@ -268,6 +272,7 @@ export class Diplomacy {
         if (this.enemies(to).length) add(this.enemies(to).some(e => this.atWar(from, e)) ? 20 : -5, this.enemies(to).some(e => this.atWar(from, e)) ? 'We share an enemy' : 'You would not aid our war');
         if (this.enemies(from).length && !this.enemies(from).every(e => this.atWar(to, e))) add(-12, 'Would drag them into your wars');
         if (rs > 1.3) add(8, 'You are strong');
+        if (p.coalition && g.dip.coalition?.members?.includes(to)) add(30, 'United against a common threat');
         if (this.reputation[from] < -5) add(this.reputation[from], 'You break treaties');
         break;
       }
@@ -407,6 +412,16 @@ export class Diplomacy {
     desire += opportunity * (skill - 0.5);
     if (rs < 1 + 0.3 * skill) desire -= 12 * skill;
     if (!seen.sure) desire -= 12 * ai.caution;                     // unsure of their strength
+    // logistics: a distant people is costly to fight, unless the war is forced on us
+    const capA = g.settlements.get(tribe.capital), capB = g.settlements.get(other.capital);
+    if (capA && capB && border <= 0) {
+      const prof = routeProfile(g, capA.x, capA.y, capB.x, capB.y);
+      const days = prof.dist * prof.avgCost / TILES_PER_DAY;
+      const soldiers = tribe.jobCounts?.soldier || 0;
+      const food = Object.entries(tribe.stock).reduce((s, [k, v]) => s + (RESOURCES[k]?.food ? v : 0), 0);
+      desire -= Math.max(0, days - 2) * 6 + prof.mountain * 15;
+      if (soldiers * 0.6 * 0.75 * (days * 1.5 + 2) > food * 0.5) desire -= 20;   // could not feed the army
+    }
     if (inCoalitionAgainst(g, a, b)) desire += 10 + (g.dip.coalition.members.some(m => m !== a && this.atWar(m, b)) ? 15 : 0);
     if (this.treaties.some(x => x.type === 'tribute' && x.payer === b && (x.a === a || x.b === a))) desire -= 40; // they already pay
     const reason = wanted ? 'to seize resources they cannot do without' : border > 15 ? 'over disputed borderlands' : towns && rs > 1.5 ? 'to take weakly held towns' : warReason(tribe, other, border);
@@ -418,14 +433,8 @@ export class Diplomacy {
     this.ultimatumAt = this.ultimatumAt || {}; this.casusBelli = this.casusBelli || {};
     this.ultimatumAt[a * 8 + b] = g.tick; this.lastProposal[a][b] = g.tick;
     const p = { type: 'tribute', ultimatum: true, reason: A.reason };
-    g.log(tribe, 'diplomacy', `The ${tribe.name} issued an ultimatum to the ${other.name}: pay tribute or face war.`, other.isPlayer ? 2 : 1, { with: b, alert: other.isPlayer });
-    if (other.isPlayer) {
-      g.pendingProposals.push({ from: a, to: b, p, tick: g.tick, expires: g.tick + DAY_TICKS * 1.5 });
-      g.bus.emit('proposal', { from: a, to: b, p });
-      return;
-    }
-    const r = this.propose(a, b, p);
-    if (!r.accept) this.onTributeRefused(a, b, p);
+    g.log(tribe, 'diplomacy', `The ${tribe.name} sent an ultimatum to the ${other.name}: pay tribute or face war.`, other.isPlayer ? 2 : 1, { with: b });
+    this.dispatch(a, b, p, { expires: g.tick + DAY_TICKS * 1.5 });
   }
   onTributeRefused(a, b, p) {
     this.casusBelli = this.casusBelli || {};
@@ -459,7 +468,7 @@ export class Diplomacy {
     for (const o of g.tribes) {
       if (o === t || !o.alive || !this.contact[t.id][o.id]) continue;
       if (g.tick - this.lastProposal[t.id][o.id] < DAY_TICKS * 2) continue;
-      const tryP = (p, label) => { if (blocked(o.id, p.type)) return false; this.lastProposal[t.id][o.id] = g.tick; const r = this.propose(t.id, o.id, p); outcome.push(`${label} with the ${o.name}: ${r.accept ? 'agreed' : 'refused'}`); return true; };
+      const tryP = (p, label) => { if (blocked(o.id, p.type)) return false; this.lastProposal[t.id][o.id] = g.tick; if (!g.tutorial) { if (!this.dispatch(t.id, o.id, p)) return false; outcome.push(`sent an envoy to the ${o.name} (${label.replace(/^(proposed|sent) /, '')})`); return true; } const r = this.propose(t.id, o.id, p); outcome.push(`${label} with the ${o.name}: ${r.accept ? 'agreed' : 'refused'}`); return true; };
       if (this.atWar(t.id, o.id)) {
         if (cfg.peace) { const w = this.war(t.id, o.id); const losing = (w.score[o.id] || 0) - (w.score[t.id] || 0) > 20; tryP({ type: 'peace', terms: losing && cfg.appease ? 'tribute_a' : 'white' }, 'proposed peace'); }
         continue;
@@ -481,6 +490,21 @@ export class Diplomacy {
     if (outcome.length) { t.envoyLog = [...outcome.map(text => ({ tick: g.tick, text })), ...(t.envoyLog || [])].slice(0, 12); g.bus.emit('envoy', { lines: outcome }); }
   }
 
+  // Every proposal travels with an envoy (except in the scripted tutorial).
+  // Returns false if no envoy could be sent.
+  dispatch(a, b, p, extra = {}) {
+    const g = this.game, other = g.tribes[b];
+    this.lastProposal[a][b] = g.tick;
+    if (g.tutorial) {
+      if (other.isPlayer && p.type !== 'gift') { g.pendingProposals.push({ from: a, to: b, p, tick: g.tick, ...extra }); g.bus.emit('proposal', { from: a, to: b, p }); return true; }
+      const r = this.propose(a, b, p);
+      if (other.isPlayer && p.type === 'gift' && r.accept) g.bus.emit('proposal', { from: a, to: b, p });
+      if (p.ultimatum && !r.accept) this.onTributeRefused(a, b, p);
+      return true;
+    }
+    return sendMission(g, a, b, 'envoy', p).ok;
+  }
+
   // ---------------------------------------------------------------- AI
   aiThink(tribe, opts = {}) {
     const g = this.game, ai = aiOf(tribe), rng = g.rng;
@@ -492,12 +516,7 @@ export class Diplomacy {
       const canPropose = since > DAY_TICKS * 2;
       const rs = (tribe.strength + 1) / (other.strength + 1);
       const atWar = this.atWar(a, b);
-      const send = (p) => {
-        this.lastProposal[a][b] = g.tick;
-        if (other.isPlayer && p.type !== 'gift') { g.log(tribe, 'diplomacy', `An envoy of the ${tribe.name} arrived with a proposal.`, 1, { with: b }); g.bus.emit('proposal', { from: a, to: b, p }); g.pendingProposals.push({ from: a, to: b, p, tick: g.tick }); return; }
-        const r = this.propose(a, b, p);
-        if (other.isPlayer && p.type === 'gift' && r.accept) g.bus.emit('proposal', { from: a, to: b, p });
-      };
+      const send = (p) => this.dispatch(a, b, p);
       if (atWar) {
         const w = this.war(a, b);
         const myS = w.score[a] || 0, theirS = w.score[b] || 0;
@@ -542,8 +561,31 @@ export class Diplomacy {
         continue;
       }
       if (ai.aggression > 0.7 && rs > 1.8 && op < 10 && !this.has('tribute', a, b) && rng.chance(0.1)) { send({ type: 'tribute' }); continue; }
+      // advanced agreements, from strategic interest
+      if (!this.has('access', a, b) && op > 10) {
+        const transit = this.enemies(a).some(e => routeCrosses(g, a, e, b));   // their land lies on the road to an enemy
+        if ((transit || (ai.trade > 0.6 && this.has('trade', a, b))) && rng.chance(transit ? 0.3 : 0.08)) { send({ type: 'access' }); continue; }
+      }
+      if (this.has('trade', a, b) && !this.has('exclusive', a, b) && ai.trade > 0.7 && this.partners(a).length === 1 && op > 25 && rng.chance(0.05)) { send({ type: 'exclusive' }); continue; }
+      if (this.has('trade', a, b) && rng.chance(0.08) && !this.treaties.some(x => x.type === 'contract' && ((x.a === a && x.b === b) || (x.a === b && x.b === a)))) {
+        const c = contractIdea(tribe, other); if (c) { send(c); continue; }
+      }
     }
   }
+}
+
+// Does the straight road from a's capital to e's capital cross b's land?
+function routeCrosses(g, a, e, b) {
+  const A = g.settlements.get(g.tribes[a].capital), E = g.settlements.get(g.tribes[e].capital); if (!A || !E) return false;
+  for (let i = 1; i < 16; i++) { const x = Math.round(A.x + (E.x - A.x) * i / 16), y = Math.round(A.y + (E.y - A.y) * i / 16); if (g.world.owner[y * g.world.w + x] === b) return true; }
+  return false;
+}
+// A supply contract that trades our surplus for something we are short of.
+function contractIdea(t, o) {
+  const surplus = ['wood', 'stone', 'grain', 'fish', 'clay', 'fibre', 'tools'].filter(r => (t.stock[r] || 0) > 150).sort((x, y) => (t.stock[y] || 0) - (t.stock[x] || 0))[0];
+  const need = ['stone', 'wood', 'iron', 'tools', 'grain', 'clay', 'herbs', 'salt'].filter(r => r !== surplus && scarcity(t, r) > 1.8 && (o.stock[r] || 0) > 120)[0];
+  if (!surplus || !need) return null;
+  return { type: 'contract', give: { [surplus]: 14 }, get: { [need]: 8 }, every: 5, times: 6 };
 }
 
 function acceptProposalLocal(g, pr) {
@@ -562,8 +604,7 @@ export { acceptProposalLocal };
 
 function warReason(t, o, border) {
   if (border > 10) return 'over disputed borderlands';
-  if (t.key === 'kharvak') return 'to prove Kharvaki might';
-  if (t.key === 'vaelith') return 'to secure valuable resources';
+  if (t.def?.warCry) return t.def.warCry;
   return 'citing intolerable provocations';
 }
 

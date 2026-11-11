@@ -1,10 +1,10 @@
 // Soldiers, armies, battles and sieges. Combat outcomes come from strength,
 // equipment, morale, terrain and fortifications with modest randomness.
-import { supplyFactor } from './logistics.js';
+import { supplyFactor, estimateCampaign } from './logistics.js';
 import { BUILDINGS } from '../data/buildings.js';
 import { BIOMES } from '../world/biomes.js';
 import { TECH } from '../data/techs.js';
-import { mod, takeRes, addRes } from './economy.js';
+import { mod, takeRes, addRes, eatFood, foodTotal } from './economy.js';
 import { centreOf, doorTile, destroyBuilding, recomputeTerritory } from './buildings.js';
 
 export function equipTier(tribe) {
@@ -33,7 +33,7 @@ export function militaryStrength(game, tribe) {
 
 export function maxHp(tribe) { return 26 + equipTier(tribe) * 8; }
 
-export function launchCampaign(game, tribe, targetSid, frac = 0.8) {
+export function launchCampaign(game, tribe, targetSid, frac = 0.8, food = null) {
   const target = game.settlements.get(targetSid);
   if (!target) return { ok: false, why: 'No such settlement' };
   const enemy = game.tribes[target.tribe];
@@ -41,7 +41,10 @@ export function launchCampaign(game, tribe, targetSid, frac = 0.8) {
   const soldiers = [...game.agents.values()].filter(a => a.tribe === tribe.id && a.job === 'soldier' && !a.army);
   const n = Math.max(1, Math.floor(soldiers.length * frac));
   if (!soldiers.length) return { ok: false, why: 'You have no idle soldiers' };
-  const army = { id: game.nextId++, tribe: tribe.id, target: targetSid, enemy: enemy.id, state: 'march', start: game.tick, size: n, losses: 0, kills: 0 };
+  // the army carries its food; what it takes is no longer available at home
+  if (food == null) food = estimateCampaign(game, tribe, targetSid, frac)?.food || n * 4;
+  const carried = eatFood(tribe, Math.min(food, foodTotal(tribe) * 0.8)) || 0;
+  const army = { id: game.nextId++, tribe: tribe.id, target: targetSid, enemy: enemy.id, state: 'march', start: game.tick, size: n, losses: 0, kills: 0, food: carried, foodPlanned: food };
   game.armies.push(army);
   soldiers.sort((a, b) => Math.hypot(a.x - target.x, a.y - target.y) - Math.hypot(b.x - target.x, b.y - target.y));
   for (const a of soldiers.slice(0, n)) { a.army = army.id; a.state = 'fight'; a.task = { kind: 'army' }; a.path = null; a.hp = maxHp(tribe); }
@@ -278,9 +281,11 @@ export function updateDefences(game) {
     ar.alive = alive;
     if (alive === 0) { ar.state = 'done'; continue; }
     const t = game.tribes[ar.tribe];
-    const breakAt = 0.55 + (t.key === 'kharvak' ? 0.15 : 0);
+    const breakAt = 0.55 + (t.def?.quirks?.morale || 0);
     if (ar.losses / ar.size > breakAt) { ar.state = 'return'; t.raidCooldown = t.raidCooldown || {}; t.raidCooldown[ar.target] = game.tick + 360 * 5; game.log(t, 'war', `The ${t.name} army fell back from ${game.settlements.get(ar.target)?.name || 'the field'}.`, 1); }
     if (game.tick - ar.start > 360 * 4) ar.state = 'return';
   }
-  game.armies = game.armies.filter(ar => ar.state !== 'done' && [...game.agents.values()].some(a => a.army === ar.id));
+  const keep = game.armies.filter(ar => ar.state !== 'done' && [...game.agents.values()].some(a => a.army === ar.id));
+  for (const ar of game.armies) if (!keep.includes(ar) && ar.food > 1) addRes(game, game.tribes[ar.tribe], 'grain', ar.food); // unused food returns to the stores
+  game.armies = keep;
 }
