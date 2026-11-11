@@ -224,7 +224,7 @@ export class Game {
         assignHousing(this, t); assignJobs(this, t); updateNeeds(this, t); checkStage(this, t);
         t.strength = militaryStrength(this, t);
         t._cap = storageCap(this, t);
-        if (t.pop === 0 && t.alive && this.day > 1) { t.alive = false; this.dip.onEliminated(t.id); this.log(t, 'war', `The ${t.name} have vanished from the world.`, 3); }
+        if (t.pop === 0 && t.alive && this.day > 1) { t.alive = false; this.dip.onEliminated(t.id); this.log(t, 'war', `The ${t.name} have vanished from the world.`, 3); this.bus.emit('eliminated', { tribe: t }); }
       }
       for (const b of this.buildings.values()) if (!b.built) b._builders = 0;
     }

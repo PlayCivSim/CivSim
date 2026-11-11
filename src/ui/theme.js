@@ -30,7 +30,7 @@ function plaque(state) {
   const S = 18; const c = canvas(S, S); const p = new Pen(c.getContext('2d'));
   const base = state === 'hover' ? '#3a2e1c' : state === 'active' ? '#4a3a1e' : state === 'disabled' ? '#1c1c22' : '#26222a';
   const edge = state === 'disabled' ? ['#2a2a30', '#34343c', '#3c3c44'] : state === 'hover' || state === 'active' ? [GOLD[1], GOLD[3], GOLD[4]] : [GOLD[0], GOLD[1], GOLD[2]];
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) p.px(x, y, hash2(x, y, 4) > 0.8 ? shade(base, 0.06) : base);
+  p.rect(0, 0, S, S, base);
   p.outline(0, 0, S, S, '#07080c');
   p.outline(1, 1, S - 2, S - 2, edge[0]);
   p.hline(2, 1, S - 4, edge[2]); p.hline(2, S - 2, S - 4, edge[0]);

@@ -219,7 +219,7 @@ function caravanOffer(g, t) {
 export function rollEvents(game) {
   const rng = game.rng;
   for (const t of game.tribes) {
-    if (!t.alive) continue;
+    if (!t.alive || t.pop < 3) continue;
     if (t.droughtUntil && game.tick > t.droughtUntil) { t.droughtMul = 1; t.droughtUntil = 0; }
     t.boom = t.boomUntil > game.tick;
     const before = t.eventMods.length;
