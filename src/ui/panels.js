@@ -13,7 +13,7 @@ import { canAfford, foodTotal, dailyFoodNeed, scarcity, buildingCost } from '../
 import { jobCap, normaliseAlloc, assignJobs, traitName } from '../sim/population.js';
 import { lawSlots, enactedCount, canEnact, enactLaw, canAdoptGov, adoptGov, policyInteractions, LEADER_TRAITS } from '../sim/government.js';
 import { launchCampaign, equipTier, recallArmy } from '../sim/military.js';
-import { canFound } from '../sim/ai.js';
+import { canFound, acceptProposal } from '../sim/ai.js';
 import { TREATY_NAMES } from '../sim/diplomacy.js';
 import { proposalText } from './hud.js';
 import { sfx } from '../audio/audio.js';
@@ -53,7 +53,7 @@ const overview = {
       <div class="section-title">Stewards</div>
       <div class="prose" style="font-size:0.9em;margin-bottom:6px">Delegate routine decisions to your advisors. They follow the same reasoning as rival rulers.</div>
       <div class="col">
-        ${[['work', 'Workforce steward', 'Automatically assign workers to jobs'], ['housing', 'Housing steward', 'Build homes when space runs short'], ['build', 'Master builder', 'Plan and place all buildings'], ['research', 'Royal scholar', 'Choose research when idle']].map(([k, n, d]) => `<div class="row between" data-act="steward" data-k="${k}" style="cursor:pointer"><span>${n}<br><small class="faint">${d}</small></span>${toggleHTML(t.steward[k])}</div>`).join('')}
+        ${[['work', 'Workforce steward', 'Automatically assign workers to jobs'], ['housing', 'Housing steward', 'Build homes when space runs short'], ['build', 'Master builder', 'Plan and place all buildings'], ['research', 'Royal scholar', 'Choose research when idle'], ['diplomacy', 'Envoy', 'Answer foreign envoys and seek treaties or peace (never declares war)']].map(([k, n, d]) => `<div class="row between" data-act="steward" data-k="${k}" style="cursor:pointer"><span>${n}<br><small class="faint">${d}</small></span>${toggleHTML(t.steward[k])}</div>`).join('')}
       </div>
       <div class="section-title">Expansion</div>
       ${(() => { const c = canFound(g, t); return `<button class="btn ${c.ok ? 'primary' : 'disabled'}" data-act="found" ${c.ok ? '' : `data-tip="${esc(c.why)}"`}>${ico('settle')} Found a new settlement</button> <span class="faint" style="font-size:0.8em">${c.ok ? '' : esc(c.why)}</span>`; })()}
@@ -418,7 +418,7 @@ export function buildingTip(hud, b, inspector) {
     const up = upgradeTarget(tribe, b);
     ctl += `<div class="row" style="margin-top:8px;gap:4px">${up ? `<button class="btn xs" data-act="b-upgrade" data-id="${b.id}" data-tip="${esc('Upgrade to ' + BUILDINGS[up].name + ': ' + Object.entries(buildingCost(tribe, up)).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', '))}">${ico('plus', 'sm')} Upgrade</button>` : ''}${b.type !== 'centre' ? `<button class="btn xs danger" data-act="b-demolish" data-id="${b.id}">${ico('close', 'sm')} Demolish</button>` : ''}</div>`;
   }
-  return `<div class="insp-head"><div class="portrait" style="width:64px"><img src="${spr}" style="width:${Math.min(60, d.size * 16)}px"></div><div style="flex:1"><div class="insp-name">${d.name}</div><div class="dim" style="font-size:0.85em">${tribe.adjective} · ${esc(s?.name || '')}${b.built ? '' : ' · under construction'}</div><div class="faint" style="font-size:0.8em;font-family:var(--font-prose)">${esc(d.desc)}</div></div>${inspector ? `<span class="close-x" data-act="insp-close">${ico('close', 'sm')}</span>` : ''}</div>
+  return `<div class="insp-head"><div class="portrait" style="width:64px"><img src="${spr}" style="width:${Math.min(60, d.size * 16)}px"></div><div style="flex:1"><div class="insp-name">${d.name}</div><div class="dim" style="font-size:0.85em">${tribe.def.adjective} · ${esc(s?.name || '')}${b.built ? '' : ' · under construction'}</div><div class="faint" style="font-size:0.8em;font-family:var(--font-prose)">${esc(d.desc)}</div></div>${inspector ? `<span class="close-x" data-act="insp-close">${ico('close', 'sm')}</span>` : ''}</div>
     <div class="kv">${info}${effect ? `<span>Effects</span><span>${effect}</span>` : ''}</div>${ctl}`;
 }
 
@@ -521,11 +521,7 @@ export const ACTIONS = {
 
 function acceptAI(g, p) {
   const D = g.dip; const from = g.tribes[p.from];
-  switch (p.p.type) {
-    case 'trade': case 'nap': case 'alliance': D.sign(p.p.type, p.from, p.to); break;
-    case 'peace': D.makePeace(p.from, p.to, p.p.terms || 'white'); break;
-    case 'gift': D.addMod(p.to, p.from, 'gift', 5, { label: 'Generous gifts', decay: 0.4 }); break;
-    case 'tribute': D.sign('tribute', p.from, p.to, { payer: p.to, until: g.tick + 360 * 10 }); D.addMod(p.from, p.to, 'submitted', 8, { label: 'Paid us tribute', decay: 0.2 }); break;
-  }
+  if (p.p.type === 'gift') D.addMod(p.to, p.from, 'gift', 5, { label: 'Generous gifts', decay: 0.4 });
+  else acceptProposal(g, p);
   toast(`Agreement with the ${from.name}`, proposalText(p.p), { icon: 'diplomacy', kind: 'good' });
 }

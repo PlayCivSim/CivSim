@@ -276,7 +276,7 @@ export class Diplomacy {
   }
 
   // ---------------------------------------------------------------- AI
-  aiThink(tribe) {
+  aiThink(tribe, opts = {}) {
     const g = this.game, ai = tribe.def.ai, rng = g.rng;
     for (const other of g.tribes) {
       if (other === tribe || !other.alive || !this.contact[tribe.id][other.id]) continue;
@@ -316,7 +316,7 @@ export class Diplomacy {
       if ((tribe.jobCounts?.soldier || 0) < 5) warDesire -= 30;
       if (rs < 1.35) warDesire -= 30; // recognise weakness
       if (other.isPlayer) warDesire += g.difficultyDef.aiBonus * 30;
-      if (warDesire > 22 && rng.chance(0.25)) { this.declareWar(a, b, warReason(tribe, other, border)); continue; }
+      if (!opts.noWar && warDesire > 22 && rng.chance(0.25)) { this.declareWar(a, b, warReason(tribe, other, border)); continue; }
       if (!canPropose) continue;
       // alliances: reassess
       if (this.has('alliance', a, b) && (op < -5 || (rs < 0.4 && ai.caution > 0.5 && op < 20))) { this.cancel('alliance', a, b, a, false); continue; }

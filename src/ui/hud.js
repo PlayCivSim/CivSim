@@ -362,7 +362,7 @@ export class Hud {
       const skills = Object.entries(a.skill).filter(([, v]) => v > 0.05).sort((p, q) => q[1] - p[1]).slice(0, 3);
       const child = y < 10;
       html = `<div class="inspector frame ${this.panel ? 'shifted' : ''}" style="--tribe:${t.color}"><div class="insp-head"><div class="portrait"><img src="${spriteURL('person', t.key, child ? 'idle' : a.job, 0, a.female, child, a.look, null, t.stage, false)}"></div>
-        <div style="flex:1"><div class="insp-name">${esc(a.name)}</div><div class="dim" style="font-size:0.86em">${t.adjective} ${child ? (a.female ? 'girl' : 'boy') : (JOBS[a.job]?.name || 'Citizen')} · ${Math.floor(y)} years</div><div class="faint" style="font-size:0.8em">${activity(g, a)}</div></div>
+        <div style="flex:1"><div class="insp-name">${esc(a.name)}</div><div class="dim" style="font-size:0.86em">${t.def.adjective} ${child ? (a.female ? 'girl' : 'boy') : (JOBS[a.job]?.name || 'Citizen')} · ${Math.floor(y)} years</div><div class="faint" style="font-size:0.8em">${activity(g, a)}</div></div>
         <span class="close-x" data-act="insp-close">${ico('close', 'sm')}</span></div>
         <div class="kv"><span>Health</span><span>${bar(a.health, a.health > 0.6 ? 'green' : 'red')}</span>
         <span>Home</span><span>${home ? BUILDINGS[home.type].name + ' · ' + esc(g.settlements.get(home.sid)?.name || '') : '<span class="bad">Homeless</span>'}</span>
@@ -386,7 +386,11 @@ export class Hud {
         ${bd.defense ? `<span>Defence</span><span>+${Math.round(bd.defense * 100)}% for defenders</span>` : ''}
         <span>Travel</span><span>${bd.walk ? (bd.walk <= 1 ? 'Easy' : bd.walk < 2 ? 'Rough' : 'Difficult') : 'Impassable'}</span></div></div>`;
     }
-    if (force || host.innerHTML !== html) host.innerHTML = html;
+    if (force || this.lastInspHTML !== html) {
+      const first = !host.firstElementChild;
+      host.innerHTML = html; this.lastInspHTML = html;
+      if (!first && !force) host.firstElementChild.style.animation = 'none';
+    }
   }
 
   onInspectorClick(e) {

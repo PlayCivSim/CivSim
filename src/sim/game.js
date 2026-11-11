@@ -114,7 +114,7 @@ export class Game {
       techs: [], research: { current: null, progress: 0, queue: [], bank: 0 },
       stage: 1, gov: 'chiefdom', laws, lawCooldown: 0, govCooldown: 0,
       alloc: Object.fromEntries(JOB_KEYS.map(k => [k, 0])),
-      steward: { work: false, housing: false, build: false, research: false },
+      steward: { work: false, housing: false, build: false, research: false, diplomacy: false },
       happiness: 60, stability: 55, productivity: 1, foodSat: 1, warWeariness: 0,
       settlements: [], capital: null, mods: {}, modsDirty: true, eventMods: [], uniqueBuilt: [],
       stats: { built: 0, born: 0, died: 0, research: 0, peak: 0, timeline: [] },

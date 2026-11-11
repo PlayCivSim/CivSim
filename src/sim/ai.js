@@ -315,4 +315,22 @@ export function stewardThink(game, t) {
   if (t.steward?.housing) aiBuild(game, t, { only: ['housing'] });
   if (t.steward?.build) aiBuild(game, t);
   if (t.steward?.research) aiResearch(game, t);
+  if (t.steward?.diplomacy && game.tick % 180 === (t.id * 40) % 180) {
+    // the envoy answers foreign proposals as an AI ruler of this tribe would
+    for (const pr of game.pendingProposals.filter(p => p.to === t.id)) {
+      const ev = game.dip.evaluate(pr.from, t.id, pr.p);
+      game.pendingProposals = game.pendingProposals.filter(x => x !== pr);
+      if (ev.accept) acceptProposal(game, pr);
+    }
+    game.dip.aiThink(t, { noWar: true });
+  }
+}
+
+export function acceptProposal(game, pr) {
+  const D = game.dip;
+  switch (pr.p.type) {
+    case 'trade': case 'nap': case 'alliance': D.sign(pr.p.type, pr.from, pr.to); break;
+    case 'peace': D.makePeace(pr.from, pr.to, pr.p.terms || 'white'); break;
+    case 'tribute': D.sign('tribute', pr.from, pr.to, { payer: pr.to, until: game.tick + 360 * 10 }); D.addMod(pr.from, pr.to, 'submitted', 8, { label: 'Paid us tribute', decay: 0.2 }); break;
+  }
 }

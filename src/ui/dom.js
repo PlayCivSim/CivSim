@@ -59,7 +59,7 @@ export function toast(title, body = '', opts = {}) {
   const root = document.getElementById('toasts');
   const el = h(`<div class="toast ${opts.kind || ''}">${opts.icon ? ico(opts.icon, 'lg') : ''}<div><div class="t-title">${esc(title)}</div>${body ? `<div class="t-body">${esc(body)}</div>` : ''}</div></div>`);
   root.appendChild(el);
-  while (root.children.length > 4) root.firstElementChild.remove();
+  while (root.children.length > 3) root.firstElementChild.remove();
   const kill = () => { el.classList.add('out'); setTimeout(() => el.remove(), 300); };
   el.onclick = () => { opts.onClick?.(); kill(); };
   setTimeout(kill, opts.ms || 5200);
