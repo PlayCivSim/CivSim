@@ -674,3 +674,12 @@ body.cb .bar.green i { background: #6ab0ff; } body.cb .bar.red i { background: #
 .enc-kv { grid-template-columns: minmax(120px, 34%) 1fr; font-size: 0.9em; gap: 4px 10px; margin-bottom: 8px; }
 .enc-kv > span:nth-child(odd) { color: var(--gold-hi); }
 .enc-tribe { display: flex; gap: 10px; margin: 8px 0; }
+
+/* ================= Stage 8: history ================= */
+.timeline { display: flex; flex-direction: column; gap: 8px; }
+.tl-year { border-left: 2px solid var(--gold-deep); padding-left: 10px; }
+.tl-y { font-family: var(--font-display); font-size: 1.4em; color: var(--gold-hi); margin-left: -4px; }
+.tl-e { display: grid; grid-template-columns: 10px 64px 1fr; gap: 6px; align-items: baseline; font-size: 0.9em; padding: 2px 0; }
+.tl-e .dot { width: 8px; height: 8px; display: inline-block; } .tl-e .when { font-family: var(--font-caps); font-size: 0.7em; color: var(--text-dim); text-transform: uppercase; }
+.tl-e.big .txt { color: var(--gold-hi); }
+.tl-e[data-act]:hover, .chron-entry[data-act]:hover { background: rgba(216,178,90,0.08); }

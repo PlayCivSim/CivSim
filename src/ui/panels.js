@@ -153,12 +153,13 @@ const population = {
   },
 };
 
-function lineChart(cv, series) {
+function lineChart(cv, series, war) {
   if (!cv) return;
   const c = cv.getContext('2d'); cv.width = cv.clientWidth * 2; cv.height = (cv.clientHeight || 150) * 2;
   const W = cv.width, H = cv.height;
   c.strokeStyle = 'rgba(216,178,90,0.12)'; c.lineWidth = 2;
   for (let i = 1; i < 4; i++) { c.beginPath(); c.moveTo(0, H * i / 4); c.lineTo(W, H * i / 4); c.stroke(); }
+  if (war?.length > 1) { c.fillStyle = 'rgba(216,74,58,0.16)'; war.forEach((w, i) => { if (w) c.fillRect(i / (war.length - 1) * W - W / war.length / 2, 0, W / war.length + 1, H); }); }
   const all = series.filter(s => !s.scale).flatMap(s => s.data);
   const max = Math.max(1, ...all) * 1.1;
   c.font = '20px Pixelify Sans';
@@ -414,23 +415,49 @@ const military = {
 
 // ================================================================= CHRONICLE
 const TYPE_COL = { war: '#d84a3a', diplomacy: '#5f8fe0', tech: '#a873e8', stage: '#f2c84b', settlement: '#7ad08a', build: '#c9b48a', wonder: '#f4dc8a', government: '#e8c058', law: '#b8a070', event: '#e8803a', population: '#8fbaf0', world: '#ffffff' };
+const STATS = [
+  ['pop', 'Population', 'population'], ['food', 'Food stored', 'food'], ['prod', 'Daily production', 'hammer'], ['wood', 'Wood', 'wood'], ['stone', 'Stone', 'stone'], ['coins', 'Coins', 'coins'],
+  ['str', 'Military strength', 'military'], ['hap', 'Happiness', 'happy'], ['tech', 'Technologies', 'technology'], ['terr', 'Territory', 'flag'],
+];
 const chronicle = {
   title: 'Chronicle', icon: 'chronicle', sub: 'The history of this world', wide: true,
   render(hud, st) {
     const g = hud.game;
-    st.cf = st.cf || 'all'; st.ct = st.ct ?? 'all';
+    st.cf = st.cf || 'all'; st.ct = st.ct ?? 'all'; st.cv = st.cv || 'stats'; st.cs = st.cs || 'pop';
+    const tabs = `<div class="seg" style="margin-bottom:8px">${[['stats', 'Statistics'], ['timeline', 'Timeline'], ['log', 'Full record']].map(([k, n]) => `<button class="btn sm ${st.cv === k ? 'on' : ''}" data-act="chron-v" data-v="${k}">${n}</button>`).join('')}</div>`;
+    if (st.cv === 'stats') {
+      const others = g.fog ? 'Under Hard intelligence only your own history is charted; rivals keep their records to themselves.' : 'Every people is charted.';
+      return tabs + `<div class="row" style="flex-wrap:wrap;gap:4px">${STATS.map(([k, n, ic]) => `<button class="btn xs ${st.cs === k ? 'on' : ''}" data-act="chron-s" data-s="${k}">${ico(ic, 'sm')}${n}</button>`).join('')}</div>
+        <canvas class="chart" id="world-chart" height="200"></canvas>
+        <div class="faint" style="font-size:0.8em">${others} Red bands mark times you were at war.</div>
+        <div class="section-title">Trends</div>${trendsHTML(g)}`;
+    }
+    if (st.cv === 'timeline') {
+      const P = g.playerId;
+      const major = g.history.filter(e => e.imp >= 2 && (e.imp >= 3 || e.tribe === P || e.with === P || (Array.isArray(e.with) && e.with.includes(P))));
+      const years = new Map(); for (const e of major) { const y = Math.floor(e.day / DAYS_PER_YEAR) + 1; if (!years.has(y)) years.set(y, []); years.get(y).push(e); }
+      return tabs + `<div class="faint" style="font-size:0.82em;margin-bottom:6px">Major moments of this world. Entries with ${ico('target', 'sm')} show the place on the map.</div><div class="timeline">${[...years.entries()].reverse().map(([y, es]) => `<div class="tl-year"><div class="tl-y">Year ${y}</div>${es.slice().reverse().map(e => `<div class="tl-e ${e.type === 'stage' || e.type === 'wonder' ? 'big' : ''}" ${e.at ? `data-act="chron-go" data-x="${e.at[0]}" data-y="${e.at[1]}" style="cursor:pointer"` : ''}><span class="dot" style="background:${TYPE_COL[e.type] || '#888'}"></span><span class="when">${SEASONS[e.day % DAYS_PER_YEAR]}</span><span class="txt">${esc(e.text)}${e.at ? ' ' + ico('target', 'sm') : ''}</span></div>`).join('')}</div>`).join('') || '<div class="prose">Nothing of note yet.</div>'}</div>`;
+    }
     const types = ['all', 'war', 'diplomacy', 'tech', 'stage', 'settlement', 'government', 'event', 'population'];
     const list = g.history.filter(e => (st.cf === 'all' || e.type === st.cf || (st.cf === 'settlement' && (e.type === 'build' || e.type === 'wonder'))) && (st.ct === 'all' || e.tribe === +st.ct || e.tribe === -1) && (e.imp >= 1 || e.tribe === g.playerId)).slice(-220).reverse();
-    return `<div class="section-title">The world in numbers</div><canvas class="chart" id="world-chart" height="160"></canvas>
-      <div class="row" style="flex-wrap:wrap;gap:4px;margin:10px 0 4px">${types.map(tp => `<button class="btn xs ${st.cf === tp ? 'on' : ''}" data-act="chron-f" data-f="${tp}">${tp === 'all' ? 'All' : tp.charAt(0).toUpperCase() + tp.slice(1)}</button>`).join('')}</div>
+    return tabs + `<div class="row" style="flex-wrap:wrap;gap:4px;margin:10px 0 4px">${types.map(tp => `<button class="btn xs ${st.cf === tp ? 'on' : ''}" data-act="chron-f" data-f="${tp}">${tp === 'all' ? 'All' : tp.charAt(0).toUpperCase() + tp.slice(1)}</button>`).join('')}</div>
       <div class="row" style="flex-wrap:wrap;gap:4px;margin-bottom:8px"><button class="btn xs ${st.ct === 'all' ? 'on' : ''}" data-act="chron-t" data-t="all">Every people</button>${g.tribes.map(t => `<button class="btn xs ${String(st.ct) === String(t.id) ? 'on' : ''}" data-act="chron-t" data-t="${t.id}"><img src="${emblemURL(t.key)}" width="16" class="pix">${t.name}</button>`).join('')}</div>
-      ${list.map(e => `<div class="chron-entry imp${e.imp}"><span class="when">Yr ${Math.floor(e.day / DAYS_PER_YEAR) + 1} · ${SEASONS[e.day % DAYS_PER_YEAR]}</span><span class="dot" style="background:${TYPE_COL[e.type] || '#888'}"></span><span class="txt">${esc(e.text)}</span></div>`).join('') || '<div class="prose">Nothing recorded yet.</div>'}`;
+      ${list.map(e => `<div class="chron-entry imp${e.imp}" ${e.at ? `data-act="chron-go" data-x="${e.at[0]}" data-y="${e.at[1]}" style="cursor:pointer"` : ''}><span class="when">Yr ${Math.floor(e.day / DAYS_PER_YEAR) + 1} · ${SEASONS[e.day % DAYS_PER_YEAR]}</span><span class="dot" style="background:${TYPE_COL[e.type] || '#888'}"></span><span class="txt">${esc(e.text)}</span></div>`).join('') || '<div class="prose">Nothing recorded yet.</div>'}`;
   },
   mount(hud, body) {
-    const g = hud.game;
-    lineChart(body.querySelector('#world-chart'), g.tribes.map(t => ({ data: t.stats.timeline.map(p => p.pop), color: t.color, label: t.name })));
+    const g = hud.game, st = hud.panelState;
+    if (st.cv !== 'stats') return;
+    const shown = g.fog ? [g.player] : g.tribes;
+    const tl = g.player.stats.timeline;
+    lineChart(body.querySelector('#world-chart'), shown.map(t => ({ data: t.stats.timeline.map(p => p[st.cs] ?? 0), color: t.color, label: t.name })), tl.map(p => (p.war || 0) > 0));
   },
 };
+function trendsHTML(g) {
+  const tl = g.player.stats.timeline; if (tl.length < 3) return '<div class="faint">Trends appear after a few days.</div>';
+  const now = tl[tl.length - 1], ago = tl[Math.max(0, tl.length - 11)];
+  const d = Math.max(1, now.d - ago.d);
+  return `<div class="stat-grid">${STATS.map(([k, n, ic]) => { const a = ago[k] ?? 0, b = now[k] ?? 0, ch = b - a; return `<div class="stat"><span class="k">${ico(ic, 'sm')}${n}</span><span class="v num">${fmt(b)} <small class="${ch > 0 ? 'good' : ch < 0 ? 'bad' : 'faint'}">${ch > 0 ? '▲' : ch < 0 ? '▼' : '='} ${fmt(Math.abs(ch))} in ${d} days</small></span></div>`; }).join('')}</div>`;
+}
 
 export const PANELS = { overview, build, population, economy, technology, diplomacy, government, military, chronicle };
 
@@ -630,6 +657,9 @@ export const ACTIONS = {
   recall: (hud, b) => { hud.sim.call('recall', +b.dataset.id); },
   'army-view': (hud, b) => { const g = hud.game; let sx = 0, sy = 0, n = 0; for (const a of g.agents.values()) if (a.army === +b.dataset.id) { sx += a.x; sy += a.y; n++; } if (n) hud.renderer.flyTo(sx / n, sy / n, 3.5); },
   spec: async (hud, b) => { const r = await hud.sim.call('specialise', +b.dataset.sid, b.dataset.k); if (!r.ok) fail('Cannot change focus', r.why, 'house'); },
+  'chron-v': (hud, b) => { hud.panelState.cv = b.dataset.v; },
+  'chron-s': (hud, b) => { hud.panelState.cs = b.dataset.s; },
+  'chron-go': (hud, b) => { hud.renderer.flyTo(+b.dataset.x + 0.5, +b.dataset.y + 0.5, 3); if (hud.app.touch) hud.closePanel(); },
   'chron-f': (hud, b) => { hud.panelState.cf = b.dataset.f; },
   'chron-t': (hud, b) => { hud.panelState.ct = b.dataset.t; },
   'b-focus': (hud, b) => { const bd = hud.game.buildings.get(+b.dataset.id); if (bd) bd.focus = b.dataset.k || null; hud.sim.call('bFocus', +b.dataset.id, b.dataset.k || null); },

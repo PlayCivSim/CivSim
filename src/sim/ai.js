@@ -267,7 +267,7 @@ export function foundSettlement(game, t, x, y) {
   // a few huts to start
   for (let i = 0; i < 2; i++) { const spot = findSpot(game, t, s, 'hut'); if (spot) placeBuilding(game, t, 'hut', spot.x, spot.y, { sid: s.id, free: true }); }
   recomputeTerritory(game);
-  game.log(t, 'settlement', `The ${t.name} founded ${s.name}.`, 2);
+  game.log(t, 'settlement', `The ${t.name} founded ${s.name}.`, 2, { at: s });
   game.bus.emit('founded', { t, s });
   return { ok: true, s };
 }

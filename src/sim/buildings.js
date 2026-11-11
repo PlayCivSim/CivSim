@@ -151,7 +151,7 @@ function onComplete(game, b, silent) {
   game.markTiles(b.x - 1, b.y - 1, b.size + 2, b.size + 2);
   if (!silent) {
     game.bus.emit('built', { b, tribe });
-    if (def.cat === 'culture') game.log(tribe, 'wonder', `${tribe.name} completed the ${def.name}!`, 3);
+    if (def.cat === 'culture') game.log(tribe, 'wonder', `${tribe.name} completed the ${def.name}!`, 3, { at: { x: b.x, y: b.y } });
     else if (def.unique) game.log(tribe, 'build', `${tribe.name} built a ${def.name}.`, tribe.isPlayer ? 2 : 1);
   }
 }

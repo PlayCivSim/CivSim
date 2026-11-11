@@ -168,7 +168,7 @@ export class Game {
   log(tribe, type, text, importance = 1, extra) {
     this.logSeq = (this.logSeq || 0) + 1;
     const e = { tick: this.tick, day: this.day, tribe: tribe ? tribe.id : -1, type, text, imp: importance, seq: this.logSeq };
-    if (extra) { if (extra.with != null) e.with = extra.with; if (extra.cat) e.cat = extra.cat; if (extra.alert) e.alert = 1; }
+    if (extra) { if (extra.with != null) e.with = extra.with; if (extra.cat) e.cat = extra.cat; if (extra.alert) e.alert = 1; if (extra.at) e.at = [Math.round(extra.at.x), Math.round(extra.at.y)]; }
     this.history.push(e);
     if (this.history.length > HISTORY_CAP) trimHistory(this.history, this.playerId);
     this.bus.emit('log', e);
@@ -277,8 +277,9 @@ export class Game {
       t.addResearchBase = 3 + (t.elders || 0) * 0.4 + t.stage;
       addResearch(this, t, t.addResearchBase * (1 + (t.mods.research || 0)));
       t.researchRate = t.researchToday || 0; t.researchToday = 0;
-      t.stats.timeline.push({ d: this.day, pop: t.pop, food: Math.round(Object.entries(t.stock).filter(([k]) => ['grain', 'meat', 'fish', 'fruit', 'veg'].includes(k)).reduce((a, [, v]) => a + v, 0)), str: Math.round(t.strength), tech: t.techs.length, hap: Math.round(t.happiness), terr: t.territory || 0 });
-      if (t.stats.timeline.length > 400) t.stats.timeline.splice(0, t.stats.timeline.length - 400);
+      t.stats.timeline.push({ d: this.day, pop: t.pop, food: Math.round(Object.entries(t.stock).filter(([k]) => ['grain', 'meat', 'fish', 'fruit', 'veg'].includes(k)).reduce((a, [, v]) => a + v, 0)), str: Math.round(t.strength), tech: t.techs.length, hap: Math.round(t.happiness), terr: t.territory || 0, wood: Math.round(t.stock.wood || 0), stone: Math.round(t.stock.stone || 0), coins: Math.round(t.stock.coins || 0), prod: Math.round(Object.values(t.lastLedger?.prod || {}).reduce((a, v) => a + v, 0)), war: this.dip.enemies(t.id).length });
+      // keep the whole history: when long, thin the older half instead of dropping it
+      if (t.stats.timeline.length > 480) { const tl = t.stats.timeline, half = tl.length >> 1; t.stats.timeline = tl.slice(0, half).filter((_, i) => i % 2 === 0).concat(tl.slice(half)); }
       const milestones = [25, 50, 100, 200, 400, 800];
       for (const m of milestones) if (t.pop >= m && (t.stats.popMilestone || 0) < m) { t.stats.popMilestone = m; this.log(t, 'population', `The ${t.name} now number ${m} souls.`, t.isPlayer ? 2 : 1); if (t.isPlayer) this.bus.emit('milestone', { text: `Population ${m}` }); }
     }

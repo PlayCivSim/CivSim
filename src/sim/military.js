@@ -45,7 +45,7 @@ export function launchCampaign(game, tribe, targetSid, frac = 0.8) {
   game.armies.push(army);
   soldiers.sort((a, b) => Math.hypot(a.x - target.x, a.y - target.y) - Math.hypot(b.x - target.x, b.y - target.y));
   for (const a of soldiers.slice(0, n)) { a.army = army.id; a.state = 'fight'; a.task = { kind: 'army' }; a.path = null; a.hp = maxHp(tribe); }
-  game.log(tribe, 'war', `${tribe.name} marched ${n} soldiers against ${target.name}.`, 2);
+  game.log(tribe, 'war', `${tribe.name} marched ${n} soldiers against ${target.name}.`, 2, { with: enemy.id, at: target });
   game.bus.emit('campaign', { army, tribe, target });
   return { ok: true, army };
 }
@@ -162,7 +162,7 @@ export function captureSettlement(game, tribe, s) {
     loser.stabilityShock = (loser.stabilityShock || 0) + 15;
     for (const o of game.tribes) if (o.alive && o.id !== tribe.id && o.id !== loser.id) game.dip.addMod(o.id, tribe.id, 'plunderer', -4, { label: 'Sacks foreign capitals', decay: 0.15, min: -16 });
     tribe.raidCooldown = tribe.raidCooldown || {}; tribe.raidCooldown[s.id] = game.tick + 360 * 8;
-    game.log(tribe, 'war', `${tribe.name} sacked ${s.name}, the ${loser.name} capital!`, 3);
+    game.log(tribe, 'war', `${tribe.name} sacked ${s.name}, the ${loser.name} capital!`, 3, { with: loser.id, at: s });
     game.bus.emit('sacked', { tribe, s });
     for (const ar of game.armies) if (ar.tribe === tribe.id && ar.target === s.id) ar.state = 'return';
     return;
@@ -180,7 +180,7 @@ export function captureSettlement(game, tribe, s) {
   game.dip.reputation[tribe.id] -= 3;
   for (const o of game.tribes) if (o.alive && o.id !== tribe.id && o.id !== loser.id) game.dip.addMod(o.id, tribe.id, 'conqueror', -8, { label: 'Conquers its neighbours', decay: 0.1, min: -24 });
   tribe.stabilityShock = (tribe.stabilityShock || 0) + 4;
-  game.log(tribe, 'war', `${tribe.name} captured ${s.name} from the ${loser.name}!`, 3);
+  game.log(tribe, 'war', `${tribe.name} captured ${s.name} from the ${loser.name}!`, 3, { with: loser.id, at: s });
   for (const ar of game.armies) if (ar.target === s.id) ar.state = 'return';
   if (!loser.settlements.length) eliminate(game, loser, tribe);
   else if (loser.capital === s.id) loser.capital = loser.settlements[0];
