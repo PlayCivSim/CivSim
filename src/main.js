@@ -10,6 +10,7 @@ import { MainMenu } from './ui/menu.js';
 import { Hud } from './ui/hud.js';
 import { TILE } from './core/constants.js';
 import { isWater } from './world/biomes.js';
+import { Tutorial, TUTORIAL_WORLD } from './ui/tutorial.js';
 
 class App {
   constructor() {
@@ -110,14 +111,21 @@ class App {
     if (fresh) await this.save('auto', true);
   }
 
-  async newRun(opts) {
+  async newRun(opts, quiet) {
+    this.tutorial?.stop();
     await this.sim.call('create', opts);
     const g = this.sim.mirror;
     await this.startGame(g, true);
-    toast(`The ${g.player.name} awaken`, `${g.settlements.get(g.player.capital).name} is founded. Guide your people.`, { icon: 'flag', ms: 7000 });
+    if (!quiet) toast(`The ${g.player.name} awaken`, `${g.settlements.get(g.player.capital).name} is founded. Guide your people.`, { icon: 'flag', ms: 7000 });
+  }
+
+  async startTutorial() {
+    await this.newRun(TUTORIAL_WORLD, true);
+    this.tutorial = new Tutorial(this); this.tutorial.start();
   }
 
   async loadRun(runId, slot) {
+    this.tutorial?.stop();
     try {
       const s = slot || await latestSlot((await listRuns()).find(r => r.runId === runId) || {});
       const json = await loadSlot(runId, s);
@@ -133,6 +141,7 @@ class App {
   }
 
   async exitToMenu() {
+    this.tutorial?.stop();
     if (this.mode === 'game') await this.save('auto', true);
     closeModal();
     this.hud.detach();

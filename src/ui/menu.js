@@ -28,6 +28,7 @@ export class MainMenu {
           <div class="logo"><div class="word">CivSim</div><div class="sub">A Living World Chronicle</div></div>
           <div class="menu-items">
             <button class="menu-item" data-act="continue" ${last ? '' : 'disabled'}>${ico('play')}<span>Continue${last ? `<small>${esc(last.runName)} · Year ${last.year}, ${esc(last.season)}</small>` : '<small>No chronicle yet</small>'}</span></button>
+            <button class="menu-item" data-act="tutorial">${ico('scroll')}<span>Tutorial<small>${this.app.settings.tutorialDone ? 'Replay the guided tour' : 'New here? Start with this'}</small></span></button>
             <button class="menu-item" data-act="new">${ico('flag')}<span>New Run<small>Raise a people from nothing</small></span></button>
             <button class="menu-item" data-act="load" ${runs.length ? '' : 'disabled'}>${ico('chronicle')}<span>Load Run<small>${runs.length} chronicle${runs.length === 1 ? '' : 's'} recorded</small></span></button>
             <button class="menu-item" data-act="settings">${ico('menu')}<span>Settings</span></button>
@@ -47,6 +48,7 @@ export class MainMenu {
       sfx('click');
       const a = b.dataset.act;
       if (a === 'continue') this.app.loadRun(last.runId);
+      else if (a === 'tutorial') this.app.startTutorial();
       else if (a === 'new') this.newRun();
       else if (a === 'load') this.loadRuns();
       else if (a === 'settings') openSettings(this.app, () => {});

@@ -84,6 +84,7 @@ export class Diplomacy {
 
   declareWar(a, b, reason = '') {
     if (this.atWar(a, b) || a === b) return;
+    if (this.game.tutorial && a !== this.game.playerId && b === this.game.playerId) return;
     const g = this.game, ta = g.tribes[a], tb = g.tribes[b];
     for (const type of ['nap', 'alliance', 'trade']) if (this.has(type, a, b)) this.cancel(type, a, b, a, type !== 'trade');
     this.treaties = this.treaties.filter(t => !(t.type === 'tribute' && ((t.a === a && t.b === b) || (t.a === b && t.b === a))));

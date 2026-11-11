@@ -540,3 +540,16 @@ body.touch .scroll, body.touch .sp-body { -webkit-overflow-scrolling: touch; }
   .tb-right { flex-wrap: nowrap; }
   body.touch .speed .btn.sm.icon, body.touch .tb-right > .btn.sm.icon { min-width: 36px; min-height: 38px; padding: 0; }
 }
+
+/* ---------- tutorial ---------- */
+#tutorial { position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 550; width: min(480px, calc(100vw - 24px)); pointer-events: none; }
+.tut-card { pointer-events: auto; padding: 2px 6px; }
+.tut-head { display: flex; justify-content: space-between; align-items: center; color: var(--gold); }
+.tut-title { color: var(--gold-hi); font-size: 1.25em; margin: 4px 0; }
+.tut-text { font-family: var(--font-prose); font-size: 1.05em; line-height: 1.35; }
+.tut-link { margin-top: 6px; padding: 4px 6px; background: rgba(216,178,90,0.12); border-left: 3px solid var(--gold); font-family: var(--font-prose); font-size: 0.95em; color: var(--text-dim); }
+.tut-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.tut-state { color: var(--good); font-size: 0.85em; }
+#tut-ring { position: fixed; display: none; z-index: 540; pointer-events: none; border: 3px solid var(--gold-hi); box-shadow: 0 0 0 2px #07080c, 0 0 14px var(--gold); animation: tutPulse 1.1s ease-in-out infinite; }
+@keyframes tutPulse { 50% { box-shadow: 0 0 0 2px #07080c, 0 0 26px var(--gold-hi); } }
+@media (max-width: 760px) { #tutorial { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); } .tut-text { font-size: 0.95em; } }

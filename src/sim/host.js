@@ -7,7 +7,7 @@ import { packAgents, tribeSnapshot, encodeEvent } from './protocol.js';
 import { placementCheck, placeBuilding, upgradeBuilding, destroyBuilding } from './buildings.js';
 import { foundSettlement, acceptProposal, autoAllocate } from './ai.js';
 import { resolveChoice } from './events.js';
-import { setResearch } from './progress.js';
+import { setResearch, prereqPath, completeTech } from './progress.js';
 import { normaliseAlloc, assignJobs } from './population.js';
 import { enactLaw, adoptGov } from './government.js';
 import { launchCampaign, recallArmy } from './military.js';
@@ -117,6 +117,13 @@ export function createHost(post) {
       if (yes) game.dip.declareWar(game.playerId, aggressor, `honouring their alliance with the ${game.tribes[victim].name}`);
       else game.dip.cancel('alliance', game.playerId, victim, game.playerId, true);
       return true;
+    },
+    // tutorial-only helpers (scripted stock and instant discoveries)
+    tut(kind, arg) {
+      if (!game.tutorial) return false;
+      if (kind === 'grant') { for (const [r, v] of Object.entries(arg)) addRes(game, P(), r, v); return true; }
+      if (kind === 'tech') { for (const k of prereqPath(P(), arg)) completeTech(game, P(), k); return true; }
+      return false;
     },
     steward(k, v) { P().steward[k] = v; return v; },
     workPriority(k) { P().workPriority = k || null; if (P().steward.work) autoAllocate(game, P()); return P().workPriority; },

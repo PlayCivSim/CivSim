@@ -71,6 +71,7 @@ export class Game {
     g.startKey = opts.start || 'standard';
     g.playerId = opts.playerTribe ?? 0;
     g.observer = !!opts.observer;
+    g.tutorial = !!opts.tutorial; // scripted tutorial world: rivals never attack the player
     g.rng = new RNG(g.seed ^ 0xbeef);
     g.world = generateWorld(g.seed, g.sizeKey, MAP_SIZES[g.sizeKey]);
     g.pf = new Pathfinder(g.world);
@@ -288,7 +289,7 @@ export class Game {
     const agents = [...this.agents.values()].map(a => { const { pending, travel, ...rest } = a; return rest; });
     return {
       v: SAVE_VERSION, runId: this.runId, runName: this.runName, seed: this.seed, seedText: this.seedText,
-      sizeKey: this.sizeKey, difficulty: this.difficulty, startKey: this.startKey, playerId: this.playerId, observer: this.observer,
+      sizeKey: this.sizeKey, difficulty: this.difficulty, startKey: this.startKey, playerId: this.playerId, observer: this.observer, tutorial: this.tutorial || false,
       created: this.created, saved: Date.now(), tick: this.tick, nextId: this.nextId, rng: this.rng.s, speed: this.speed,
       world: { trees: enc(w.trees), treeMax: enc(w.treeMax), deposit: enc(w.deposit), depAmt: enc(w.depAmt), fauna: enc(w.fauna), road: enc(w.road), biome: enc(w.biome) },
       logSeq: this.logSeq || 0, territoryVersion: this.territoryVersion,
@@ -300,7 +301,7 @@ export class Game {
   static deserialize(d) {
     if (!d || d.v == null || !d.world) throw new Error('Save data is corrupted or incomplete');
     const g = new Game();
-    Object.assign(g, { runId: d.runId, runName: d.runName, seed: d.seed, seedText: d.seedText, sizeKey: d.sizeKey, difficulty: d.difficulty, startKey: d.startKey, playerId: d.playerId, observer: d.observer, created: d.created, tick: d.tick, nextId: d.nextId });
+    Object.assign(g, { runId: d.runId, runName: d.runName, seed: d.seed, seedText: d.seedText, sizeKey: d.sizeKey, difficulty: d.difficulty, startKey: d.startKey, playerId: d.playerId, observer: d.observer, tutorial: !!d.tutorial, created: d.created, tick: d.tick, nextId: d.nextId });
     g.rng = new RNG(1); g.rng.s = d.rng;
     g.world = generateWorld(g.seed, g.sizeKey, MAP_SIZES[g.sizeKey]);
     const w = g.world;
