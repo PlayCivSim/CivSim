@@ -13,7 +13,7 @@ import { canAfford, foodTotal, dailyFoodNeed, scarcity, buildingCost } from '../
 import { jobCap, normaliseAlloc, assignJobs, traitName } from '../sim/population.js';
 import { lawSlots, enactedCount, canEnact, enactLaw, canAdoptGov, adoptGov, policyInteractions, LEADER_TRAITS } from '../sim/government.js';
 import { launchCampaign, equipTier, recallArmy } from '../sim/military.js';
-import { canFound, ENVOY_DEFAULTS } from '../sim/ai.js';
+import { canFound, ENVOY_DEFAULTS, WORK_PRIORITIES } from '../sim/ai.js';
 import { planProgress } from '../sim/planner.js';
 import { TREATY_NAMES } from '../sim/diplomacy.js';
 import { proposalText } from './hud.js';
@@ -116,6 +116,7 @@ const population = {
       <div class="section-title">Workforce allocation</div>
       <div class="row between" style="margin-bottom:6px"><span class="dim" style="font-size:0.85em">${assigned} of ${t.adults} adults assigned · ${idleAdults} idle</span>
         <span class="row" data-act="steward" data-k="work" style="cursor:pointer">${toggleHTML(t.steward.work, 'Steward')}</span></div>
+      ${t.steward.work ? `<div class="row" style="flex-wrap:wrap;gap:4px;margin-bottom:8px"><span class="caps" style="color:var(--gold)">Priority</span><button class="btn xs ${!t.workPriority ? 'on' : ''}" data-act="work-prio" data-k="" data-tip="The steward balances every job by need">None</button>${Object.entries(WORK_PRIORITIES).map(([k, p]) => `<button class="btn xs ${t.workPriority === k ? 'on' : ''}" data-act="work-prio" data-k="${k}" data-tip="${esc(p.label)} gets workers first, once everyone is fed">${ico(p.icon, 'sm')}${esc(p.label)}</button>`).join('')}</div>` : ''}
       ${t.steward.work ? '<div class="warn-item" style="margin-bottom:6px">' + ico('warning', 'sm') + 'The workforce steward is assigning workers. Adjusting will turn it off.</div>' : ''}
       ${rows}
       <div class="section-title">Population over time</div><canvas class="chart" id="pop-chart" height="150"></canvas>
@@ -502,6 +503,7 @@ export const ACTIONS = {
   found: hud => { const c = canFound(hud.game, hud.game.player); if (!c.ok) { toast('Cannot found a settlement', c.why, { kind: 'bad', icon: 'warning' }); return; } hud.closePanel(); hud.startPlacing('__settle'); },
   bcat: (hud, b) => { hud.panelState.bcat = b.dataset.cat; },
   build: (hud, b) => { hud.startPlacing(b.dataset.type); },
+  'work-prio': (hud, b) => { hud.game.player.workPriority = b.dataset.k || null; hud.sim.call('workPriority', b.dataset.k || null); },
   alloc: (hud, b, e) => { let d = +b.dataset.d; if (e.shiftKey) d *= 5; hud.game.player.steward.work = false; hud.sim.call('alloc', b.dataset.job, d); },
   research: async (hud, b) => {
     const t = hud.game.player; const k = b.dataset.key; if (t.techs.includes(k)) return;

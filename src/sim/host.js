@@ -5,7 +5,7 @@ import { Game } from './game.js';
 import { BUILDINGS, JOB_KEYS } from '../data/buildings.js';
 import { packAgents, tribeSnapshot, encodeEvent } from './protocol.js';
 import { placementCheck, placeBuilding, upgradeBuilding, destroyBuilding } from './buildings.js';
-import { foundSettlement, acceptProposal } from './ai.js';
+import { foundSettlement, acceptProposal, autoAllocate } from './ai.js';
 import { resolveChoice } from './events.js';
 import { setResearch } from './progress.js';
 import { normaliseAlloc, assignJobs } from './population.js';
@@ -119,6 +119,7 @@ export function createHost(post) {
       return true;
     },
     steward(k, v) { P().steward[k] = v; return v; },
+    workPriority(k) { P().workPriority = k || null; if (P().steward.work) autoAllocate(game, P()); return P().workPriority; },
     envoy(cfg) { P().envoy = { ...(P().envoy || {}), ...cfg }; return P().envoy; },
     alloc(k, d) {
       const t = P(); t.steward.work = false;

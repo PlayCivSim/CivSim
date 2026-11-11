@@ -28,7 +28,9 @@ export function autoAllocate(game, t) {
   const give = (k, n) => { const cap = jobCap(t, k); const v = Math.max(0, Math.min(Math.floor(n), cap - alloc[k], left)); alloc[k] += v; left -= v; };
   const need = dailyFoodNeed(game, t);
   const days = foodTotal(t) / Math.max(1, need);
-  const safety = days < 1.5 ? 1.7 : days < 4 ? 1.35 : days > 12 ? 0.85 : 1.1;
+  // player-chosen priority (workforce steward): food stays safe, then the priority job is filled first
+  const prio = t.isPlayer && t.steward?.work ? WORK_PRIORITIES[t.workPriority] : null;
+  const safety = (days < 1.5 ? 1.7 : days < 4 ? 1.35 : days > 12 ? 0.85 : 1.1) * (prio?.food ? 1.4 : prio ? 0.95 : 1);
   let foodNeed = need * safety;
   const winter = game.season === 3, autumnSoon = game.season === 2;
   const farmY = 3.6 * (1 + mod(t, 'farm')) * (winter ? 0.15 + mod(t, 'winterFarm') : autumnSoon ? 1.4 : 1);
@@ -42,6 +44,7 @@ export function autoAllocate(game, t) {
   for (const k of order) { if (foodNeed <= 0) break; const n = Math.ceil(foodNeed / per[k]); const before = alloc[k]; give(k, n); foodNeed -= (alloc[k] - before) * per[k]; }
   if (foodNeed > 0) give('gatherer', Math.ceil(foodNeed / 2));
   give('soldier', Math.min(wantSoldiers, t.adults * (days < 3 ? 0.12 : 0.35)) - alloc.soldier);
+  if (prio && !prio.food) for (const j of prio.jobs) give(j, j === 'builder' ? t.adults * 0.35 : j === 'soldier' ? t.adults * 0.3 : jobCap(t, j));
   const pj = t.plan?.jobs || {};
   if (pj.miner) give('miner', jobCap(t, 'miner'));
   if (pj.researcher) give('researcher', jobCap(t, 'researcher'));
@@ -364,4 +367,14 @@ export function stewardThink(game, t) {
 
 export function acceptProposal(game, pr) { acceptProposalLocal(game, pr); }
 
+export const WORK_PRIORITIES = {
+  food: { label: 'Farming & food', icon: 'wheat', jobs: ['farmer', 'fisher', 'hunter'], food: true },
+  wood: { label: 'Chopping wood', icon: 'wood', jobs: ['woodcutter'] },
+  stone: { label: 'Mining & quarrying', icon: 'stone', jobs: ['miner'] },
+  building: { label: 'Construction', icon: 'hammer', jobs: ['builder'] },
+  research: { label: 'Research', icon: 'research', jobs: ['researcher'] },
+  crafts: { label: 'Crafting', icon: 'tools', jobs: ['craftsman'] },
+  trade: { label: 'Trade', icon: 'coin', jobs: ['trader'] },
+  military: { label: 'Military', icon: 'soldier', jobs: ['soldier'] },
+};
 export const ENVOY_DEFAULTS = { answer: true, trade: true, peace: true, alliances: true, appease: true, gifts: true };
