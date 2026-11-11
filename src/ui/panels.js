@@ -13,7 +13,7 @@ import { canAfford, foodTotal, dailyFoodNeed, scarcity, buildingCost } from '../
 import { jobCap, normaliseAlloc, assignJobs, traitName } from '../sim/population.js';
 import { lawSlots, enactedCount, canEnact, enactLaw, canAdoptGov, adoptGov, policyInteractions, LEADER_TRAITS } from '../sim/government.js';
 import { launchCampaign, equipTier, recallArmy } from '../sim/military.js';
-import { canFound, acceptProposal } from '../sim/ai.js';
+import { canFound, ENVOY_DEFAULTS } from '../sim/ai.js';
 import { TREATY_NAMES } from '../sim/diplomacy.js';
 import { proposalText } from './hud.js';
 import { sfx } from '../audio/audio.js';
@@ -469,60 +469,54 @@ function reportProposal(g, o, res, what) {
   else { sfx('error'); toast(`The ${o.name} refuse`, res.reasons.filter(r => r.label).sort((a, b) => a.v - b.v).slice(0, 3).map(r => `${r.label} (${sign(r.v, 0)})`).join(' · '), { kind: 'bad', icon: 'diplomacy', ms: 7000 }); }
 }
 
+// All mutations go to the simulation worker; the mirror refreshes on the
+// next batch (sent immediately after every command).
+const fail = (title, why, icon = 'warning') => { sfx('error'); toast(title, why || '', { kind: 'bad', icon, ms: 3000 }); };
+const confirmAsync = async (...a) => (await import('./dom.js')).confirmDialog(...a);
+
 export const ACTIONS = {
-  steward: (hud, b) => { const t = hud.game.player; t.steward[b.dataset.k] = !t.steward[b.dataset.k]; },
+  steward: (hud, b) => { const t = hud.game.player; const v = !t.steward[b.dataset.k]; t.steward[b.dataset.k] = v; hud.sim.call('steward', b.dataset.k, v); },
+  envoy: (hud, b) => { const t = hud.game.player; const cfg = { ...(t.envoy || ENVOY_DEFAULTS) }; const k = b.dataset.k; cfg[k] = b.dataset.v != null ? b.dataset.v : !cfg[k]; t.envoy = cfg; hud.sim.call('envoy', cfg); },
   found: hud => { const c = canFound(hud.game, hud.game.player); if (!c.ok) { toast('Cannot found a settlement', c.why, { kind: 'bad', icon: 'warning' }); return; } hud.closePanel(); hud.startPlacing('__settle'); },
   bcat: (hud, b) => { hud.panelState.bcat = b.dataset.cat; },
   build: (hud, b) => { hud.startPlacing(b.dataset.type); },
-  alloc: (hud, b, e) => {
-    const g = hud.game, t = g.player; const k = b.dataset.job; let d = +b.dataset.d; if (e.shiftKey) d *= 5;
-    t.steward.work = false;
-    t.alloc[k] = Math.max(0, (t.alloc[k] || 0) + d);
-    // if no free adults, take from the job with the most idle-able workers
-    let sum = JOB_KEYS.reduce((a, j) => a + (t.alloc[j] || 0), 0);
-    if (d > 0 && sum > t.adults) {
-      const donors = ['gatherer', 'woodcutter', 'builder', 'hunter'].filter(j => j !== k && t.alloc[j] > 0);
-      for (const j of donors) { while (sum > t.adults && t.alloc[j] > 0) { t.alloc[j]--; sum--; } }
-    }
-    normaliseAlloc(t); assignJobs(g, t);
+  alloc: (hud, b, e) => { let d = +b.dataset.d; if (e.shiftKey) d *= 5; hud.game.player.steward.work = false; hud.sim.call('alloc', b.dataset.job, d); },
+  research: async (hud, b) => {
+    const t = hud.game.player; const k = b.dataset.key; if (t.techs.includes(k)) return;
+    if (!(await hud.sim.call('research', k))) fail('Cannot research yet', techState(t, k) === 'stage' ? 'Your civilisation must advance to a later stage.' : 'Prerequisites are missing.', 'lock');
   },
-  research: (hud, b) => { const t = hud.game.player; const k = b.dataset.key; if (t.techs.includes(k)) return; if (!setResearch(hud.game, t, k)) toast('Cannot research yet', techState(t, k) === 'stage' ? 'Your civilisation must advance to a later stage.' : 'Prerequisites are missing.', { kind: 'bad', icon: 'lock' }); },
-  'prop-yes': (hud, b) => { const g = hud.game; const p = g.pendingProposals[+b.dataset.i]; if (!p) return; g.pendingProposals.splice(+b.dataset.i, 1); acceptAI(g, p); },
-  'prop-no': (hud, b) => { const g = hud.game; const p = g.pendingProposals[+b.dataset.i]; if (!p) return; g.pendingProposals.splice(+b.dataset.i, 1); g.dip.addMod(p.from, p.to, 'rebuffed', -4, { label: 'Rebuffed our envoys', decay: 0.4 }); if (p.p.type === 'tribute') g.dip.addMod(p.from, p.to, 'defiance', -8, { label: 'Defied our demands', decay: 0.3 }); },
+  'prop-yes': async (hud, b) => { const g = hud.game; const p = g.pendingProposals[+b.dataset.i]; if (!p) return; if (await hud.sim.call('answerProposal', p.from, p.tick, p.p.type, true)) toast(`Agreement with the ${g.tribes[p.from].name}`, proposalText(p.p), { icon: 'diplomacy', kind: 'good' }); },
+  'prop-no': (hud, b) => { const p = hud.game.pendingProposals[+b.dataset.i]; if (p) hud.sim.call('answerProposal', p.from, p.tick, p.p.type, false); },
   dip: async (hud, b) => {
     const g = hud.game, t = g.player, o = g.tribes[+b.dataset.to]; const type = b.dataset.type;
     let p = { type };
     if (type === 'gift') { const r = await chooseResource(t, `A gift for the ${o.name}`, 'Choose a resource to send.'); if (!r) return; p = { type, ...r }; }
     if (type === 'exchange') { const r = await exchangeDialog(g, t, o); if (!r) return; p = { type, ...r }; }
     if (type === 'peace') { const r = await peaceDialog(g, t, o); if (!r) return; p = { type, terms: r }; }
-    const res = g.dip.propose(t.id, o.id, p);
+    const res = await hud.sim.call('propose', o.id, p);
     reportProposal(g, o, res, { trade: 'A trade agreement is signed.', nap: 'A non-aggression pact is signed.', alliance: 'You are now allies.', peace: 'The war is over.', gift: 'Your gift is received warmly.', exchange: 'The exchange is complete.', tribute: 'They will pay tribute.' }[type]);
-    hud.renderPanel(true);
   },
-  'dip-cancel': (hud, b) => { const g = hud.game; g.dip.cancel(b.dataset.treaty, g.playerId, +b.dataset.to, g.playerId, false); },
+  'dip-cancel': (hud, b) => { hud.sim.call('cancelTreaty', +b.dataset.to, b.dataset.treaty); },
   'dip-war': async (hud, b) => {
     const g = hud.game, o = g.tribes[+b.dataset.to];
     const breaking = ['nap', 'alliance'].filter(x => g.dip.has(x, g.playerId, o.id));
-    const ok = await (await import('./dom.js')).confirmDialog(`Declare war on the ${o.name}?`, `${breaking.length ? `<span class="bad">This breaks your ${breaking.map(x => TREATY_NAMES[x]).join(' and ')} and will damage your reputation with every people.</span><br><br>` : ''}Their allies may join the war. Your people will grow weary of fighting.`, 'Declare war', true);
-    if (ok) { g.dip.declareWar(g.playerId, o.id); hud.renderPanel(true); }
+    const allies = g.dip.allies(o.id).filter(x => x !== g.playerId).map(x => g.tribes[x].name);
+    const ok = await confirmAsync(`Declare war on the ${o.name}?`, `${breaking.length ? `<span class="bad">This breaks your ${breaking.map(x => TREATY_NAMES[x]).join(' and ')} and will damage your reputation with every people.</span><br><br>` : ''}${allies.length ? `Their allies (${allies.join(', ')}) may join the war. ` : ''}Unprovoked aggression lowers your standing with other peoples, and your people will grow weary of fighting.`, 'Declare war', true);
+    if (ok) hud.sim.call('declareWar', o.id);
   },
-  law: (hud, b) => { const g = hud.game; const r = enactLaw(g, g.player, b.dataset.law, b.dataset.opt); if (!r.ok) { sfx('error'); toast('Cannot enact', r.why, { kind: 'bad', icon: 'scales', ms: 3000 }); } },
-  gov: async (hud, b) => { const g = hud.game; const c = canAdoptGov(g, g.player, b.dataset.k); if (!c.ok) { toast('Reform impossible', c.why, { kind: 'bad', icon: 'crown' }); return; } if (await (await import('./dom.js')).confirmDialog(`Reform into a ${GOVERNMENTS[b.dataset.k].name}?`, 'Reforms shake the realm: stability will fall for a while, and some laws may lapse.', 'Reform')) { adoptGov(g, g.player, b.dataset.k); hud.renderPanel(true); } },
-  campaign: (hud, b) => { const g = hud.game; const r = launchCampaign(g, g.player, +b.dataset.sid, hud.panelState.commit || 0.75); if (!r.ok) toast('Cannot attack', r.why, { kind: 'bad', icon: 'military' }); else { const s = g.settlements.get(+b.dataset.sid); hud.renderer.flyTo(s.x, s.y, 2.5); } },
+  law: async (hud, b) => { const r = await hud.sim.call('enactLaw', b.dataset.law, b.dataset.opt); if (!r.ok) fail('Cannot enact', r.why, 'scales'); },
+  gov: async (hud, b) => {
+    const g = hud.game; const c = canAdoptGov(g, g.player, b.dataset.k); if (!c.ok) { toast('Reform impossible', c.why, { kind: 'bad', icon: 'crown' }); return; }
+    if (await confirmAsync(`Reform into a ${GOVERNMENTS[b.dataset.k].name}?`, 'Reforms shake the realm: stability will fall for a while, and some laws may lapse.', 'Reform')) hud.sim.call('adoptGov', b.dataset.k);
+  },
+  campaign: async (hud, b) => { const g = hud.game; const r = await hud.sim.call('campaign', +b.dataset.sid, hud.panelState.commit || 0.75); if (!r.ok) fail('Cannot attack', r.why, 'military'); else { const s = g.settlements.get(+b.dataset.sid); if (s) hud.renderer.flyTo(s.x, s.y, 2.5); } },
   commit: (hud, b) => { hud.panelState.commit = +b.dataset.f; },
-  recall: (hud, b) => { const a = hud.game.armies.find(x => x.id === +b.dataset.id); if (a) recallArmy(hud.game, a); },
+  recall: (hud, b) => { hud.sim.call('recall', +b.dataset.id); },
   'army-view': (hud, b) => { const g = hud.game; let sx = 0, sy = 0, n = 0; for (const a of g.agents.values()) if (a.army === +b.dataset.id) { sx += a.x; sy += a.y; n++; } if (n) hud.renderer.flyTo(sx / n, sy / n, 3.5); },
   'chron-f': (hud, b) => { hud.panelState.cf = b.dataset.f; },
   'chron-t': (hud, b) => { hud.panelState.ct = b.dataset.t; },
-  'b-focus': (hud, b) => { const bd = hud.game.buildings.get(+b.dataset.id); if (bd) bd.focus = b.dataset.k || null; },
-  'b-recipe': (hud, b) => { const bd = hud.game.buildings.get(+b.dataset.id); if (bd) bd.recipe = +b.dataset.r; },
-  'b-upgrade': (hud, b) => { const g = hud.game; const bd = g.buildings.get(+b.dataset.id); const r = upgradeBuilding(g, g.player, bd); if (!r.ok) toast('Cannot upgrade', r.why, { kind: 'bad', icon: 'house' }); },
-  'b-demolish': async (hud, b) => { const g = hud.game; const bd = g.buildings.get(+b.dataset.id); if (!bd) return; if (await (await import('./dom.js')).confirmDialog(`Demolish ${BUILDINGS[bd.type].name}?`, 'Some materials will be recovered.', 'Demolish', true)) { for (const [r, v] of Object.entries(BUILDINGS[bd.type].cost || {})) g.player.stock[r] = (g.player.stock[r] || 0) + v * 0.4; destroyBuilding(g, bd, 'demolished'); hud.select(null); } },
+  'b-focus': (hud, b) => { const bd = hud.game.buildings.get(+b.dataset.id); if (bd) bd.focus = b.dataset.k || null; hud.sim.call('bFocus', +b.dataset.id, b.dataset.k || null); },
+  'b-recipe': (hud, b) => { const bd = hud.game.buildings.get(+b.dataset.id); if (bd) bd.recipe = +b.dataset.r; hud.sim.call('bRecipe', +b.dataset.id, +b.dataset.r); },
+  'b-upgrade': async (hud, b) => { const r = await hud.sim.call('bUpgrade', +b.dataset.id); if (!r.ok) fail('Cannot upgrade', r.why, 'house'); },
+  'b-demolish': async (hud, b) => { const bd = hud.game.buildings.get(+b.dataset.id); if (!bd) return; if (await confirmAsync(`Demolish ${BUILDINGS[bd.type].name}?`, 'Some materials will be recovered.', 'Demolish', true)) { hud.sim.call('bDemolish', bd.id); hud.select(null); } },
 };
-
-function acceptAI(g, p) {
-  const D = g.dip; const from = g.tribes[p.from];
-  if (p.p.type === 'gift') D.addMod(p.to, p.from, 'gift', 5, { label: 'Generous gifts', decay: 0.4 });
-  else acceptProposal(g, p);
-  toast(`Agreement with the ${from.name}`, proposalText(p.p), { icon: 'diplomacy', kind: 'good' });
-}

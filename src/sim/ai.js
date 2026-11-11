@@ -334,3 +334,5 @@ export function acceptProposal(game, pr) {
     case 'tribute': D.sign('tribute', pr.from, pr.to, { payer: pr.to, until: game.tick + 360 * 10 }); D.addMod(pr.from, pr.to, 'submitted', 8, { label: 'Paid us tribute', decay: 0.2 }); break;
   }
 }
+
+export const ENVOY_DEFAULTS = { answer: true, trade: true, peace: true, alliances: true, appease: true, gifts: true };

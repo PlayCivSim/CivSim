@@ -2,7 +2,7 @@
 import { installTheme } from './ui/theme.js';
 import { initTooltips, toast, modalOpen, closeModal } from './ui/dom.js';
 import { Renderer } from './render/renderer.js';
-import { Game } from './sim/game.js';
+import { SimClient } from './sim/client.js';
 import { initAudio, resumeAudio, setVolumes, setAmbience, sfx, setMusicMood } from './audio/audio.js';
 import { loadSettings, storeSettings, saveGame, listRuns, loadSlot, latestSlot } from './save/saves.js';
 import { MainMenu } from './ui/menu.js';
@@ -16,6 +16,7 @@ class App {
     this.cv = document.getElementById('world');
     this.renderer = new Renderer(this.cv);
     this.game = null;
+    this.sim = new SimClient();
     this.mode = 'boot';
     this.keys = new Set();
     this.last = performance.now();
@@ -53,9 +54,9 @@ class App {
     this.mode = 'menu';
     this.hud.hide();
     // a living background world, run entirely by AI
-    const bg = Game.create({ seed: 'menu-' + (Math.random() * 1e6 | 0), size: 'small', observer: true, playerTribe: 0, start: 'bountiful' });
-    for (let i = 0; i < 360 * 6; i++) bg.step();
-    this.game = bg; this.game.speed = 2;
+    await this.sim.call('create', { seed: 'menu-' + (Math.random() * 1e6 | 0), size: 'small', observer: true, playerTribe: 0, start: 'bountiful' }, 360 * 6);
+    const bg = this.sim.mirror;
+    this.game = bg; this.sim.setSpeed(2); this.sim.setHold(false);
     this.renderer.setGame(bg);
     this.menuTour();
     setMusicMood('menu');
@@ -72,7 +73,7 @@ class App {
     this.menu.hide();
     this.game = game;
     this.mode = 'game';
-    game.speed = fresh ? (this.settings.defaultSpeed ?? 1) : 1;
+    this.sim.setSpeed(fresh ? (this.settings.defaultSpeed ?? 1) : 1);
     this.renderer.setGame(game);
     const s = game.settlements.get(game.player.capital) || [...game.settlements.values()][0];
     this.renderer.centerOn(s.x + 0.5, s.y + 1.5, 4);
@@ -84,7 +85,8 @@ class App {
   }
 
   async newRun(opts) {
-    const g = Game.create(opts);
+    await this.sim.call('create', opts);
+    const g = this.sim.mirror;
     await this.startGame(g, true);
     toast(`The ${g.player.name} awaken`, `${g.settlements.get(g.player.capital).name} is founded. Guide your people.`, { icon: 'flag', ms: 7000 });
   }
@@ -92,7 +94,9 @@ class App {
   async loadRun(runId, slot) {
     try {
       const s = slot || await latestSlot((await listRuns()).find(r => r.runId === runId) || {});
-      const g = await loadSlot(runId, s);
+      const json = await loadSlot(runId, s);
+      await this.sim.call('load', json);
+      const g = this.sim.mirror;
       await this.startGame(g, false);
       toast('Chronicle resumed', `${g.runName} — Year ${g.year}, ${g.seasonName}.`, { icon: 'chronicle' });
     } catch (e) {
@@ -114,7 +118,8 @@ class App {
     this.saving = true;
     try {
       const thumb = this.thumbnail();
-      await saveGame(this.game, slot, thumb);
+      const json = await this.sim.call('serialize');
+      await saveGame(this.game, slot, thumb, json);
       if (!silent) { toast('Chronicle saved', `${this.game.runName} · ${slot === 'auto' ? 'Autosave' : slot === 'quick' ? 'Quicksave' : 'Slot ' + slot.slice(1)}`, { icon: 'save', ms: 2500 }); sfx('save'); }
     } catch (e) {
       console.error(e);
@@ -134,8 +139,9 @@ class App {
     const dt = Math.min(0.1, (now - this.last) / 1000); this.last = now;
     const g = this.game;
     if (g) {
-      const blocked = this.mode === 'game' && (modalOpen() || this.hud.blocking());
-      if (!blocked) g.update(dt);
+      // the simulation runs in the worker; here we only interpolate and render
+      this.sim.setHold(this.mode === 'game' && (modalOpen() || this.hud.blocking()));
+      this.sim.frame(g.view);
       this.panKeys(dt);
       if (this.mode === 'menu') this.updateTour(dt);
       this.renderer.frame(dt);

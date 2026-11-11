@@ -2,7 +2,6 @@
 // slots (auto, quick, manual). Writes are verified before commit and happen
 // in a single transaction that also preserves the previous version as a
 // backup, so a failed save never overwrites a healthy one.
-import { Game } from '../sim/game.js';
 import { STAGES } from '../sim/progress.js';
 
 const DB_NAME = 'civsim', DB_VER = 1;
@@ -48,10 +47,11 @@ export function runSummary(game) {
   };
 }
 
-export async function saveGame(game, slot = 'auto', thumb = null) {
+// `game` supplies the run summary (the main-thread mirror is fine); `json` is the
+// authoritative serialisation produced by the simulation worker.
+export async function saveGame(game, slot = 'auto', thumb = null, json = null) {
   // 1. serialise and verify before touching storage
-  const data = game.serialize();
-  const json = JSON.stringify(data);
+  if (!json) json = JSON.stringify(game.serialize());
   const parsed = JSON.parse(json);
   if (!parsed.tribes || parsed.tribes.length !== 4 || !parsed.world?.trees) throw new Error('Save verification failed');
   const meta = { ...runSummary(game), slot, savedAt: Date.now(), bytes: json.length };
@@ -85,11 +85,12 @@ export async function loadSlot(runId, slot) {
   const r = await rec;
   if (!r) throw new Error('Save slot is empty');
   try {
-    return Game.deserialize(JSON.parse(r.json));
+    JSON.parse(r.json); // integrity check before handing it to the worker
+    return r.json;
   } catch (e) {
     // fall back to the backup copy if the primary is damaged
     const bak = await (await tx(['slots'], 'readonly', t => req(t.objectStore('slots').get(`${runId}|${slot}|bak`))));
-    if (bak) return Game.deserialize(JSON.parse(bak.json));
+    if (bak) { JSON.parse(bak.json); return bak.json; }
     throw e;
   }
 }

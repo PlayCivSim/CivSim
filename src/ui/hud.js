@@ -12,8 +12,8 @@ import { STAGES } from '../sim/progress.js';
 import { SPEEDS, SPEED_NAMES, TILE, DAYS_PER_YEAR } from '../core/constants.js';
 import { placementCheck, placeBuilding, destroyBuilding } from '../sim/buildings.js';
 import { buildingCost, foodTotal, dailyFoodNeed } from '../sim/economy.js';
-import { foundSettlement, siteCheck, canFound } from '../sim/ai.js';
-import { EVENTS, resolveChoice } from '../sim/events.js';
+import { siteCheck, canFound } from '../sim/ai.js';
+import { EVENTS } from '../sim/events.js';
 import { ageYears } from '../sim/agents.js';
 import { sfx, setMusicMood } from '../audio/audio.js';
 import { openSettings } from './menu.js';
@@ -33,6 +33,7 @@ export class Hud {
     this.panel = null; this.placing = null; this.uiTimer = 0; this.offs = []; this.state = {};
   }
   get game() { return this.app.game; }
+  get sim() { return this.app.sim; }
   get renderer() { return this.app.renderer; }
   blocking() { return !!this.pausedForChoice; }
 
@@ -272,7 +273,7 @@ export class Hud {
     else if (b.dataset.act === 'territory') { this.app.settings.territory = !this.app.settings.territory; this.app.applySettings(); }
     else if (b.dataset.act === 'home') this.goHome();
   }
-  setSpeed(i) { this.game.speed = i; this.update(1); }
+  setSpeed(i) { this.sim.setSpeed(i); this.update(1); }
   goHome() { const s = this.game.settlements.get(this.game.player.capital); if (s) this.renderer.flyTo(s.x + 0.5, s.y + 1, Math.max(3, this.renderer.cam.tz)); }
 
   // ---------------------------------------------------------------- placement
@@ -320,12 +321,16 @@ export class Hud {
       const gh = this.renderer.ghost;
       this.onHover(w, e);
       if (this.placing === '__settle') {
-        const r = foundSettlement(g, t, gh.x, gh.y);
-        if (r.ok) { sfx('place'); this.cancelPlacing(); } else { sfx('error'); toast('Cannot found here', r.why, { kind: 'bad', icon: 'warning', ms: 2500 }); }
+        if (!gh.ok) { sfx('error'); toast('Cannot found here', gh.why || '', { kind: 'bad', icon: 'warning', ms: 2500 }); return; }
+        this.cancelPlacing();
+        this.sim.call('found', gh.x, gh.y).then(r => { if (r.ok) sfx('place'); else { sfx('error'); toast('Cannot found here', r.why, { kind: 'bad', icon: 'warning', ms: 2500 }); } });
         return;
       }
       if (!gh.ok) { sfx('error'); toast('Cannot build here', gh.why || '', { kind: 'bad', icon: 'warning', ms: 2200 }); return; }
-      placeBuilding(g, t, gh.type, gh.x, gh.y);
+      // optimistically mark the footprint so shift-placement can't double-book it before the worker replies
+      const sz = BUILDINGS[gh.type].size;
+      for (let dy = 0; dy < sz; dy++) for (let dx = 0; dx < sz; dx++) g.world.occ[g.world.idx(gh.x + dx, gh.y + dy)] = -1;
+      this.sim.call('place', gh.type, gh.x, gh.y).then(r => { if (!r.ok) { sfx('error'); toast('Cannot build here', r.why || '', { kind: 'bad', icon: 'warning', ms: 2200 }); } });
       if (!e.shiftKey) this.cancelPlacing(); else this.onHover(w, e);
       if (this.panel === 'build') this.renderPanel(true);
       return;
@@ -344,6 +349,7 @@ export class Hud {
 
   select(s) {
     this.selected = s; this.game.selected = s;
+    this.sim.call('watch', s?.kind === 'agent' ? s.id : null);
     if (!s) { $('#insp-host', this.root).innerHTML = ''; return; }
     sfx('click');
     this.renderInspector(true);
@@ -419,7 +425,7 @@ export class Hud {
 
   // ---------------------------------------------------------------- dialogs
   async escMenu() {
-    const prev = this.game.speed; this.game.speed = 0;
+    const prev = this.game.speed; this.sim.setSpeed(0);
     const r = await modal(`<div class="esc-menu"><div class="logo" style="margin-bottom:6px"><div class="word" style="font-size:52px">CivSim</div><div class="sub">${esc(this.game.runName)}</div></div>
       <button class="btn" data-v="resume">${ico('play')} Resume</button>
       <div class="caps" style="color:var(--gold);margin-top:6px">Save to slot</div>
@@ -427,7 +433,7 @@ export class Hud {
       <button class="btn" data-v="settings">${ico('menu')} Settings</button>
       <button class="btn" data-v="exit">${ico('house')} Save & exit to menu</button></div>`,
     { onMount: m => m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { sfx('click'); closeModal(b.dataset.v); }) });
-    this.game.speed = prev;
+    this.sim.setSpeed(prev);
     if (r?.startsWith('save:')) this.app.save(r.slice(5));
     else if (r === 'settings') openSettings(this.app, () => {});
     else if (r === 'exit') this.app.exitToMenu();
@@ -445,16 +451,14 @@ export class Hud {
       <div class="col" style="margin-top:12px">${ev.choices.map((c, i) => { const ok = !c.can || c.can(g, t); return `<button class="btn choice ${ok ? '' : 'disabled'}" data-i="${i}" ${ok ? '' : 'disabled'}><span>${esc(c.label)}</span><small>${esc(c.desc)}</small></button>`; }).join('')}</div>`,
     { dismissable: false, onMount: m => m.querySelectorAll('[data-i]').forEach(b => b.onclick = () => { if (!b.disabled) { sfx('click'); closeModal(+b.dataset.i); } }) });
     this.pausedForChoice = false;
-    if (!g.pendingEvents.includes(pe)) return;
-    const res = resolveChoice(g, pe, idx);
+    const res = await this.sim.call('resolveChoice', pe.key, pe.tick, idx);
     if (res) toast(ev.title, res, { icon: ev.icon });
   }
 
   async allyCall(victim, aggressor) {
     const g = this.game;
     const yes = await confirmDialog('An ally calls for aid', `The <em>${g.tribes[aggressor].name}</em> have attacked your ally, the <em>${g.tribes[victim].name}</em>. Honour the alliance and declare war? Refusing will break the alliance and damage your reputation.`, 'Honour the alliance');
-    if (yes) g.dip.declareWar(g.playerId, aggressor, `honouring their alliance with the ${g.tribes[victim].name}`);
-    else g.dip.cancel('alliance', g.playerId, victim, g.playerId, true);
+    this.sim.call('allyCall', victim, aggressor, !!yes);
   }
 
   celebrateStage(t) {
@@ -468,11 +472,11 @@ export class Hud {
   }
 
   defeat() {
-    const g = this.game; this.game.speed = 0;
+    const g = this.game; this.sim.setSpeed(0);
     sfx('bad');
     modal(`<div style="text-align:center"><div class="panel-title" style="font-size:3em">The Chronicle Ends</div><div class="prose" style="margin:12px 0">The last of the ${g.player.name} are gone. Their story endured ${g.year} years. The world will remember them.</div>
       <div class="modal-actions" style="justify-content:center"><button class="btn" data-v="watch">Keep watching</button><button class="btn primary" data-v="menu">Return to menu</button></div></div>`,
-    { dismissable: false, onMount: m => m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { closeModal(); if (b.dataset.v === 'menu') this.app.exitToMenu(); else g.speed = 1; }) });
+    { dismissable: false, onMount: m => m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { closeModal(); if (b.dataset.v === 'menu') this.app.exitToMenu(); else this.sim.setSpeed(1); }) });
   }
 }
 

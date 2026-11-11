@@ -141,7 +141,8 @@ export class Game {
 
   // ---------------------------------------------------------------- helpers
   log(tribe, type, text, importance = 1) {
-    const e = { tick: this.tick, day: this.day, tribe: tribe ? tribe.id : -1, type, text, imp: importance };
+    this.logSeq = (this.logSeq || 0) + 1;
+    const e = { tick: this.tick, day: this.day, tribe: tribe ? tribe.id : -1, type, text, imp: importance, seq: this.logSeq };
     this.history.push(e);
     if (this.history.length > 1500) this.history.splice(0, this.history.length - 1500);
     this.bus.emit('log', e);
@@ -290,6 +291,7 @@ export class Game {
       sizeKey: this.sizeKey, difficulty: this.difficulty, startKey: this.startKey, playerId: this.playerId, observer: this.observer,
       created: this.created, saved: Date.now(), tick: this.tick, nextId: this.nextId, rng: this.rng.s, speed: this.speed,
       world: { trees: enc(w.trees), treeMax: enc(w.treeMax), deposit: enc(w.deposit), depAmt: enc(w.depAmt), fauna: enc(w.fauna), road: enc(w.road), biome: enc(w.biome) },
+      logSeq: this.logSeq || 0, territoryVersion: this.territoryVersion,
       tribes, agents, buildings: [...this.buildings.values()], settlements: [...this.settlements.values()],
       armies: this.armies, history: this.history, dip: this.dip.toJSON(), pendingEvents: this.pendingEvents, weather: this.weather,
     };
@@ -317,6 +319,7 @@ export class Game {
     for (const a of d.agents) { if (a.state === 'pathWait' || a.state === 'travel') { a.state = 'think'; a.hidden = false; } g.agents.set(a.id, a); }
     g.armies = d.armies || [];
     g.history = d.history || [];
+    g.logSeq = d.logSeq || g.history.reduce((m, e) => Math.max(m, e.seq || 0), 0);
     g.dip = new Diplomacy(g, d.dip);
     g.pendingEvents = d.pendingEvents || [];
     g.weather = d.weather || null;
