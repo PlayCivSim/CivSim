@@ -96,7 +96,7 @@ export class Diplomacy {
 
   declareWar(a, b, reason = '') {
     if (this.atWar(a, b) || a === b) return;
-    if (this.game.tutorial && a !== this.game.playerId && b === this.game.playerId) return;
+    if (this.game.tutorial && !this.game.tutWar && a !== this.game.playerId && b === this.game.playerId) return;
     const g = this.game, ta = g.tribes[a], tb = g.tribes[b];
     for (const type of ['nap', 'alliance', 'trade', 'access', 'exclusive']) if (this.has(type, a, b)) this.cancel(type, a, b, a, type === 'nap' || type === 'alliance', 'war');
     for (const c of this.treaties.filter(x => x.type === 'contract' && ((x.a === a && x.b === b) || (x.a === b && x.b === a)))) endContract(g, c, a, 'war');
@@ -281,6 +281,7 @@ export class Diplomacy {
         const mine = w.score[to] || 0, theirs = w.score[from] || 0;
         add((theirs - mine) * 0.8, theirs > mine ? 'Losing the war' : 'Winning the war');
         add((tt.warWeariness || 0) * 0.4, 'War weariness');
+        if (g.tutorial && g.tutWar) add(60, 'Tired of this war');
         add(-ai.aggression * 10, 'Warlike temperament');
         add(Math.min(15, (g.tick - w.start) / DAY_TICKS * 2) - 6, 'Duration of war');
         if (p.terms === 'tribute_a') add(25, 'You offer tribute');

@@ -243,11 +243,11 @@ const favGov = t => ({ oruvai: 'republic', kharvak: 'monarchy', thalori: 'common
 export const SETTLE_COST = { wood: 80, stone: 40, grain: 40 };
 
 export function canFound(game, t) {
-  if (t.settlements.length >= MAX_SETTLEMENTS[t.stage]) return { ok: false, why: `Your stage allows ${MAX_SETTLEMENTS[t.stage]} settlement(s)` };
+  if (t.settlements.length >= MAX_SETTLEMENTS[t.stage] + (t.tutTown || 0)) return { ok: false, why: `Your stage allows ${MAX_SETTLEMENTS[t.stage]} settlement(s)` };
   const cost = { ...SETTLE_COST };
   for (const [r, v] of Object.entries(cost)) if ((t.stock[r] || 0) < v) return { ok: false, why: 'Requires 80 wood, 40 stone and 40 grain' };
   const adults = [...game.agents.values()].filter(a => a.tribe === t.id && isAdult(a) && !a.army).length;
-  if (adults < 16) return { ok: false, why: 'Need at least 16 adults' };
+  if (adults < (t.tutTown ? 8 : 16)) return { ok: false, why: 'Need at least 16 adults' };
   return { ok: true };
 }
 

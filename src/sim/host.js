@@ -1,6 +1,7 @@
 // Simulation host: owns the authoritative Game, runs the fixed-tick loop and
 // streams batched state to the main thread. Runs inside a Web Worker
 // (worker.js) or, as a fallback, in-thread behind the same message protocol.
+import { revealFor } from './vision.js';
 import { playerSightBits } from './vision.js';
 import { setSpec } from './logistics.js';
 import { remember } from './aimind.js';
@@ -157,6 +158,40 @@ export function createHost(post) {
         if (m) { m.eta = game.tick + 60; m.days = 1; m.doom = null; m.risk = 0; }
         return { ok: res.ok, to: r.o.id, x: r.s.x, y: r.s.y };
       }
+      // scripted scenes ---------------------------------------------------
+      const T = P(), cap = game.settlements.get(T.capital);
+      const rival = rivals[1] || rivals[0];
+      if (kind === 'famine') {   // the granaries spoil and the food workers walk off
+        for (const k of ['grain', 'meat', 'fish', 'fruit', 'veg']) if (T.stock[k]) T.stock[k] *= 0.12;
+        T.steward.work = false; for (const k of ['gatherer', 'hunter', 'fisher', 'farmer']) T.alloc[k] = 0; normaliseAlloc(T); assignJobs(game, T);
+        game.log(T, 'event', 'Blight: rot spread through the stores and the food gatherers fell ill. The people will starve unless food work resumes.', 3, { cat: 'production', alert: true });
+        return true;
+      }
+      if (kind === 'trade') {    // both sides know Barter and already trade
+        for (const t of [T, rivals[0]]) { for (const k of prereqPath(t, 'barter')) completeTech(game, t, k); }
+        if (!game.dip.has('trade', pid, rivals[0].id)) game.dip.sign('trade', pid, rivals[0].id);
+        addRes(game, T, 'wood', 200); addRes(game, rivals[0], 'stone', 300);
+        return { to: rivals[0].id };
+      }
+      if (kind === 'writing') { for (const k of prereqPath(T, 'writing')) completeTech(game, T, k); addRes(game, T, 'grain', 120); addRes(game, T, 'tools', 20); return true; }
+      if (kind === 'invasion') { // a rival attacks with a small, weary warband
+        game.tutWar = true;
+        game.dip.declareWar(rival.id, pid, 'to seize your granaries');
+        const adults = [...game.agents.values()].filter(a => a.tribe === rival.id && !a.army && a.age > 16 * 48).slice(0, 3);
+        for (const a of adults) { a.job = 'soldier'; a.x = cap.x + 14; a.y = cap.y + 4; a._x0 = a.x; a._y0 = a.y; a.state = 'think'; a.hidden = false; }
+        const r = launchCampaign(game, rival, T.capital, 1, 30);
+        for (const a of game.agents.values()) if (r.army && a.army === r.army.id) a.hp = 10;
+        addRes(game, T, 'weapons', 20);
+        return { ok: r.ok, from: rival.id };
+      }
+      if (kind === 'counter') {  // supplies and recruits for a counter-campaign
+        addRes(game, T, 'grain', 250); addRes(game, T, 'wood', 80);
+        T.steward.work = false; T.alloc.soldier = Math.max(T.alloc.soldier || 0, Math.min(T.slots.soldier || 3, 6)); normaliseAlloc(T); assignJobs(game, T);
+        game.dip.contact[pid][rival.id] = game.dip.contact[rival.id][pid] = true;
+        if (game.vis !== 'open') { const s = game.settlements.get(rival.capital); revealFor(game, pid, s.x, s.y, 8); }
+        return { to: rival.id, sid: rival.capital };
+      }
+      if (kind === 'expand') { T.tutTown = 1; addRes(game, T, 'wood', 120); addRes(game, T, 'stone', 60); addRes(game, T, 'grain', 60); return true; }
       if (kind === 'leave') { game.observers = (game.observers || []).filter(o => o.t !== pid); return true; }
       if (kind === 'age') { const rec = game.dip.intel?.[pid]; if (rec) for (const row of rec) for (const c of Object.values(row || {})) if (c) c.day -= 30; return true; }
       // free the law slot and the council's cooldown so a law can always be enacted
