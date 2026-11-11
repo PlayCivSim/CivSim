@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CivSim</title>
+  <meta name="description" content="CivSim — a living-world civilisation builder. Four tribes, one procedurally generated world.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,600;1,400&family=Jacquarda+Bastarda+9&family=Pixelify+Sans:wght@400;600&family=Silkscreen&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/ui.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'><rect width='16' height='16' fill='%2312141b'/><rect x='3' y='7' width='10' height='6' fill='%23d8b25a'/><rect x='5' y='4' width='6' height='3' fill='%232f6fd6'/><rect x='7' y='2' width='2' height='2' fill='%23f4dc8a'/></svg>">
+</head>
+<body>
+  <canvas id="world"></canvas>
+  <div id="hud" class="hidden"></div>
+  <div id="screens"></div>
+  <div id="toasts"></div>
+  <div id="modal-root"></div>
+  <div id="tooltip"></div>
+  <div id="boot" class="loading"><div class="lw">CivSim</div><div class="prose dim">The world is taking shape…</div></div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
