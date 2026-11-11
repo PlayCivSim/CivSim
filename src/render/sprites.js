@@ -10,6 +10,21 @@ const memo = (key, fn) => { let c = cache.get(key); if (!c) { c = fn(); cache.se
 export function clearSpriteCache() { cache.clear(); }
 
 // ------------------------------------------------------------------ styles
+// Dark 1px silhouette outline so buildings read clearly against terrain.
+// The result is 1px larger on every side (BUILDING_MARGIN).
+export const BUILDING_MARGIN = 1;
+function outlined(c) {
+  const o = canvas(c.width + 2, c.height + 2); const x = o.getContext('2d');
+  const sil = canvas(c.width, c.height); const sx = sil.getContext('2d');
+  // only solid pixels count: translucent ground (plazas, shadows) is not outlined
+  const src = c.getContext('2d').getImageData(0, 0, c.width, c.height), dst = sx.createImageData(c.width, c.height);
+  for (let i = 0; i < src.data.length; i += 4) if (src.data[i + 3] > 200) { dst.data[i] = 20; dst.data[i + 1] = 16; dst.data[i + 2] = 14; dst.data[i + 3] = 255; }
+  sx.putImageData(dst, 0, 0);
+  for (const [dx, dy] of [[0, 1], [2, 1], [1, 0], [1, 2], [0, 0], [2, 0], [0, 2], [2, 2]]) x.drawImage(sil, dx, dy);
+  x.drawImage(c, 1, 1);
+  return o;
+}
+
 export const STYLES = {
   oruvai: { wall: '#ece6d8', wallD: '#c9c1ad', trim: '#8fb0d8', roof: '#2f6fd6', roofD: '#1c4796', roofL: '#74a8f2', wood: '#8a6a4a', woodD: '#5e4630', accent: '#e8eef8', banner: '#2f6fd6', metal: '#c5ced9', stone: '#cfc8b8', stoneD: '#a59d8b', shape: 'dome' },
   kharvak: { wall: '#7d5434', wallD: '#5a3a22', trim: '#3a3536', roof: '#a3282c', roofD: '#651519', roofL: '#d0504c', wood: '#5a3c26', woodD: '#3a2616', accent: '#d4a050', banner: '#b3242c', metal: '#6e6a6c', stone: '#7c7470', stoneD: '#57504c', shape: 'pitched' },
@@ -542,7 +557,7 @@ export function buildingSprite(type, tribeKey, opts = {}) {
       default: house(p, S, k, cx, base - 2, Math.min(W - 2, 14), 6, 6);
     }
     if (opts.ruin) { const ctx = c.getContext('2d'); ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = 'rgba(30,20,10,0.55)'; ctx.fillRect(0, 0, W, H); }
-    return c;
+    return outlined(c);
   });
 }
 

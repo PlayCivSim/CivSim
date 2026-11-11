@@ -46,7 +46,7 @@ class App {
   applySettings() {
     const s = this.settings;
     document.documentElement.style.setProperty('--ui', s.uiScale);
-    Object.assign(this.renderer.settings, { particles: s.particles, animations: s.animations, territory: s.territory, quality: s.quality });
+    Object.assign(this.renderer.settings, { particles: s.particles, animations: s.animations, territory: s.territory, quality: s.quality, lighting: s.lighting !== false });
     setVolumes(s);
     this.touch = s.inputMode === 'touch';
     document.body.classList.toggle('touch', this.touch);

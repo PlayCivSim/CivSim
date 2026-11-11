@@ -9,6 +9,7 @@ import { hash2 } from '../core/rng.js';
 import { TerrainCache, CH, treeTypeFor } from './terrain.js';
 import { personSprite, treeSprite, buildingSprite, scaffoldSprite, glowSprite, cloudSprite, animalSprite, resColor, buildingPad } from './sprites.js';
 import { ageYears } from '../sim/agents.js';
+import { Lighting } from './lighting.js';
 import { WORK_AGE } from '../core/constants.js';
 
 export class Camera {
@@ -21,7 +22,8 @@ export class Renderer {
     this.cam = new Camera();
     this.game = null; this.terrain = null;
     this.time = 0;
-    this.settings = { particles: true, quality: 'high', animations: true, territory: true, uiScale: 1 };
+    this.settings = { particles: true, quality: 'high', animations: true, territory: true, uiScale: 1, lighting: true };
+    this.lighting = new Lighting();
     this.critters = [];
     this.particles = [];
     this.clouds = [];
@@ -104,6 +106,7 @@ export class Renderer {
     if (g.shake > 0) { g.shake -= dt; shx = (Math.random() - 0.5) * 6 * g.shake; shy = (Math.random() - 0.5) * 6 * g.shake; }
     const ox = Math.round(cv.width / 2 - this.cam.x * s + shx), oy = Math.round(cv.height / 2 - this.cam.y * s + shy);
     ctx.setTransform(s, 0, 0, s, ox, oy);
+    this._s = s; this._ox = ox; this._oy = oy;
     const vx0 = -ox / s, vy0 = -oy / s, vx1 = vx0 + cv.width / s, vy1 = vy0 + cv.height / s;
     this.view = { x0: vx0, y0: vy0, x1: vx1, y1: vy1 };
     g.view = { x0: vx0 / TILE - 6, y0: vy0 / TILE - 6, x1: vx1 / TILE + 6, y1: vy1 / TILE + 6 };
@@ -192,6 +195,18 @@ export class Renderer {
     if (detailed && this.settings.quality !== 'low') { this.updateCritters(dt, vx0, vy0, vx1, vy1); for (const c of this.critters) items.push({ y: c.y * TILE, k: 3, c }); }
     items.sort((p, q) => p.y - q.y);
     const tier = id => g.tribes[id].stage;
+    // dynamic sun shadows (smooth, drawn under the sprites)
+    if (this.settings.lighting && this.settings.quality !== 'low' && z >= 1.2) {
+      const sh = [];
+      for (const it of items) {
+        if (it.k === 0) { if (!it.small) sh.push({ spr: it.spr, x: it.x, y: it.yy - 1 }); }
+        else if (it.k === 1) { const b = it.b, def = BUILDINGS[b.type]; if (!b.built || def.field || b.type === 'training') continue; const spr = buildingSprite(b.type, TRIBES[b.tribe].key, { tier: tier(b.tribe), season, size: b.size, field: false }); sh.push({ spr, x: b.x * TILE - 1, y: (b.y + b.size) * TILE - spr.height }); }
+        else if (it.k === 2 && z >= 1.8) { const a = it.a; const child = ageYears(a) < WORK_AGE; sh.push({ spr: personSprite(TRIBES[a.tribe].key, child ? 'idle' : a.job, 0, a.female, child, a.look, null, tier(a.tribe), a.facing < 0), x: a.x * TILE - 4.5, y: a.y * TILE - 12 }); }
+      }
+      const dim = g.weather?.kind === 'rain' || g.weather?.kind === 'snow' ? 0.45 : 1;
+      this.lighting.drawShadows(ctx, sh, this._s, this._ox, this._oy, g.dayFrac, dim);
+      ctx.setTransform(this._s, 0, 0, this._s, this._ox, this._oy);
+    }
     const sel = g.selected;
     for (const it of items) {
       if (it.k === 0) {
@@ -206,7 +221,7 @@ export class Renderer {
   drawBuilding(ctx, b, tier, season, sel) {
     const def = BUILDINGS[b.type]; const tribe = TRIBES[b.tribe];
     const spr = buildingSprite(b.type, tribe.key, { tier, season, size: b.size, field: !!def.field });
-    const x = b.x * TILE, y = (b.y + b.size) * TILE - spr.height;
+    const x = b.x * TILE - 1, y = (b.y + b.size) * TILE - spr.height + 1;
     if (!b.built) {
       const frac = Math.max(0, Math.min(1, b.progress / (def.work || 30)));
       const sc = scaffoldSprite(b.size, buildingPad(b.type));
@@ -351,7 +366,7 @@ export class Renderer {
         return;
       }
       const spr = buildingSprite(gh.type, g.player.key, { tier: g.player.stage, season: g.season, size: def.size, field: !!def.field });
-      ctx.globalAlpha = 0.7; ctx.drawImage(spr, x, y + sz - spr.height); ctx.globalAlpha = 1;
+      ctx.globalAlpha = 0.7; ctx.drawImage(spr, x - 1, y + sz - spr.height + 1); ctx.globalAlpha = 1;
       ctx.fillStyle = gh.ok ? 'rgba(120,255,140,0.28)' : 'rgba(255,80,80,0.35)'; ctx.fillRect(x, y, sz, sz);
       ctx.strokeStyle = gh.ok ? 'rgba(160,255,170,0.9)' : 'rgba(255,120,120,0.9)'; ctx.lineWidth = 1 / this.cam.zoom; ctx.strokeRect(x, y, sz, sz);
       const r = def.prod?.radius; if (r) { ctx.strokeStyle = 'rgba(255,240,180,0.45)'; ctx.beginPath(); ctx.arc(x + sz / 2, y + sz / 2, r * TILE, 0, Math.PI * 2); ctx.stroke(); }
@@ -402,7 +417,12 @@ export class Renderer {
     if (g.season === 3) { ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = 'rgba(160,190,230,0.10)'; ctx.fillRect(0, 0, cv.width, cv.height); }
     if (g.weather?.kind === 'drought') { ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = 'rgba(255,200,80,0.25)'; ctx.fillRect(0, 0, cv.width, cv.height); }
     if (g.weather?.kind === 'rain') { ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgb(205,212,228)'; ctx.fillRect(0, 0, cv.width, cv.height); }
-    if (d > 0.01) {
+    if (d > 0.01 && this.settings.lighting && this.settings.quality !== 'low') {
+      // ray-cast lightmap: lights add into a dark buffer, buildings cast shadows
+      ctx.globalCompositeOperation = 'source-over';
+      const { lights, occ } = this.lighting.collect(g, { x0: vx0, y0: vy0, x1: vx1, y1: vy1 }, s, ox, oy, this.time, this.cam.zoom >= 1.6);
+      this.lighting.drawLightmap(ctx, lights, occ, d);
+    } else if (d > 0.01) {
       ctx.globalCompositeOperation = 'multiply';
       const r = Math.round(255 - d * 200), gg = Math.round(255 - d * 185), b = Math.round(255 - d * 120);
       ctx.fillStyle = `rgb(${r},${gg},${b})`; ctx.fillRect(0, 0, cv.width, cv.height);
