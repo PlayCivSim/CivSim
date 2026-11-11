@@ -1,6 +1,7 @@
 // Main-thread side of the simulation: talks to the worker, maintains the
 // mirror Game used by the renderer and UI, and interpolates agent motion
 // between batches so animation stays smooth at any batch rate.
+import { HISTORY_CAP, trimHistory } from './game.js';
 import { Game } from './game.js';
 import { BUILDINGS } from '../data/buildings.js';
 import { unpackAgents, applyTribe, decodeEvent } from './protocol.js';
@@ -109,7 +110,7 @@ export class SimClient {
     Object.assign(g.dip, s.dip);
     g.pendingEvents = s.pendingEvents; g.pendingProposals = s.pendingProposals;
     g.nextId = s.nextId;
-    if (s.history.length) { g.history.push(...s.history); if (g.history.length > 1500) g.history.splice(0, g.history.length - 1500); }
+    if (s.history.length) { g.history.push(...s.history); if (g.history.length > HISTORY_CAP) trimHistory(g.history, g.playerId); }
   }
 
   // ------------------------------------------------------------ per frame

@@ -1,6 +1,6 @@
 // In-game HUD: top bar, navigation rail, side panels, minimap, inspector,
 // build placement, notifications and the escape menu.
-import { h, $, $$, esc, fmt, sign, toast, modal, closeModal, modalOpen, confirmDialog, refreshTip, tip, bar, mapTip } from './dom.js';
+import { h, $, $$, esc, fmt, sign, toast, modal, closeModal, modalOpen, confirmDialog, promptDialog, refreshTip, tip, bar, mapTip } from './dom.js';
 import { ico, emblemURL, spriteURL } from './icons.js';
 import { PANELS, ACTIONS, buildingTip } from './panels.js';
 import { TRIBES } from '../data/tribes.js';
@@ -17,7 +17,7 @@ import { EVENTS } from '../sim/events.js';
 import { ageYears } from '../sim/agents.js';
 import { sfx, setMusicMood } from '../audio/audio.js';
 import { openSettings } from './menu.js';
-import { SLOT_NAMES } from '../save/saves.js';
+import { SLOT_NAMES, MANUAL_SLOTS, getRun, slotLabel } from '../save/saves.js';
 import { techCost } from '../sim/progress.js';
 import { unread, openHappiness, manpower, manpowerTip, openHudCustomise, hudHidden } from './notices.js';
 import { isAlert } from '../sim/records.js';
@@ -75,7 +75,7 @@ export class Hud {
       <div id="place-host"></div>`;
     this.bindResTips();
     this.applyHudPins();
-    tip($('#tb-save', this.root), () => { const a = this.app; const ago = a.lastSaved ? Math.round((Date.now() - a.lastSaved) / 1000) : null; return `<div class="tt-title">${ico('save', 'sm')} Saving</div>${a.saving ? 'Saving now…' : ago == null ? 'Not saved yet this session.' : `Last saved ${ago < 60 ? ago + ' s' : Math.round(ago / 60) + ' min'} ago (${esc(a.lastSlot || 'auto')}).`}<div class="faint">${a.settings.autosaveMin ? `Autosaves every ${a.settings.autosaveMin} min.` : 'Autosave is off.'}</div>`; });
+    tip($('#tb-save', this.root), () => { const a = this.app; const ago = a.lastSaved ? Math.round((Date.now() - a.lastSaved) / 1000) : null; return `<div class="tt-title">${ico('save', 'sm')} Saving</div>${a.saving ? 'Saving now…' : a.saveError ? `<span class="bad">The last save failed: ${esc(a.saveError)}. Earlier saves are untouched.</span>` : ago == null ? 'Not saved yet this session.' : `Last saved ${ago < 60 ? ago + ' s' : Math.round(ago / 60) + ' min'} ago (${esc(a.lastSlot || 'auto')}).`}<div class="faint">${a.settings.autosaveMin ? `Autosaves every ${a.settings.autosaveMin} min.` : 'Autosave is off.'}</div>`; });
     this.root.onclick = e => this.onHudClick(e);
     this.root.addEventListener('mouseover', e => { if (e.target.closest('.btn')) sfx('hover'); });
     const mm = $('#mm', this.root);
@@ -128,7 +128,8 @@ export class Hud {
   updateSaveInd() {
     const el = $('#tb-save', this.root); if (!el) return; const a = this.app;
     const m = a.lastSaved ? Math.floor((Date.now() - a.lastSaved) / 60000) : null;
-    const txt = a.saving ? '…' : m == null ? '—' : m < 1 ? 'now' : m + 'm';
+    const txt = a.saving ? '…' : a.saveError ? '!' : m == null ? '—' : m < 1 ? 'now' : m + 'm';
+    el.classList.toggle('failed', !!a.saveError);
     const sp = $('span', el); if (sp.textContent !== txt) sp.textContent = txt;
     el.classList.toggle('saving', !!a.saving);
   }
@@ -502,16 +503,29 @@ export class Hud {
   // ---------------------------------------------------------------- dialogs
   async escMenu() {
     const prev = this.game.speed; this.sim.setSpeed(0);
+    const run = await getRun(this.game.runId).catch(() => null) || {};
+    const slotBtn = s => { const m = run.slots?.[s]; return `<button class="slot-pick ${m ? '' : 'empty'}" data-v="save:${s}"><span class="sp-n">${ico('save', 'sm')}${esc(SLOT_NAMES[s])}</span><span class="sp-l">${m ? esc(m.label || `Year ${m.year}, ${m.season}`) : 'Empty'}</span>${m ? `<span class="sp-t">${new Date(m.savedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>` : ''}</button>`; };
+    const last = this.app.lastSaved ? `Last saved ${Math.max(0, Math.round((Date.now() - this.app.lastSaved) / 60000))} min ago (${esc(this.app.lastSlot)})` : 'Not saved yet this session';
     const r = await modal(`<div class="esc-menu"><div class="logo" style="margin-bottom:6px"><div class="word" style="font-size:52px">CivSim</div><div class="sub">${esc(this.game.runName)}</div></div>
       <button class="btn" data-v="resume">${ico('play')} Resume</button>
-      <div class="caps" style="color:var(--gold);margin-top:6px">Save to slot</div>
-      <div class="seg">${['quick', 's1', 's2', 's3'].map(s => `<button class="btn sm" data-v="save:${s}">${ico('save', 'sm')} ${SLOT_NAMES[s].replace('Slot ', '')}</button>`).join('')}</div>
+      <div class="caps" style="color:var(--gold);margin-top:6px">Save the chronicle</div>
+      <div class="slot-picks">${['quick', ...MANUAL_SLOTS].map(slotBtn).join('')}</div>
+      <div class="faint ${this.app.saveError ? 'bad' : ''}" style="font-size:0.78em;text-align:center">${this.app.saveError ? 'Last save failed: ' + esc(this.app.saveError) : last} · five rotating autosaves are kept</div>
       <button class="btn" data-v="settings">${ico('menu')} Settings</button>
       <button class="btn" data-v="pins">${ico('pin')} Customise top bar</button>
       <button class="btn" data-v="exit">${ico('house')} Save & exit to menu</button></div>`,
     { onMount: m => m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { sfx('click'); closeModal(b.dataset.v); }) });
     this.sim.setSpeed(prev);
-    if (r?.startsWith('save:')) this.app.save(r.slice(5));
+    if (r?.startsWith('save:')) {
+      const slot = r.slice(5);
+      if (MANUAL_SLOTS.includes(slot)) {
+        const m = run.slots?.[slot];
+        if (m && !await confirmDialog('Overwrite save?', `${esc(SLOT_NAMES[slot])} holds <em>${esc(slotLabel(m))}</em>. Replace it? (The old copy is kept as a backup.)`, 'Overwrite')) return;
+        const name = await promptDialog('Name this save', 'Save name', m?.label || `Year ${this.game.year}, ${this.game.seasonName}`);
+        if (name == null) return;
+        this.app.save(slot, false, name);
+      } else this.app.save(slot);
+    }
     else if (r === 'settings') openSettings(this.app, () => {});
     else if (r === 'pins') openHudCustomise(this);
     else if (r === 'exit') this.app.exitToMenu();

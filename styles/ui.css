@@ -606,3 +606,18 @@ body.touch .scroll, body.touch .sp-body { -webkit-overflow-scrolling: touch; }
 body.cb { --good: #6ab0ff; --bad: #ff9a3a; }
 body.cb .bar.green i { background: #6ab0ff; } body.cb .bar.red i { background: #ff9a3a; }
 @media (max-width: 760px) { .spd-label { display: none; } .save-ind { display: none; } .hc-btn { display: none; } .alert-strip { top: calc(var(--top-h) + 6px); } }
+
+/* ================= Stage 2: saves ================= */
+.slot-picks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.slot-pick { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 8px; background: rgba(255,255,255,0.035); border: 2px solid #07080c; box-shadow: 0 0 0 1px var(--gold-deep) inset; color: var(--text); font: inherit; cursor: pointer; text-align: left; min-width: 0; }
+.slot-pick:hover { background: rgba(216,178,90,0.12); }
+.slot-pick.empty { color: var(--text-dim); box-shadow: 0 0 0 1px rgba(216,178,90,0.25) inset; }
+.slot-pick .sp-n { font-family: var(--font-caps); font-size: 0.66em; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); display: flex; gap: 4px; align-items: center; }
+.slot-pick .sp-l { font-size: 0.9em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-pick .sp-t { font-size: 0.7em; color: var(--text-dim); }
+.slot-group { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; margin-top: 3px; }
+.slot-group > .caps { font-size: 0.6em; color: var(--gold); width: 72px; }
+.btn.recover { box-shadow: 0 0 0 1px var(--warn) inset; color: var(--warn); }
+.recover-note { font-size: 0.78em; color: var(--warn); display: flex; gap: 4px; align-items: center; }
+.save-ind.failed { color: var(--bad); }
+.slot-group .btn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; }

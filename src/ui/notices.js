@@ -11,10 +11,16 @@ import { mod } from '../sim/economy.js';
 const CAT = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));
 export const ago = (g, day) => { const d = g.day - day; return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < DAYS_PER_YEAR * 2 ? `${d} days ago` : `${Math.floor(d / DAYS_PER_YEAR)} years ago`; };
 
-// ---------------------------------------------------------------- unread state (per run, UI only)
-const seenKey = g => 'civsim.seen.' + g.runId;
-export function seenSeq(g) { try { return +localStorage.getItem(seenKey(g)) || 0; } catch { return 0; } }
-function markSeen(g, seq) { try { localStorage.setItem(seenKey(g), String(seq)); } catch { /* no storage */ } }
+// ---------------------------------------------------------------- unread state
+// Saved in the run (game.seenSeq, set through the 'markSeen' command). The UI
+// keeps its own copy so the badge clears at once; older runs fall back to the
+// value Stage 1 kept in localStorage.
+const localSeen = new Map();
+export function seenSeq(g) {
+  let legacy = 0; try { legacy = +localStorage.getItem('civsim.seen.' + g.runId) || 0; } catch { /* no storage */ }
+  return Math.max(g.seenSeq || 0, localSeen.get(g.runId) || 0, legacy);
+}
+function markSeen(hud, seq) { const g = hud.game; if (seq <= seenSeq(g)) return; localSeen.set(g.runId, seq); hud.sim.call('markSeen', seq); }
 
 // Records shown in the centre: anything that concerns the player, plus major world news.
 export function playerNotices(g) {
@@ -58,7 +64,7 @@ PANELS.notices = {
   mount(hud) {
     const g = hud.game, st = hud.panelState;
     if (st.nSeenAtOpen == null) st.nSeenAtOpen = seenSeq(g);
-    const last = g.history[g.history.length - 1]; if (last) markSeen(g, last.seq);
+    const last = g.history[g.history.length - 1]; if (last) markSeen(hud, last.seq);
     hud.updateBell?.();
   },
 };

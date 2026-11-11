@@ -1,6 +1,7 @@
 // Simulation host: owns the authoritative Game, runs the fixed-tick loop and
 // streams batched state to the main thread. Runs inside a Web Worker
 // (worker.js) or, as a fallback, in-thread behind the same message protocol.
+import { checksum } from '../save/checksum.js';
 import { Game } from './game.js';
 import { BUILDINGS, JOB_KEYS } from '../data/buildings.js';
 import { packAgents, tribeSnapshot, encodeEvent } from './protocol.js';
@@ -102,7 +103,14 @@ export function createHost(post) {
   const COMMANDS = {
     create(opts, preTicks = 0) { const g = Game.create(opts); for (let i = 0; i < preTicks; i++) g.step(); g.fx.length = 0; g.dirtyTiles.length = 0; attach(g); return true; },
     load(json) { attach(Game.deserialize(typeof json === 'string' ? JSON.parse(json) : json)); return true; },
-    serialize() { return JSON.stringify(game.serialize()); },
+    // Serialises and verifies off the main thread so autosaves never hitch the UI.
+    serialize() {
+      const d = game.serialize();
+      if (!d.world?.trees || d.tribes?.length !== 4 || !Array.isArray(d.agents)) throw new Error('Save verification failed');
+      const json = JSON.stringify(d);
+      return { json, sum: checksum(json), v: d.v };
+    },
+    markSeen(seq) { game.seenSeq = Math.max(game.seenSeq || 0, seq | 0); return game.seenSeq; },
     unload() { game = null; unsub?.(); return true; },
     setSpeed(i) { game.speed = i; return i; },
     setHold(v) { hold = !!v; return hold; },

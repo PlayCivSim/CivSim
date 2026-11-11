@@ -1,11 +1,12 @@
 // CivSim application controller: screens, main loop, input, autosave.
 import { installTheme } from './ui/theme.js';
 import { ico } from './ui/icons.js';
-import { initTooltips, toast, modalOpen, closeModal } from './ui/dom.js';
+import { initTooltips, toast, modalOpen, closeModal, confirmDialog } from './ui/dom.js';
 import { Renderer } from './render/renderer.js';
 import { SimClient } from './sim/client.js';
 import { initAudio, resumeAudio, setVolumes, setAmbience, sfx, setMusicMood } from './audio/audio.js';
-import { loadSettings, storeSettings, saveGame, listRuns, loadSlot, latestSlot } from './save/saves.js';
+import { loadSettings, storeSettings, saveGame, listRuns, loadSlot, latestSlot, slotLabel, clearRecovery } from './save/saves.js';
+import { SAVE_VERSION } from './sim/game.js';
 import { MainMenu } from './ui/menu.js';
 import { Hud } from './ui/hud.js';
 import { TILE } from './core/constants.js';
@@ -33,6 +34,10 @@ class App {
     if (!this.settings.inputMode) await this.chooseDevice();
     this.renderer.resize();
     addEventListener('resize', () => this.renderer.resize());
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') this.recoverySave(); });
+    addEventListener('pagehide', () => this.recoverySave());
+    addEventListener('error', () => this.recoverySave());
+    addEventListener('unhandledrejection', () => this.recoverySave());
     this.bindInput();
     const unlock = () => { initAudio(); resumeAudio(); setVolumes(this.settings); };
     addEventListener('pointerdown', unlock, { once: false });
@@ -129,11 +134,15 @@ class App {
     this.tutorial?.stop();
     try {
       const s = slot || await latestSlot((await listRuns()).find(r => r.runId === runId) || {});
-      const json = await loadSlot(runId, s);
+      const { json, meta, fallback } = await loadSlot(runId, s);
+      const v = meta?.v ?? +(/^\{"v":(\d+)/.exec(json)?.[1] || 0);
+      if (v > SAVE_VERSION && !await confirmDialog('Newer save', `This chronicle was saved by a newer version of CivSim (save format ${v}; this game reads up to ${SAVE_VERSION}). It may not load correctly. Try anyway?`, 'Load anyway')) return;
       await this.sim.call('load', json);
       const g = this.sim.mirror;
       await this.startGame(g, false);
       toast('Chronicle resumed', `${g.runName} — Year ${g.year}, ${g.seasonName}.`, { icon: 'chronicle' });
+      if (fallback) toast('Damaged save skipped', `${slotLabel({ slot: s })} could not be read, so ${fallback} was loaded instead.`, { kind: 'bad', icon: 'warning', ms: 9000 });
+      if (v && v < SAVE_VERSION) toast('Older save converted', `This chronicle was saved by an earlier version (format ${v}). It has been updated and will be saved in the new format.`, { icon: 'save', ms: 7000 });
     } catch (e) {
       console.error(e);
       toast('Could not load run', e.message, { kind: 'bad', icon: 'warning' });
@@ -143,25 +152,38 @@ class App {
 
   async exitToMenu() {
     this.tutorial?.stop();
-    if (this.mode === 'game') await this.save('auto', true);
+    if (this.mode === 'game' && await this.save('auto', true)) await clearRecovery(this.game.runId).catch(() => {});
     closeModal();
     this.hud.detach();
     await this.showMenu();
   }
 
-  async save(slot = 'auto', silent = false) {
-    if (!this.game || this.mode !== 'game' || this.saving) return;
+  // slot: 'auto' (rotates through five autosaves), 'quick', 's1'–'s3' or 'recover'.
+  async save(slot = 'auto', silent = false, label) {
+    if (!this.game || this.mode !== 'game' || this.saving) return false;
     this.saving = true;
     try {
-      const thumb = this.thumbnail();
-      const json = await this.sim.call('serialize');
-      await saveGame(this.game, slot, thumb, json);
-      this.lastSaved = Date.now(); this.lastSlot = slot === 'auto' ? 'autosave' : slot === 'quick' ? 'quicksave' : 'slot ' + slot.slice(1);
-      if (!silent) { toast('Chronicle saved', `${this.game.runName} · ${slot === 'auto' ? 'Autosave' : slot === 'quick' ? 'Quicksave' : 'Slot ' + slot.slice(1)}`, { icon: 'save', ms: 2500 }); sfx('save'); }
+      const thumb = slot === 'recover' ? null : this.thumbnail();
+      const { json, sum, v } = await this.sim.call('serialize');
+      const meta = await saveGame(this.game, slot, thumb, json, { sum, v, label });
+      this.lastSaved = Date.now(); this.lastSlot = slotLabel(meta).toLowerCase(); this.saveError = null;
+      if (!silent) { toast('Chronicle saved', `${this.game.runName} · ${slotLabel(meta)}`, { icon: 'save', ms: 2500 }); sfx('save'); }
+      return true;
     } catch (e) {
       console.error(e);
-      toast('Save failed', 'Your previous save is untouched. ' + e.message, { kind: 'bad', icon: 'warning' });
-    } finally { this.saving = false; this.autosaveAt = performance.now() + this.settings.autosaveMin * 60000; }
+      this.saveError = e.message || 'Unknown error';
+      if (slot !== 'recover') toast('Save failed', 'Your previous saves are untouched. ' + this.saveError, { kind: 'bad', icon: 'warning' });
+      return false;
+    } finally { this.saving = false; if (slot !== 'recover') this.autosaveAt = performance.now() + this.settings.autosaveMin * 60000; }
+  }
+
+  // Crash recovery: a quick save whenever the page is hidden, closed or hits an
+  // uncaught error, so an unexpected exit loses as little as possible.
+  recoverySave() {
+    if (this.mode !== 'game' || !this.game || this.saving || this.game.observer) return;
+    if (performance.now() - (this.lastRecover || -1e9) < 15000) return;
+    this.lastRecover = performance.now();
+    this.save('recover', true);
   }
 
   thumbnail() {

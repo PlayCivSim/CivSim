@@ -4,7 +4,8 @@ import { h, $, $$, esc, toast, modal, closeModal, confirmDialog, promptDialog, t
 import { ico, emblemURL, spriteURL } from './icons.js';
 import { TRIBES } from '../data/tribes.js';
 import { MAP_SIZES, DIFFICULTIES, STARTS, SEASONS } from '../core/constants.js';
-import { listRuns, deleteRun, renameRun, storeSettings, SLOT_NAMES } from '../save/saves.js';
+import { listRuns, deleteRun, renameRun, storeSettings, SLOT_NAMES, slotLabel, isAuto } from '../save/saves.js';
+import { SAVE_VERSION } from '../sim/game.js';
 import { generateWorld } from '../world/worldgen.js';
 import { BIOMES, isWater } from '../world/biomes.js';
 import { hashString } from '../core/rng.js';
@@ -220,6 +221,7 @@ export class MainMenu {
   }
 
   saveCard(r) {
+    const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : new Date(t).toLocaleDateString(); };
     const t = TRIBES.find(x => x.key === r.tribe) || TRIBES[0];
     const when = new Date(r.lastPlayed);
     const slots = Object.values(r.slots || {}).sort((a, b) => b.savedAt - a.savedAt);
@@ -230,7 +232,14 @@ export class MainMenu {
         <div class="dim" style="font-size:0.86em">${t.name} · ${esc(r.stage)} · Year ${r.year}, ${esc(r.season)} ${r.alive === false ? '<span class="bad">· Fallen</span>' : ''}</div>
         <div class="faint" style="font-size:0.8em">${r.pop} people · ${r.techs} techs · ${r.settlements} settlement${r.settlements === 1 ? '' : 's'} · ${MAP_SIZES[r.size]?.label || ''} · seed “${esc(r.seedText)}”</div>
         <div class="faint" style="font-size:0.78em">Last played ${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-        <div class="slot-btns">${slots.map(s => `<button class="btn xs" data-act="slot" data-id="${r.runId}" data-slot="${s.slot}" data-tip="${esc(`Year ${s.year}, ${s.season} · ${new Date(s.savedAt).toLocaleString()}`)}">${ico('play', 'sm')}${SLOT_NAMES[s.slot] || s.slot}</button>`).join('')}
+        ${(() => {
+          const btn = s => { const old = s.v != null && s.v < SAVE_VERSION, newer = s.v > SAVE_VERSION; return `<button class="btn xs ${s.slot === 'recover' ? 'recover' : ''}" data-act="slot" data-id="${r.runId}" data-slot="${s.slot}" data-tip="${esc(`${slotLabel(s)} · Year ${s.year}, ${s.season} · ${new Date(s.savedAt).toLocaleString()}${old ? ' · saved by an older version, will be converted' : newer ? ' · saved by a NEWER version' : ''}`)}">${ico(old || newer ? 'warning' : 'play', 'sm')}${esc(s.slot === 'recover' ? 'Recover' : isAuto(s.slot) ? ago(s.savedAt) : slotLabel(s))}</button>`; };
+          const rec = slots.filter(s => s.slot === 'recover'), autos = slots.filter(s => isAuto(s.slot)), man = slots.filter(s => !isAuto(s.slot) && s.slot !== 'recover');
+          return `${rec.length && rec[0] === slots[0] ? `<div class="recover-note">${ico('warning', 'sm')} This run closed without a final save. The recovery save is the most recent.</div>` : ''}
+          <div class="slot-group"><span class="caps">Saves</span>${[...rec, ...man].map(btn).join('') || '<span class="faint">none</span>'}</div>
+          <div class="slot-group"><span class="caps">Autosaves</span>${autos.map(btn).join('') || '<span class="faint">none</span>'}</div>`;
+        })()}
+        <div class="slot-btns">
           <button class="btn xs" data-act="rename" data-id="${r.runId}" data-tip="Rename">${ico('scroll', 'sm')}</button>
           <button class="btn xs danger" data-act="del" data-id="${r.runId}" data-tip="Delete run">${ico('close', 'sm')}</button></div>
       </div></div>`;

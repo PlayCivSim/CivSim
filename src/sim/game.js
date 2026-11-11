@@ -25,7 +25,20 @@ import { rollEvents, resolveChoice, EVENTS } from './events.js';
 import { aiThink, stewardThink, autoAllocate } from './ai.js';
 import { isWater, BIOMES } from '../world/biomes.js';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4; // 4: event records carry cat/with/alert; seenSeq
+
+// The shared event record keeps up to HISTORY_CAP entries. When full, minor
+// news about other peoples goes first; anything major or involving the player
+// is kept as long as possible.
+export const HISTORY_CAP = 3000;
+export function trimHistory(h, P) {
+  const drop = h.length - Math.floor(HISTORY_CAP * 0.9);
+  if (drop <= 0) return;
+  let n = 0;
+  const keep = h.filter((e, i) => { if (n < drop && i < h.length - 200 && e.imp < 2 && e.tribe !== P && e.with !== P) { n++; return false; } return true; });
+  if (keep.length > HISTORY_CAP) keep.splice(0, keep.length - Math.floor(HISTORY_CAP * 0.9));
+  h.length = 0; h.push(...keep);
+}
 
 export class Game {
   constructor() {
@@ -147,7 +160,7 @@ export class Game {
     const e = { tick: this.tick, day: this.day, tribe: tribe ? tribe.id : -1, type, text, imp: importance, seq: this.logSeq };
     if (extra) { if (extra.with != null) e.with = extra.with; if (extra.cat) e.cat = extra.cat; if (extra.alert) e.alert = 1; }
     this.history.push(e);
-    if (this.history.length > 1500) this.history.splice(0, this.history.length - 1500);
+    if (this.history.length > HISTORY_CAP) trimHistory(this.history, this.playerId);
     this.bus.emit('log', e);
   }
   markTiles(x, y, w, h) { this.dirtyTiles.push([x, y, w, h]); }
@@ -295,7 +308,7 @@ export class Game {
       sizeKey: this.sizeKey, difficulty: this.difficulty, startKey: this.startKey, playerId: this.playerId, observer: this.observer, tutorial: this.tutorial || false,
       created: this.created, saved: Date.now(), tick: this.tick, nextId: this.nextId, rng: this.rng.s, speed: this.speed,
       world: { trees: enc(w.trees), treeMax: enc(w.treeMax), deposit: enc(w.deposit), depAmt: enc(w.depAmt), fauna: enc(w.fauna), road: enc(w.road), biome: enc(w.biome) },
-      logSeq: this.logSeq || 0, territoryVersion: this.territoryVersion,
+      logSeq: this.logSeq || 0, seenSeq: this.seenSeq || 0, territoryVersion: this.territoryVersion,
       tribes, agents, buildings: [...this.buildings.values()], settlements: [...this.settlements.values()],
       armies: this.armies, history: this.history, dip: this.dip.toJSON(), pendingEvents: this.pendingEvents, weather: this.weather,
     };
@@ -323,6 +336,7 @@ export class Game {
     for (const a of d.agents) { if (a.state === 'pathWait' || a.state === 'travel') { a.state = 'think'; a.hidden = false; } g.agents.set(a.id, a); }
     g.armies = d.armies || [];
     g.history = d.history || [];
+    g.seenSeq = d.seenSeq || 0;
     g.logSeq = d.logSeq || g.history.reduce((m, e) => Math.max(m, e.seq || 0), 0);
     g.dip = new Diplomacy(g, d.dip);
     g.pendingEvents = d.pendingEvents || [];
