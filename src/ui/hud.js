@@ -332,7 +332,7 @@ export class Hud {
       // optimistically mark the footprint so shift-placement can't double-book it before the worker replies
       const sz = BUILDINGS[gh.type].size;
       for (let dy = 0; dy < sz; dy++) for (let dx = 0; dx < sz; dx++) g.world.occ[g.world.idx(gh.x + dx, gh.y + dy)] = -1;
-      this.sim.call('place', gh.type, gh.x, gh.y).then(r => { if (!r.ok) { sfx('error'); toast('Cannot build here', r.why || '', { kind: 'bad', icon: 'warning', ms: 2200 }); } });
+      this.sim.call('place', gh.type, gh.x, gh.y).then(r => { this.sim.occDirty = true; if (!r.ok) { sfx('error'); toast('Cannot build here', r.why || '', { kind: 'bad', icon: 'warning', ms: 2200 }); } });
       if (!e.shiftKey) this.cancelPlacing(); else this.onHover(w, e);
       if (this.panel === 'build') this.renderPanel(true);
       return;

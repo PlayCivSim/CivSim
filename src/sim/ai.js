@@ -345,6 +345,11 @@ const PLAN_HELPERS = {
     if (!c.ok) return false;
     placeBuilding(game, t, type, x, y); return true;
   },
+  placeTight: (game, t, type, x, y) => {
+    const c = placementCheck(game, t, type, x, y, { allowRoad: true });
+    if (!c.ok) return false;
+    placeBuilding(game, t, type, x, y); return true;
+  },
 };
 
 // Player steward: optional automation for the player's tribe.

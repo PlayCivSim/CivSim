@@ -42,7 +42,7 @@ export function planProgress(game, t) {
     plan.needs.push(why);
     // nowhere to put it? make room: expand, and retire a surplus hut
     const roomy = t.settlements.some(sid => { const s = game.settlements.get(sid); return s && findSpot(game, t, s, type, 120, false); });
-    if (!roomy) { plan.actions.push('expand'); if (t.housing - t.pop > 8) plan.clearHut = true; plan.needs.push(`${why}: no room — expanding`); }
+    if (!roomy) { plan.actions.push('expand'); if (t.housing - t.pop > 8) plan.clearHut = true; plan.redevelop = type; plan.needs.push(`${why}: no room — redeveloping`); }
   };
 
   if (sp) for (const r of sp.reqs) {
@@ -182,6 +182,7 @@ export function executePlan(game, t, plan, helpers) {
     }
   }
   if (plan.actions.includes('roads')) connectRoads(game, t);
+  if (plan.redevelop) redevelop(game, t, plan.redevelop, helpers);
   if (plan.clearHut) {
     const hut = [...game.buildings.values()].find(b => b.tribe === t.id && b.type === 'hut' && b.built && !b.residentCount);
     if (hut) { destroyBuilding(game, hut, 'cleared'); t.lastDecision = 'Clearing an empty hut to make room'; }
@@ -190,6 +191,36 @@ export function executePlan(game, t, plan, helpers) {
   if (plan.wantsTrade || Object.keys(plan.bottlenecks).some(r => /trade/.test(plan.bottlenecks[r]))) seekTrade(game, t, plan);
   // claim territory toward an out-of-reach resource by building a watchtower or storehouse at the border
   if (plan.expandToward && !t.atWar) claimToward(game, t, plan.expandToward, helpers);
+}
+
+// Urban redevelopment: clear the fewest of our own huts to fit a building the
+// next stage depends on. Families are rehoused as new homes go up.
+function redevelop(game, t, type, helpers) {
+  if (game.tick - (t.lastRedevelop || -1e9) < DAY_TICKS * 2) return;
+  const cost = buildingCost(t, type);
+  if (Object.entries(cost).some(([r, v]) => (t.stock[r] || 0) < v)) return;
+  const w = game.world, size = BUILDINGS[type].size;
+  let best = null;
+  for (const sid of t.settlements) {
+    const s = game.settlements.get(sid); if (!s) continue;
+    for (let dy = -12; dy <= 12; dy++) for (let dx = -12; dx <= 12; dx++) {
+      const x = s.x + dx, y = s.y + dy; let huts = new Set(), ok = true;
+      for (let yy = 0; yy < size && ok; yy++) for (let xx = 0; xx < size; xx++) {
+        if (!w.inb(x + xx, y + yy)) { ok = false; break; }
+        const i = w.idx(x + xx, y + yy);
+        if (w.owner[i] !== t.id || !BIOMES[w.biome[i]].build) { ok = false; break; }
+        const o = w.occ[i];
+        if (o) { const b = game.buildings.get(o - 1); if (!b || b.tribe !== t.id || b.type !== 'hut') { ok = false; break; } huts.add(b); }
+      }
+      if (!ok || !huts.size) continue;
+      const score = huts.size * 10 + Math.hypot(dx, dy);
+      if (!best || score < best.score) best = { x, y, huts: [...huts], score };
+    }
+  }
+  if (!best || best.huts.length > 3) return;
+  t.lastRedevelop = game.tick;
+  for (const h of best.huts) destroyBuilding(game, h, 'redeveloped');
+  if (helpers.placeTight(game, t, type, best.x, best.y)) { t.lastDecision = `Clearing ${best.huts.length} hut(s) to raise the ${BUILDINGS[type].name}`; game.log(t, 'build', `The ${t.name} cleared old huts to make room for a ${BUILDINGS[type].name}.`, t.isPlayer ? 1 : 0); }
 }
 
 function connectRoads(game, t) {

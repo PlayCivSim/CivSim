@@ -20,10 +20,21 @@ export function createHost(post) {
   let lastFast = 0, lastSlow = 0, lastWorld = 0, lastDay = -1, lastTerr = -1, histSent = 0;
   let pendingEvents = [], pendingSfx = [], slowDirty = true, watch = null;
   let unsub = null;
+  let bSig = new Map(), lastFullB = 0;
+  const sigOf = b => `${b.type}|${b.tribe}|${b.built ? 1 : 0}|${b.progress | 0}|${b.hp | 0}|${b.workerCount || 0}|${b.residentCount || 0}|${b.flags}|${b.recipe}|${b.focus}|${b._builders || 0}|${b.sid}`;
+  // buildings travel as deltas (changed/new + removed ids) with a periodic full resync
+  function buildingDelta(now) {
+    const full = now - lastFullB > 5000;
+    if (full) { lastFullB = now; bSig = new Map(); for (const b of game.buildings.values()) bSig.set(b.id, sigOf(b)); return { full: [...game.buildings.values()] }; }
+    const changed = [], removed = [];
+    for (const b of game.buildings.values()) { const s = sigOf(b); if (bSig.get(b.id) !== s) { bSig.set(b.id, s); changed.push(b); } }
+    for (const id of bSig.keys()) if (!game.buildings.has(id)) { bSig.delete(id); removed.push(id); }
+    return { changed, removed };
+  }
 
   function attach(g) {
     game = g; unsub?.();
-    histSent = g.logSeq || 0; lastDay = -1; lastTerr = -1; slowDirty = true; pendingEvents = []; pendingSfx = [];
+    histSent = g.logSeq || 0; lastDay = -1; lastFullB = 0; lastTerr = -1; slowDirty = true; pendingEvents = []; pendingSfx = [];
     unsub = g.bus.on('*', (type, p) => {
       if (type === 'sfx') { if (pendingSfx.length < 24) pendingSfx.push(p); return; }
       pendingEvents.push(encodeEvent(type, p));
@@ -69,7 +80,7 @@ export function createHost(post) {
       const day = g.day; const full = day !== lastDay; lastDay = day;
       slow = {
         tribes: g.tribes.map(t => tribeSnapshot(t, full)),
-        buildings: [...g.buildings.values()], settlements: [...g.settlements.values()], armies: g.armies,
+        buildings: buildingDelta(now), settlements: [...g.settlements.values()], armies: g.armies,
         dip: g.dip.toJSON(), pendingEvents: g.pendingEvents, pendingProposals: g.pendingProposals,
         history: g.history.filter(e => e.seq > histSent), nextId: g.nextId,
       };

@@ -91,10 +91,19 @@ export class SimClient {
   applySlow(s) {
     const g = this.mirror, w = g.world;
     s.tribes.forEach((snap, i) => applyTribe(g.tribes[i], snap));
-    // buildings: replace and rebuild occupancy/field layers
-    g.buildings = new Map(s.buildings.map(b => [b.id, b]));
-    w.occ.fill(0); w.field.fill(0);
-    for (const b of s.buildings) for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) { const i = (b.y + dy) * w.w + b.x + dx; w.occ[i] = b.id + 1; if (BUILDINGS[b.type]?.field) w.field[i] = 1; }
+    // buildings arrive as a full list or as deltas; occupancy is rebuilt only
+    // when the set of buildings actually changes shape
+    const B = s.buildings; let structural = false;
+    if (B.full) { g.buildings = new Map(B.full.map(b => [b.id, b])); structural = true; }
+    else {
+      for (const b of B.changed) { const old = g.buildings.get(b.id); if (!old || old.type !== b.type) structural = true; g.buildings.set(b.id, b); }
+      for (const id of B.removed) { g.buildings.delete(id); structural = true; }
+    }
+    if (structural || this.occDirty) {
+      this.occDirty = false;
+      w.occ.fill(0); w.field.fill(0);
+      for (const b of g.buildings.values()) for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) { const i = (b.y + dy) * w.w + b.x + dx; w.occ[i] = b.id + 1; if (BUILDINGS[b.type]?.field) w.field[i] = 1; }
+    }
     g.settlements = new Map(s.settlements.map(x => [x.id, x]));
     g.armies = s.armies;
     Object.assign(g.dip, s.dip);
