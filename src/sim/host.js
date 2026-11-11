@@ -1,6 +1,7 @@
 // Simulation host: owns the authoritative Game, runs the fixed-tick loop and
 // streams batched state to the main thread. Runs inside a Web Worker
 // (worker.js) or, as a fallback, in-thread behind the same message protocol.
+import { remember } from './aimind.js';
 import { setEmbargo, setTariff, endContract } from './trade.js';
 import { sendMission, setCounter } from './intel.js';
 import { checksum } from '../save/checksum.js';
@@ -128,6 +129,7 @@ export function createHost(post) {
     allyCall(victim, aggressor, yes) {
       if (yes) game.dip.declareWar(game.playerId, aggressor, `honouring their alliance with the ${game.tribes[victim].name}`);
       else game.dip.cancel('alliance', game.playerId, victim, game.playerId, true);
+      if (yes) remember(game, victim, game.playerId, 'aid', 8, 20);
       return true;
     },
     // tutorial-only helpers (scripted stock and instant discoveries)

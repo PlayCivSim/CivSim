@@ -20,9 +20,9 @@ export const MAP_SIZES = {
 };
 
 export const DIFFICULTIES = {
-  gentle:   { label: 'Gentle',   aiBonus: -0.15, eventSeverity: 0.7, desc: 'Forgiving events, measured rivals.' },
-  balanced: { label: 'Balanced', aiBonus: 0,     eventSeverity: 1.0, desc: 'The world as intended.' },
-  harsh:    { label: 'Harsh',    aiBonus: 0.15,  eventSeverity: 1.3, desc: 'Ambitious rivals and unforgiving seasons.' },
+  gentle:   { label: 'Gentle',   aiBonus: 0, skill: 0.6, eventSeverity: 0.7, desc: 'Forgiving events. Rival rulers misjudge and rarely exploit your weakness.' },
+  balanced: { label: 'Balanced', aiBonus: 0, skill: 1.0, eventSeverity: 1.0, desc: 'The world as intended.' },
+  harsh:    { label: 'Harsh',    aiBonus: 0, skill: 1.4, eventSeverity: 1.3, desc: 'Unforgiving seasons. Rivals plan more often, strike when you are weak and only fight wars they can win. No unfair bonuses.' },
 };
 
 export const STARTS = {

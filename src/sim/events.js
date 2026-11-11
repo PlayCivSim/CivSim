@@ -1,5 +1,6 @@
 // Contextual world events. Weights depend on season, terrain, preparation and
 // state, so a prepared player can anticipate and soften them.
+import { aiOf } from './aimind.js';
 import { DAY_TICKS, DAYS_PER_YEAR } from '../core/constants.js';
 import { BIOMES, B, isWater } from '../world/biomes.js';
 import { DEPOSITS, DEP, RESOURCES } from '../data/resources.js';
@@ -245,7 +246,7 @@ export function triggerEvent(game, t, ev) {
       return;
     }
     // AI picks the first sensible option for its temperament
-    const ai = t.def.ai;
+    const ai = aiOf(t);
     const opts = ev.choices.filter(c => !c.can || c.can(game, t));
     const c = ev.key === 'refugees' ? (t.foodSat >= 1 ? opts[0] : opts[opts.length - 1]) : ev.key === 'unrest' && ai.military > 0.8 && opts.find(o => o.label === 'Crack down') ? opts.find(o => o.label === 'Crack down') : opts[0];
     const r = c.apply(game, t);

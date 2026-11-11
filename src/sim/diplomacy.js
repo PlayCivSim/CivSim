@@ -1,5 +1,7 @@
 // Diplomacy: opinions built from decaying modifiers, treaties, wars,
 // proposals with explainable acceptance, AI diplomatic reasoning and trade.
+import { aiOf, remember, memoryOpinion, memoryBreakdown, perceivedStrength, coalitionTick, inCoalitionAgainst } from './aimind.js';
+import { intel } from './intel.js';
 import { RESOURCES } from '../data/resources.js';
 import { mod, addRes, takeRes, scarcity } from './economy.js';
 import { militaryStrength } from './military.js';
@@ -36,6 +38,7 @@ export class Diplomacy {
     const ta = this.game.tribes[a], tb = this.game.tribes[b];
     let v = compat(ta.key, tb.key) + this.reputation[b] * 0.5;
     for (const m of this.mods[a][b]) v += m.v;
+    v += memoryOpinion(this.game, a, b);
     return Math.max(-100, Math.min(100, v));
   }
   breakdown(a, b) {
@@ -44,6 +47,7 @@ export class Diplomacy {
     const c = compat(ta.key, tb.key); if (c) out.push({ label: c > 0 ? 'Kindred cultures' : 'Clashing cultures', v: c });
     if (Math.abs(this.reputation[b]) >= 1) out.push({ label: this.reputation[b] > 0 ? 'Trustworthy reputation' : 'Untrustworthy reputation', v: this.reputation[b] * 0.5 });
     for (const m of this.mods[a][b]) if (Math.abs(m.v) >= 0.5) out.push({ label: m.label, v: m.v });
+    out.push(...memoryBreakdown(this.game, a, b));
     return out;
   }
   addMod(a, b, k, v, opts = {}) {
@@ -80,6 +84,7 @@ export class Diplomacy {
     if (broken) {
       this.reputation[by] -= type === 'alliance' ? 12 : 7;
       this.addMod(other, by, 'betrayal', -30, { label: 'Broke a treaty with us', decay: 0.2 });
+      remember(g, other, by, 'betrayal', -15);
     } else this.addMod(other, by, 'cancelled', -8, { label: 'Ended a treaty', decay: 0.4 });
     if (type === 'trade' || type === 'exclusive') ledger(g, { a, b, kind: type + '-end', by, why: why || (broken ? 'broken' : 'ended') });
     g.log(g.tribes[by], 'diplomacy', `${g.tribes[by].name} ${broken ? 'broke' : 'ended'} the ${TREATY_NAMES[type]} with the ${g.tribes[other].name}${why ? ` (${why})` : ''}.`, 2, { with: other, alert: g.tribes[other].isPlayer && broken });
@@ -100,6 +105,7 @@ export class Diplomacy {
       for (const o of g.tribes) if (o.alive && o.id !== a && o.id !== b) this.addMod(o.id, a, 'warmonger', -6, { label: 'Wages unprovoked wars', decay: 0.15, min: -24 });
     }
     this.addMod(b, a, 'war', -40, { label: 'At war with us', decay: 0.3, min: -60 });
+    remember(g, b, a, 'war', -12);
     this.addMod(a, b, 'war', -20, { label: 'At war with us', decay: 0.3, min: -60 });
     ta.atWar = tb.atWar = true;
     g.log(ta, 'war', `${ta.name} declared war on the ${tb.name}${reason ? ' — ' + reason : ''}.`, 3, { with: b });
@@ -108,7 +114,7 @@ export class Diplomacy {
     for (const ally of this.allies(b)) {
       if (ally === a || this.atWar(ally, a)) continue;
       const t = g.tribes[ally];
-      const loyal = t.isPlayer ? false : (t.def.ai.loyalty * 0.7 + this.opinion(ally, b) / 150 - this.opinion(ally, a) / 300 > 0.45);
+      const loyal = t.isPlayer ? false : (aiOf(t).loyalty * 0.7 + this.opinion(ally, b) / 150 - this.opinion(ally, a) / 300 > 0.45);
       if (t.isPlayer) g.bus.emit('allyCall', { ally, victim: b, aggressor: a });
       else if (loyal) this.declareWar(ally, a, `honouring their alliance with the ${tb.name}`);
       else { this.cancel('alliance', ally, b, ally, true); }
@@ -159,13 +165,14 @@ export class Diplomacy {
       // borders
       const border = sharedBorder(g, a, b);
       if (border > 0) this.addMod(a, b, 'border', -0.25 - border * 0.01, { label: 'Border tensions', decay: 0.05, min: -20 });
+      if (border > 15) remember(g, a, b, 'border', -0.06, 12);
       if (this.has('trade', a, b)) this.addMod(a, b, 'trade', 0.6 * (1 + mod(ta, 'relationTrade')), { label: 'Profitable trade', decay: 0.1, max: 20 });
       // common enemies bring tribes together
       const ce = this.enemies(a).filter(e => this.atWar(b, e));
       if (ce.length) this.addMod(a, b, 'common_enemy', 0.8, { label: 'Common enemy', decay: 0.3, max: 18 });
       // fear of powerful, aggressive neighbours
       const ratio = (tb.strength + 1) / (ta.strength + 1);
-      if (ratio > 1.8 && tb.def.ai.aggression > 0.5 && border > 0) this.addMod(a, b, 'fear', -0.3, { label: 'Fears our military', decay: 0.2, min: -12 });
+      if (ratio > 1.8 && aiOf(tb).aggression > 0.5 && border > 0) this.addMod(a, b, 'fear', -0.3, { label: 'Fears our military', decay: 0.2, min: -12 });
       if (this.atWar(a, b)) this.addMod(a, b, 'war', -0.2, { label: 'At war with us', decay: 0.3, min: -60 });
     }
     // ignored ultimatums count as refusals
@@ -192,13 +199,14 @@ export class Diplomacy {
     }
     for (let i = 0; i < T.length; i++) this.reputation[i] = this.reputation[i] * 0.99;
     dailyTrade(g);
+    coalitionTick(g);
   }
 
   // ---------------------------------------------------------------- proposals
   evaluate(from, to, p) {
     const g = this.game, tf = g.tribes[from], tt = g.tribes[to];
     const op = this.opinion(to, from);
-    const ai = tt.def.ai;
+    const ai = aiOf(tt);
     const reasons = [];
     let score = 0;
     const add = (v, label) => { score += v; if (Math.abs(v) >= 1) reasons.push({ v: Math.round(v), label }); };
@@ -324,6 +332,7 @@ export class Diplomacy {
         takeRes(tf, p.res, p.amt); addRes(g, tt, p.res, p.amt);
         const v = Math.min(25, 3 + Math.sqrt(p._value || 10) * 1.4);
         this.addMod(to, from, 'gift', v, { label: 'Generous gifts', decay: 0.4, max: 30 });
+        remember(g, to, from, 'gift', Math.min(6, v * 0.25), 15);
         g.log(tf, 'diplomacy', `${tf.name} sent a gift of ${Math.round(p.amt)} ${RESOURCES[p.res].name} to the ${tt.name}.`, 1, { with: to });
         break;
       }
@@ -362,10 +371,11 @@ export class Diplomacy {
   // Weighs expected gains against expected losses, diplomatic fallout and
   // strategic distractions, filtered through personality.
   assessWar(tribe, other) {
-    const g = this.game, ai = tribe.def.ai, a = tribe.id, b = other.id;
+    const g = this.game, ai = aiOf(tribe), a = tribe.id, b = other.id;
     const op = this.opinion(a, b);
     const allies = this.allies(b).filter(x => !this.atWar(x, a) && x !== a);
-    const theirPower = other.strength + 1 + allies.reduce((s, x) => s + g.tribes[x].strength * 0.6 * g.tribes[x].def.ai.loyalty, 0) + fortValue(g, other);
+    const seen = perceivedStrength(g, a, b, intel);
+    const theirPower = seen.v + 1 + allies.reduce((s, x) => s + g.tribes[x].strength * 0.6 * aiOf(g.tribes[x]).loyalty, 0) + fortValue(g, other);
     const myPower = tribe.strength + 1;
     const rs = myPower / theirPower;
     const border = sharedBorder(g, a, b);
@@ -389,7 +399,13 @@ export class Diplomacy {
     // early-game protection: young peoples are left to grow
     const grace = other.isPlayer ? { gentle: 55, balanced: 40, harsh: 28 }[g.difficulty] ?? 40 : 30;
     if (g.day < grace || other.stage < 2 || tribe.stage < 2) desire -= 70;
-    if (other.isPlayer) desire += g.difficultyDef.aiBonus * 25;
+    // Smarter, not stronger: higher difficulties exploit weakness and demand better odds; gentler rulers misjudge.
+    const skill = g.difficultyDef.skill ?? 1;
+    const opportunity = (this.enemies(b).length ? 10 : 0) + (other.foodSat < 0.95 ? 8 : 0) + (other.happiness < 35 ? 5 : 0);
+    desire += opportunity * (skill - 0.5);
+    if (rs < 1 + 0.3 * skill) desire -= 12 * skill;
+    if (!seen.sure) desire -= 12 * ai.caution;                     // unsure of their strength
+    if (inCoalitionAgainst(g, a, b)) desire += 10 + (g.dip.coalition.members.some(m => m !== a && this.atWar(m, b)) ? 15 : 0);
     if (this.treaties.some(x => x.type === 'tribute' && x.payer === b && (x.a === a || x.b === a))) desire -= 40; // they already pay
     const reason = wanted ? 'to seize resources they cannot do without' : border > 15 ? 'over disputed borderlands' : towns && rs > 1.5 ? 'to take weakly held towns' : warReason(tribe, other, border);
     return { desire, gain, losses, rs, reason };
@@ -465,7 +481,7 @@ export class Diplomacy {
 
   // ---------------------------------------------------------------- AI
   aiThink(tribe, opts = {}) {
-    const g = this.game, ai = tribe.def.ai, rng = g.rng;
+    const g = this.game, ai = aiOf(tribe), rng = g.rng;
     for (const other of g.tribes) {
       if (other === tribe || !other.alive || !this.contact[tribe.id][other.id]) continue;
       const a = tribe.id, b = other.id;
@@ -625,6 +641,7 @@ export function tradeTrip(game, a, t) {
     }
     if (partner.techs.includes('currency')) addRes(game, partner, 'coins', base * 0.6);
     game.dip.addMod(partner.id, tribe.id, 'trade', 0.3, { label: 'Profitable trade', decay: 0.1, max: 20 });
+    remember(game, partner.id, tribe.id, 'trade', 0.25, 15);
     tribe.stats.tradeTrips = (tribe.stats.tradeTrips || 0) + 1;
     a.state = 'think';
   }

@@ -5,6 +5,7 @@
 //   every 10 ticks  – census, territory refresh, AI fast/steward (staggered)
 //   every 50 ticks  – job + housing assignment, needs/happiness, stage checks
 //   every day       – economy ledger, demographics, regrowth, diplomacy, events, AI strategy
+import { rollPersonality } from './aimind.js';
 import { updateMissions, updateExplore, exploreTerritory, dailyIntel, revealCircle } from './intel.js';
 import { DAY_TICKS, DAYS_PER_YEAR, TICK_DT, SPEEDS, MAP_SIZES, DIFFICULTIES, STARTS, SEASONS } from '../core/constants.js';
 import { RNG, hashString } from '../core/rng.js';
@@ -87,7 +88,8 @@ export class Game {
     g.playerId = opts.playerTribe ?? 0;
     g.observer = !!opts.observer;
     g.tutorial = !!opts.tutorial; // scripted tutorial world: rivals never attack the player
-    g.fog = !g.tutorial && opts.intel !== 'open'; // Hard Mode: fog of war, uncertain intelligence, travelling envoys
+    g.fog = !g.tutorial && opts.intel !== 'open';
+    g._personalitySeed = typeof g.seed === 'number' ? g.seed : [...String(g.seed)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7); // Hard Mode: fog of war, uncertain intelligence, travelling envoys
     g.rng = new RNG(g.seed ^ 0xbeef);
     g.world = generateWorld(g.seed, g.sizeKey, MAP_SIZES[g.sizeKey]);
     g.pf = new Pathfinder(g.world);
@@ -114,6 +116,7 @@ export class Game {
       }
       computeMods(g, t);
     }
+    for (const t of g.tribes) if (!t.isPlayer) t.ai = rollPersonality(g._personalitySeed, t);
     census(g);
     for (const t of g.tribes) { assignHousing(g, t); autoAllocate(g, t); assignJobs(g, t); t._cap = storageCap(g, t); }
     recomputeTerritory(g);
@@ -238,7 +241,7 @@ export class Game {
       const ti = (tk / 10) % 4;
       const t = this.tribes[ti];
       if (t.alive) {
-        if (!t.isPlayer) { if ((tk / 10) % 8 < 4) aiThink(this, t, 'fast'); }
+        if (!t.isPlayer) { if ((tk / 10) % 8 < 4 || (this.difficultyDef.skill || 1) > 1.2) aiThink(this, t, 'fast'); }
         else stewardThink(this, t);
       }
     }

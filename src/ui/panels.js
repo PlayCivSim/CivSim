@@ -18,6 +18,7 @@ import { planProgress } from '../sim/planner.js';
 import { TREATY_NAMES } from '../sim/diplomacy.js';
 import { intelBadges, economyLine, strengthChip, intentLine, missionsSection, counterSection, reputationLine, inboxSection, intelActions, confirmJourney } from './intelui.js';
 import { route, intel } from '../sim/intel.js';
+import { traits } from '../sim/aimind.js';
 import { counterOffer, dealText, embargoed, TARIFFS } from '../sim/trade.js';
 import { proposalText } from './hud.js';
 import { sfx } from '../audio/audio.js';
@@ -308,6 +309,7 @@ const diplomacy = {
         return `<div class="frame dip-card" style="--tribe:${o.color}"><div class="dip-head"><img class="emb" src="${emblemURL(o.key)}">
           <div style="flex:1"><div class="row between"><div class="dip-name" style="color:${o.def.pal.light}">${o.name}</div><span class="${cls}" style="font-size:1.05em">${att} ${sign(op, 0)}</span></div>
           <div class="dim" style="font-size:0.85em">${o.def.leaderTitle} ${esc(o.leader?.name || '')} · ${economyLine(g, t.id, o)} · ${GOVERNMENTS[o.gov].name}</div>
+          <div class="row" style="gap:4px;flex-wrap:wrap;margin-top:2px">${traits(o).map(([n, d]) => `<span class="trait-chip" data-tip="${esc(d + ' Temperament shapes their choices but does not dictate them.')}">${esc(n)}</span>`).join('')}${D.coalition?.against === o.id ? '<span class="trait-chip bad" data-tip="Other peoples have banded together against them.">Coalition target</span>' : ''}${D.coalition?.members?.includes(o.id) ? `<span class="trait-chip" data-tip="Part of a coalition against the ${esc(g.tribes[D.coalition.against].name)}.">In coalition</span>` : ''}</div>
           ${intelBadges(g, t.id, o)}
           <div class="rel-bar has-tip" data-tip="${esc(bd.map(x => `${x.label}: ${sign(x.v, 0)}`).join('\n') || 'No strong feelings')}"><div class="mark" style="left:${(op + 100) / 2}%"></div></div>
           <div class="faint" style="font-size:0.78em">${bd.slice(0, 4).map(x => `${esc(x.label)} ${sign(x.v, 0)}`).join(' · ')}</div>

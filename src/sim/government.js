@@ -65,10 +65,7 @@ export function computeMods(game, tribe) {
     for (const [k, v] of Object.entries(e)) if (!['happiness', 'health'].includes(k) || BUILDINGS[bt].unique) m[k] = (m[k] || 0) + v;
   }
   for (const em of tribe.eventMods) addMods(m, em.mods);
-  if (game.difficulty && !tribe.isPlayer) {
-    const b = game.difficultyDef.aiBonus;
-    m.productivity = (m.productivity || 0) + b; m.research = (m.research || 0) + b * 0.5;
-  }
+  // Difficulty no longer grants AI production or research bonuses; it changes how well they decide (see assessWar).
   tribe.mods = m;
   tribe._lawUpkeep = lawUpkeep;
   tribe.modsDirty = false;

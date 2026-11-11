@@ -1,6 +1,8 @@
 // Utility-based AI. Every choice is a weighted score built from observable
 // state (shortages, threats, opportunities) times personality, so behaviour is
 // explainable. The same allocation/planning helpers power the player's steward.
+import { aiOf, knowsSettlement, perceivedStrength } from './aimind.js';
+import { intel } from './intel.js';
 import { BUILDINGS, JOB_KEYS } from '../data/buildings.js';
 import { TECH } from '../data/techs.js';
 import { LAWS } from '../data/laws.js';
@@ -22,7 +24,7 @@ const countCat = (g, t, pred) => { let n = 0; for (const b of g.buildings.values
 
 // ---------------------------------------------------------------- workforce
 export function autoAllocate(game, t) {
-  const ai = t.def.ai;
+  const ai = aiOf(t);
   let left = t.adults;
   const alloc = Object.fromEntries(JOB_KEYS.map(k => [k, 0]));
   const give = (k, n) => { const cap = jobCap(t, k); const v = Math.max(0, Math.min(Math.floor(n), cap - alloc[k], left)); alloc[k] += v; left -= v; };
@@ -69,7 +71,7 @@ export function autoAllocate(game, t) {
 
 // ---------------------------------------------------------------- building
 function buildUtilities(game, t) {
-  const ai = t.def.ai; const avail = new Set(availableBuildings(t));
+  const ai = aiOf(t); const avail = new Set(availableBuildings(t));
   const U = [];
   const add = (type, u, why) => { if (avail.has(type) && u > 0) U.push({ type, u, why }); };
   const freeHousing = t.housing - t.pop;
@@ -182,7 +184,7 @@ export function aiResearch(game, t) {
   if (planned) { setResearch(game, t, planned); return; }
   const opts = availableTechs(t);
   if (!opts.length) return;
-  const ai = t.def.ai;
+  const ai = aiOf(t);
   let best = null, bv = -1;
   for (const tech of opts) {
     let v = (t.def.techBias[tech.branch] || 1) / Math.sqrt(techCost(t, tech.key));
@@ -274,7 +276,7 @@ function aiExpand(game, t) {
   if (!canFound(game, t).ok) return;
   const planned = t.plan?.actions.includes('expand') || !!t.plan?.expandToward;
   if ((t.pop < t.settlements.length * (planned ? 25 : 40)) || t.atWar) return;
-  const ai = t.def.ai;
+  const ai = aiOf(t);
   if (game.rng.next() > 0.3 + ai.expansion * 0.5 + (planned ? 0.3 : 0)) return;
   const toward = t.plan?.expandToward;
   let best = null, bv = -1e9;
@@ -313,14 +315,15 @@ function aiWar(game, t) {
       if ((t.raidCooldown?.[sid] || 0) > game.tick) continue;
       if (s.capital && (s.sackedUntil || 0) > game.tick) continue;
       if (!s.capital && game.tick - (s.founded || 0) < 360 * 12 && et.settlements.length > 1) continue;
+      if (!knowsSettlement(game, t.id, s, intel)) continue; // cannot attack what they have not found
       const d = Math.hypot(s.x - home.x, s.y - home.y);
-      const defense = et.strength / Math.max(1, et.settlements.length) * (s.capital ? 1.4 : 0.8);
+      const defense = perceivedStrength(game, t.id, e, intel).v / Math.max(1, et.settlements.length) * (s.capital ? 1.4 : 0.8);
       const v = myPow / Math.max(1, defense) - d / 80 + (s.capital ? -0.2 : 0.2);
       if (v > tv) { tv = v; target = s; }
     }
   }
   const already = game.armies.some(ar => ar.tribe === t.id && ar.state !== 'return');
-  if (target && !already && tv > 1.1 - t.def.ai.aggression * 0.3) { launchCampaign(game, t, target.id, 0.75); t.raidCooldown = t.raidCooldown || {}; t.raidCooldown[target.id] = game.tick + 360 * 3; }
+  if (target && !already && tv > 1.1 - aiOf(t).aggression * 0.3) { launchCampaign(game, t, target.id, 0.75); t.raidCooldown = t.raidCooldown || {}; t.raidCooldown[target.id] = game.tick + 360 * 3; }
 }
 
 // ---------------------------------------------------------------- main

@@ -249,6 +249,7 @@ export class Hud {
     if (!t.research.current) W.push({ bad: false, icon: 'technology', text: 'No research selected.' });
     if (t.happiness < 35) W.push({ bad: true, icon: 'sad', text: 'Unrest grows: happiness is low.' });
     if (t.threat) W.push({ bad: true, icon: 'military', text: 'Enemies are inside your lands!' });
+    if (g.dip.coalition?.against === t.id) W.push({ bad: true, icon: 'diplomacy', text: `A coalition of the ${g.dip.coalition.members.map(m => g.tribes[m].name).join(' and ')} has formed against your growing power.` });
     if ((t.stock.wood || 0) < 15) W.push({ bad: false, icon: 'wood', text: 'Wood is nearly exhausted.' });
     if (t.lastLedger?.wasted > 5) W.push({ bad: false, icon: 'warning', text: 'Storage is full — goods are being lost. Build storehouses.' });
     return W;

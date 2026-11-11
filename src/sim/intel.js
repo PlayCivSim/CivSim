@@ -11,6 +11,7 @@
 //
 // With game.fog off (older saves, the tutorial, "Open" runs) every query
 // returns live, verified information and missions resolve instantly.
+import { aiOf, remember } from './aimind.js';
 import { DAY_TICKS } from '../core/constants.js';
 import { addRes, takeRes, foodTotal, eatFood } from './economy.js';
 import { RESOURCES } from '../data/resources.js';
@@ -295,6 +296,7 @@ function arrive(g, m) {
       m.status = 'lost'; m.ended = g.tick; const a = g.agents.get(m.agent); if (a) g.removeAgent(a, 'captured');
       d.addMod(m.to, m.from, 'spy', m.kind === 'sabotage' ? -35 : -15, { label: m.kind === 'sabotage' ? 'Sabotaged us' : 'Caught spying on us', decay: 0.25, min: -50 });
       d.reputation[m.from] -= m.kind === 'sabotage' ? 4 : 2;
+      remember(g, m.to, m.from, 'spy', m.kind === 'sabotage' ? -10 : -5, 20);
       if (m.kind === 'sabotage') { d.casusBelli = d.casusBelli || {}; d.casusBelli[m.to * 8 + m.from] = g.tick + DAY_TICKS * 20; }
       if (m.kind === 'deceive') exposeFakes(g, m.to, m.from);
       const what = { spy: 'spying', sabotage: 'attempting sabotage', deceive: 'spreading false reports' }[m.kind];
@@ -330,7 +332,7 @@ function aiIntelligence(g) {
   const d = g.dip;
   for (const t of g.tribes) {
     if (t.isPlayer || !t.alive || !t.techs.includes('writing')) continue;
-    const ai = t.def.ai;
+    const ai = aiOf(t);
     // counter-intelligence when neighbours are hostile
     const threatened = g.tribes.some(o => o !== t && o.alive && (d.atWar(t.id, o.id) || d.opinion(t.id, o.id) < -25));
     const want = threatened ? 1 + (ai.caution > 0.6 ? 1 : 0) : 0;
