@@ -1,5 +1,9 @@
 # CivSim
 
+![A Vaelith town at midsummer](docs/shots/settlement.jpg)
+
+**[Play in your browser](https://OWNER.github.io/civsim/game.html)** · [Website](https://OWNER.github.io/civsim/)
+
 A living-world civilisation builder in the browser. Four distinct tribes — the diplomatic **Oruvai**, the martial **Kharvak**, the agrarian **Thalori** and the inventive **Vaelith** — grow from a single hearth on a procedurally generated continent. You lead one; the other three are run by a personality-driven AI.
 
 Every sprite, tile, icon, emblem and UI ornament is generated as pixel art in code, and all music, ambience and sound effects are synthesised live. There are no external assets and no dependencies.
@@ -10,7 +14,7 @@ Every sprite, tile, icon, emblem and UI ornament is generated as pixel art in co
 node server.mjs
 ```
 
-Then open <http://localhost:8080>. Any static file server works (the game is plain ES modules); it just needs to be served over HTTP rather than opened as a `file://` URL. All fonts are bundled in `fonts/` (SIL OFL), so the game makes no network requests and looks identical offline.
+Then open <http://localhost:8080> for the website, or <http://localhost:8080/game.html> to play. Any static file server works (the game is plain ES modules); it just needs to be served over HTTP rather than opened as a `file://` URL. All fonts are bundled in `fonts/` (SIL OFL), so the game makes no network requests and looks identical offline.
 
 ## Controls
 
@@ -88,3 +92,14 @@ node tools/aggression.mjs 120 seed1      # passive player vs AI, with/without En
 ```
 
 Saves store the world seed plus all mutable state (forests, deposits, fauna, roads, buildings, every inhabitant, AI state, diplomacy, history). Each save is serialised and verified before being written, and the previous version of the slot is kept as a backup in the same transaction.
+
+## Gallery
+
+| | |
+|---|---|
+| ![Night](docs/shots/night.jpg) | ![World](docs/shots/world.jpg) |
+| ![Tribes](docs/shots/tribes.jpg) | ![Technology](docs/shots/techtree.jpg) |
+
+## Publishing
+
+The site deploys to GitHub Pages from `.github/workflows/pages.yml` on every push to `main` (set **Settings → Pages → Source** to **GitHub Actions** once).

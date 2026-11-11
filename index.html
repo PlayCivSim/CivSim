@@ -4,23 +4,128 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CivSim</title>
-  <meta name="description" content="CivSim — a living-world civilisation builder. Four tribes, one procedurally generated world.">
+  <meta name="description" content="CivSim is a living-world civilisation builder that runs in your browser. Lead one of four tribes on a procedurally generated continent against three AI rivals.">
+  <meta property="og:title" content="CivSim">
+  <meta property="og:description" content="Four peoples. One living world. A pixel-art civilisation builder that runs in your browser.">
+  <meta property="og:image" content="docs/shots/settlement.jpg">
+  <meta name="theme-color" content="#12141b">
   <link rel="preload" href="fonts/pixelify-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/jacquarda-bastarda-9-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="fonts/silkscreen-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/alegreya-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="fonts/alegreya-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles/ui.css">
+  <link rel="stylesheet" href="styles/site.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'><rect width='16' height='16' fill='%2312141b'/><rect x='3' y='7' width='10' height='6' fill='%23d8b25a'/><rect x='5' y='4' width='6' height='3' fill='%232f6fd6'/><rect x='7' y='2' width='2' height='2' fill='%23f4dc8a'/></svg>">
 </head>
-<body>
-  <canvas id="world"></canvas>
-  <div id="hud" class="hidden"></div>
-  <div id="screens"></div>
-  <div id="toasts"></div>
-  <div id="modal-root"></div>
+<body class="site">
+  <header class="hero">
+    <canvas id="world" aria-hidden="true"></canvas>
+    <div class="hero-shade"></div>
+    <nav class="topnav wrap">
+      <a class="brand" href="#top"><span class="brand-mark"></span>CivSim</a>
+      <div class="navlinks">
+        <a href="#peoples">Peoples</a><a href="#living">The world</a><a href="#gallery">Gallery</a><a href="#play">How to play</a>
+        <a class="gh hidden" id="gh-nav" href="#">GitHub</a>
+      </div>
+    </nav>
+    <div class="hero-body wrap" id="top">
+      <div class="hero-card frame">
+        <div class="eyebrow">A living world chronicle</div>
+        <h1 class="logo"><span class="word">CivSim</span></h1>
+        <p class="lede">Four peoples. One procedurally generated continent. Raise a tribe from a single hearth into a civilisation while three rival AIs pursue ambitions of their own.</p>
+        <div class="cta">
+          <a class="btn big primary" href="game.html" id="play-btn"><i class="ico" data-ico="play"></i> Play in your browser</a>
+          <a class="btn big hidden" id="gh-btn" href="#"><i class="ico" data-ico="scroll"></i> View the source</a>
+        </div>
+        <div class="meta">Free · No install · Runs offline after first load · Saves in your browser</div>
+      </div>
+      <aside class="chronicle" aria-live="polite">
+        <div class="chron-head"><span class="dot"></span> Live from the world behind this page</div>
+        <div id="ticker"></div>
+      </aside>
+    </div>
+  </header>
+
+  <main>
+    <section class="section wrap" id="peoples">
+      <div class="section-head">
+        <h2 class="display">Choose a people</h2>
+        <p class="prose">Each tribe builds, thinks and fights differently. Their towns look different, their rulers want different things, and the same land rewards each of them in its own way.</p>
+      </div>
+      <div class="peoples" id="peoples-grid"></div>
+    </section>
+
+    <section class="section band" id="living">
+      <div class="wrap">
+        <div class="section-head">
+          <h2 class="display">A world that keeps living</h2>
+          <p class="prose">Nothing waits for you. Every person in every town is simulated, and the rival rulers plan, trade, scheme and go to war whether or not you are watching.</p>
+        </div>
+        <div class="features" id="features"></div>
+      </div>
+    </section>
+
+    <section class="section wrap" id="gallery">
+      <div class="section-head">
+        <h2 class="display">From hearth to empire</h2>
+        <p class="prose">Every sprite, tile, icon and ornament is drawn by code at runtime. There is not a single image file in the game.</p>
+      </div>
+      <div class="gallery">
+        <figure class="g-big frame"><img src="docs/shots/settlement.jpg" alt="A Vaelith settlement of violet spires beside a river, with farms, a quarry and villagers at work" loading="lazy"><figcaption>A Vaelith town at midsummer: farmers in the fields, miners at the quarry, roads worn by daily commutes.</figcaption></figure>
+        <figure class="frame"><img src="docs/shots/night.jpg" alt="The same settlement at night, windows glowing" loading="lazy"><figcaption>Night falls; hearths and windows light up.</figcaption></figure>
+        <figure class="frame"><img src="docs/shots/world.jpg" alt="A whole procedurally generated continent with four settlements" loading="lazy"><figcaption>Every run is a new continent.</figcaption></figure>
+        <figure class="frame"><img src="docs/shots/tribes.jpg" alt="The tribe selection screen with four illustrated tribe cards" loading="lazy"><figcaption>Choosing a people and a world seed.</figcaption></figure>
+        <figure class="frame"><img src="docs/shots/techtree.jpg" alt="The technology tree with seven connected branches" loading="lazy"><figcaption>Forty-five technologies across seven branches.</figcaption></figure>
+        <figure class="frame"><img src="docs/shots/diplomacy.jpg" alt="The diplomacy panel showing rival tribes, relations and treaties" loading="lazy"><figcaption>Relations, treaties and the Envoy steward.</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="section band" id="play">
+      <div class="wrap two">
+        <div>
+          <h2 class="display">How to play</h2>
+          <ol class="steps">
+            <li><span><b>Feed and house your people.</b> Assign workers to foraging, hunting and farming; build huts before families run out of room.</span></li>
+            <li><span><b>Research and build.</b> Stone tools, farming and oral tradition open the way to quarries, schools and councils.</span></li>
+            <li><span><b>Advance through six stages.</b> Each needs people, knowledge and institutions. The Advisor shows what is missing.</span></li>
+            <li><span><b>Deal with your neighbours.</b> Trade, sign pacts, answer ultimatums, or raise an army. Stewards can run routine work for you.</span></li>
+          </ol>
+        </div>
+        <div class="frame controls">
+          <div class="caps">Controls</div>
+          <dl>
+            <dt>Drag · WASD</dt><dd>Pan the map</dd>
+            <dt>Wheel · Q / E</dt><dd>Zoom</dd>
+            <dt>Click</dt><dd>Inspect a person, building or tile</dd>
+            <dt>Space · 1 2 3</dt><dd>Pause and speed</dd>
+            <dt>B P O T</dt><dd>Build, population, economy, technology</dd>
+            <dt>G L M C</dt><dd>Diplomacy, laws, military, chronicle</dd>
+            <dt>F5 · Esc</dt><dd>Quicksave · menu</dd>
+          </dl>
+          <a class="btn primary" href="game.html"><i class="ico" data-ico="play"></i> Start a chronicle</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section wrap" id="engine">
+      <div class="section-head">
+        <h2 class="display">Under the hood</h2>
+      </div>
+      <div class="engine">
+        <div><div class="k">Simulation</div><p>Runs in a Web Worker at a fixed ten ticks a second. The page only renders, animates and listens to you.</p></div>
+        <div><div class="k">Population</div><p>Over a thousand individuals with homes, jobs, skills, partners and needs, at under two milliseconds per tick.</p></div>
+        <div><div class="k">Rival minds</div><p>Utility AI with a progression planner, stagnation detection and a war assessment that weighs plunder against losses and reputation.</p></div>
+        <div><div class="k">Art &amp; sound</div><p>Procedural pixel art and synthesised audio. No image or sound files at all.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer wrap">
+    <div>CivSim · plain JavaScript, no dependencies · fonts under the SIL Open Font License</div>
+    <a href="game.html">Play</a>
+  </footer>
+
+  <div class="lightbox hidden" id="lightbox"><img alt=""></div>
   <div id="tooltip"></div>
-  <div id="boot" class="loading"><div class="lw">CivSim</div><div class="prose dim">The world is taking shape…</div></div>
-  <script type="module" src="src/main.js"></script>
+  <script type="module" src="src/site/landing.js"></script>
 </body>
 </html>
