@@ -17,6 +17,7 @@ const compat = (a, b) => COMPAT[[a, b].sort().join('-')] || 0;
 
 export const TREATY_NAMES = { trade: 'Trade Agreement', nap: 'Non-Aggression Pact', alliance: 'Military Alliance', tribute: 'Tribute', access: 'Border Access', exclusive: 'Trade Exclusivity' };
 import { repTier } from './intel.js';
+import { tradeTerms, counterOffer, signContract, endContract, dailyTrade, ledger, caravanRisk, contractValue } from './trade.js';
 
 export class Diplomacy {
   constructor(game, data) {
@@ -71,7 +72,7 @@ export class Diplomacy {
     if (type !== 'tribute') g.log(ta, 'diplomacy', `${ta.name} and ${tb.name} signed a ${TREATY_NAMES[type]}.`, (ta.isPlayer || tb.isPlayer) ? 2 : 1, { with: b });
     g.bus.emit('treaty', { type, a, b });
   }
-  cancel(type, a, b, by = a, broken = false) {
+  cancel(type, a, b, by = a, broken = false, why = '') {
     const before = this.treaties.length;
     this.treaties = this.treaties.filter(t => !(t.type === type && ((t.a === a && t.b === b) || (t.a === b && t.b === a))));
     if (this.treaties.length === before) return;
@@ -80,14 +81,16 @@ export class Diplomacy {
       this.reputation[by] -= type === 'alliance' ? 12 : 7;
       this.addMod(other, by, 'betrayal', -30, { label: 'Broke a treaty with us', decay: 0.2 });
     } else this.addMod(other, by, 'cancelled', -8, { label: 'Ended a treaty', decay: 0.4 });
-    g.log(g.tribes[by], 'diplomacy', `${g.tribes[by].name} ${broken ? 'broke' : 'ended'} the ${TREATY_NAMES[type]} with the ${g.tribes[other].name}.`, 2, { with: other, alert: g.tribes[other].isPlayer && broken });
+    if (type === 'trade' || type === 'exclusive') ledger(g, { a, b, kind: type + '-end', by, why: why || (broken ? 'broken' : 'ended') });
+    g.log(g.tribes[by], 'diplomacy', `${g.tribes[by].name} ${broken ? 'broke' : 'ended'} the ${TREATY_NAMES[type]} with the ${g.tribes[other].name}${why ? ` (${why})` : ''}.`, 2, { with: other, alert: g.tribes[other].isPlayer && broken });
   }
 
   declareWar(a, b, reason = '') {
     if (this.atWar(a, b) || a === b) return;
     if (this.game.tutorial && a !== this.game.playerId && b === this.game.playerId) return;
     const g = this.game, ta = g.tribes[a], tb = g.tribes[b];
-    for (const type of ['nap', 'alliance', 'trade', 'access', 'exclusive']) if (this.has(type, a, b)) this.cancel(type, a, b, a, type === 'nap' || type === 'alliance');
+    for (const type of ['nap', 'alliance', 'trade', 'access', 'exclusive']) if (this.has(type, a, b)) this.cancel(type, a, b, a, type === 'nap' || type === 'alliance', 'war');
+    for (const c of this.treaties.filter(x => x.type === 'contract' && ((x.a === a && x.b === b) || (x.a === b && x.b === a)))) endContract(g, c, a, 'war');
     this.treaties = this.treaties.filter(t => !(t.type === 'tribute' && ((t.a === a && t.b === b) || (t.a === b && t.b === a))));
     this.wars.push({ a, b, start: g.tick, score: { [a]: 0, [b]: 0 }, reason });
     // aggression has diplomatic consequences: unprovoked wars alarm everyone
@@ -188,6 +191,7 @@ export class Diplomacy {
       t.warWeariness = t.atWar ? Math.min(100, (t.warWeariness || 0) + 1.6 * (t.key === 'kharvak' ? 0.6 : 1)) : Math.max(0, (t.warWeariness || 0) - 3);
     }
     for (let i = 0; i < T.length; i++) this.reputation[i] = this.reputation[i] * 0.99;
+    dailyTrade(g);
   }
 
   // ---------------------------------------------------------------- proposals
@@ -203,6 +207,7 @@ export class Diplomacy {
     if (tier.key === 'honourable' && ['nap', 'alliance', 'access', 'exclusive', 'trade'].includes(p.type)) add(6, 'Your word is trusted');
     if (tier.key === 'doubted' && ['nap', 'alliance', 'access', 'exclusive'].includes(p.type)) add(-10, 'They doubt your word');
     if (tier.key === 'oathbreaker' && p.type === 'nap') add(-25, 'You are an oathbreaker');
+    const trd = tradeTerms(this, from, to, p, add); if (trd) return trd;
     if (tier.key === 'oathbreaker' && p.type === 'alliance') return { accept: false, score: -100, reasons: [{ v: -100, label: 'You are an oathbreaker' }] };
     add(op * 0.5, 'Opinion of you');
     const rs = (tf.strength + 1) / (tt.strength + 1);
@@ -231,6 +236,15 @@ export class Diplomacy {
       }
       case 'offerTribute':
         add(30, 'Welcomes tribute'); break;
+      case 'contract': {
+        if (this.atWar(from, to)) return { accept: false, score: -100, reasons: [{ v: -100, label: 'At war' }] };
+        for (const [r, v] of Object.entries(p.get || {})) if ((tt.stock[r] || 0) < v * 2) return { accept: false, score: -100, reasons: [{ v: -100, label: `They cannot spare ${RESOURCES[r].name} regularly` }] };
+        const { get, give } = contractValue(this, from, to, p);
+        add(Math.max(-80, Math.min(40, ((get - give) / Math.max(1, give)) * 60)), get >= give ? 'Favourable terms' : 'Unfavourable terms');
+        add(4 + ai.trade * 6, 'Values a steady supply');
+        if (this.reputation[from] < -5) add(this.reputation[from] * 0.6, 'Doubts you will deliver');
+        break;
+      }
       case 'nap':
         if (this.atWar(from, to)) return { accept: false, score: -100, reasons: [{ v: -100, label: 'You are at war — propose peace instead' }] };
         add(5 + (rs > 1.2 ? 12 : 0), rs > 1.2 ? 'Wary of your strength' : 'Values security');
@@ -297,11 +311,13 @@ export class Diplomacy {
       const rk = from * 8 + to;
       if (g.tick - (this.refusedAt[rk] || -1e9) < DAY_TICKS * 5) this.addMod(to, from, 'pester', -3, { label: 'Pesters us with proposals', decay: 0.3, min: -12 });
       this.refusedAt[rk] = g.tick;
+      if (p.type === 'exchange' || p.type === 'contract') ev.counter = counterOffer(this, from, to, p);
       if (p.type === 'tribute') this.addMod(to, from, 'demand', -10, { label: 'Made insulting demands', decay: 0.4 });
       return ev;
     }
     switch (p.type) {
-      case 'trade': case 'nap': case 'alliance': case 'access': case 'exclusive': this.sign(p.type, from, to); break;
+      case 'trade': case 'nap': case 'alliance': case 'access': case 'exclusive': this.sign(p.type, from, to); if (p.type === 'trade' || p.type === 'exclusive') ledger(g, { a: from, b: to, kind: p.type }); break;
+      case 'contract': signContract(g, from, to, p); break;
       case 'offerTribute': this.sign('tribute', from, to, { payer: from, until: g.tick + DAY_TICKS * 10 }); g.log(tf, 'diplomacy', `The ${tf.name} agreed to pay tribute to the ${tt.name}.`, 2, { with: to }); break;
       case 'peace': this.makePeace(from, to, p.terms || 'white'); break;
       case 'gift': {
@@ -515,7 +531,9 @@ export class Diplomacy {
 function acceptProposalLocal(g, pr) {
   const D = g.dip;
   switch (pr.p.type) {
-    case 'trade': case 'nap': case 'alliance': D.sign(pr.p.type, pr.from, pr.to); break;
+    case 'trade': case 'nap': case 'alliance': case 'access': case 'exclusive': D.sign(pr.p.type, pr.from, pr.to); break;
+    case 'offerTribute': D.sign('tribute', pr.from, pr.to, { payer: pr.from, until: g.tick + DAY_TICKS * 10 }); break;
+    case 'contract': D.propose(pr.to, pr.from, { type: 'contract', give: pr.p.get, get: pr.p.give, every: pr.p.every, times: pr.p.times }); break;
     case 'peace': D.makePeace(pr.from, pr.to, pr.p.terms || 'white'); break;
     case 'tribute': D.sign('tribute', pr.from, pr.to, { payer: pr.to, until: g.tick + DAY_TICKS * 10 }); D.addMod(pr.from, pr.to, 'submitted', 8, { label: 'Paid us tribute', decay: 0.2 }); break;
     case 'exchange': D.propose(pr.to, pr.from, { type: 'exchange', give: pr.p.get, get: pr.p.give }); break;
@@ -582,7 +600,16 @@ export function tradeTrip(game, a, t) {
     if (!partner || !partner.alive || !game.dip.has('trade', tribe.id, partner.id)) { a.state = 'think'; return; }
     const wb = a.workId != null ? game.buildings.get(a.workId) : null;
     const bonus = wb?.type === 'harbor' ? 0.4 : 0;
-    const base = 5 * (1 + mod(tribe, 'trade') + bonus) * (tribe.productivity || 1) * (game.dip.has('exclusive', tribe.id, partner.id) ? 1.5 : 1);
+    // raiders on the road (risk from geography, war and how well the roads are guarded)
+    if (game.rng.chance(caravanRisk(game, tribe.id, partner.id))) {
+      tribe.stats.raided = (tribe.stats.raided || 0) + 1; ledger(game, { a: tribe.id, b: partner.id, kind: 'raid' });
+      if (tribe.isPlayer && game.tick - (tribe._raidLog || -1e9) > DAY_TICKS * 3) { tribe._raidLog = game.tick; game.log(tribe, 'trade', `A caravan returning from the ${partner.name} was raided. Its goods are lost.`, 1, { with: partner.id, cat: 'trade' }); }
+      a.state = 'think'; return;
+    }
+    const tariff = tribe.tariffRate || 0;
+    if (tariff) game.dip.addMod(partner.id, tribe.id, 'tariff', -tariff * 0.6, { label: 'High tariffs', decay: 0.15, min: -tariff * 30 });
+    const base = 5 * (1 + mod(tribe, 'trade') + bonus + tariff) * (tribe.productivity || 1) * (game.dip.has('exclusive', tribe.id, partner.id) ? 1.5 : 1);
+    const ts = game.dip.tradeStats = game.dip.tradeStats || {}; const tk = tribe.id + ':' + partner.id; ts[tk] = (ts[tk] || 0) + 1;
     if (tribe.techs.includes('currency')) addRes(game, tribe, 'coins', base * 1.6 * (1 + mod(tribe, 'tariff')));
     else addRes(game, tribe, 'goods', base * 0.25);
     // exchange surpluses: each side receives something the other has in excess

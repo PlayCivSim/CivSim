@@ -277,6 +277,12 @@ function arrive(g, m) {
       const res = d.propose(m.from, m.to, m.p, true);
       const why = (res.reasons || []).filter(x => x.label).sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 2).map(x => x.label.toLowerCase()).join('; ');
       m.result = { accept: res.accept, why };
+      // a refused deal may come back with their counteroffer
+      if (!res.accept && res.counter && from.isPlayer) {
+        const q = res.counter;
+        g.pendingProposals.push({ from: m.to, to: m.from, tick: g.tick, p: { ...q, type: q.type, give: q.get, get: q.give, counter: true } });
+        g.bus.emit('proposal', { from: m.to, to: m.from, p: g.pendingProposals[g.pendingProposals.length - 1].p });
+      }
       tell(`Your envoy reached the ${to.name}: ${proposalName(m.p)} ${res.accept ? 'accepted' : 'refused'}${why ? ` (${why})` : ''}.`, { cat: m.p.type === 'exchange' || m.p.type === 'trade' || m.p.type === 'exclusive' ? 'trade' : undefined });
     }
   } else if (m.kind === 'scout') {

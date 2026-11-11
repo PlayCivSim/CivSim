@@ -587,7 +587,8 @@ export function proposalText(p) {
     case 'peace': return p.terms === 'tribute_a' ? 'They sue for peace and offer tribute.' : p.terms === 'tribute_b' ? 'They offer peace — if you pay tribute.' : 'They offer a white peace.';
     case 'gift': return `They send a gift of ${p.amt} ${RESOURCES[p.res].name}.`;
     case 'tribute': return p.ultimatum ? `Ultimatum: pay tribute for ten days or face war (${p.reason || 'they covet your lands'}).` : 'They demand that you pay tribute.';
-    case 'exchange': return `They offer ${Object.entries(p.give).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')} for ${Object.entries(p.get).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')}.`;
+    case 'contract': return `${p.counter ? 'Counteroffer: ' : ''}A supply contract: every ${p.every} days for ${p.every * p.times} days they send ${Object.entries(p.give).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')} for ${Object.entries(p.get).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')}.`;
+    case 'exchange': return `${p.counter ? 'Counteroffer: ' : ''}They offer ${Object.entries(p.give).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')} for ${Object.entries(p.get).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')}.`;
     default: return 'They wish to speak with you.';
   }
 }

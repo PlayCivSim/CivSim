@@ -645,3 +645,10 @@ body.cb .bar.green i { background: #6ab0ff; } body.cb .bar.red i { background: #
 .dispatch.old { opacity: 0.6; } .dispatch.alert { background: rgba(255,90,80,0.08); }
 .kvbox { margin-top: 8px; padding: 6px 8px; background: rgba(7,8,12,0.5); box-shadow: 0 0 0 1px var(--gold-deep) inset; display: flex; flex-direction: column; gap: 3px; }
 .kvbox .tt-row { display: flex; justify-content: space-between; gap: 12px; }
+
+/* ================= Stage 4: trade ================= */
+.deal-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+.deal-side { display: flex; flex-direction: column; gap: 4px; } .deal-side .caps { color: var(--gold); } .deal-side .faint { font-size: 0.8em; }
+.deal-arrow { opacity: 0.7; }
+.contract { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 5px 8px; background: rgba(255,255,255,0.03); border-left: 3px solid var(--gold); margin-bottom: 3px; font-size: 0.9em; }
+@media (max-width: 560px) { .deal-grid { grid-template-columns: 1fr; } .deal-arrow { display: none; } }

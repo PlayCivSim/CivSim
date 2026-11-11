@@ -17,7 +17,8 @@ import { canFound, ENVOY_DEFAULTS, WORK_PRIORITIES } from '../sim/ai.js';
 import { planProgress } from '../sim/planner.js';
 import { TREATY_NAMES } from '../sim/diplomacy.js';
 import { intelBadges, economyLine, strengthChip, intentLine, missionsSection, counterSection, reputationLine, inboxSection, intelActions, confirmJourney } from './intelui.js';
-import { route } from '../sim/intel.js';
+import { route, intel } from '../sim/intel.js';
+import { counterOffer, dealText, embargoed, TARIFFS } from '../sim/trade.js';
 import { proposalText } from './hud.js';
 import { sfx } from '../audio/audio.js';
 import { SEASONS, DAYS_PER_YEAR } from '../core/constants.js';
@@ -187,7 +188,8 @@ const economy = {
       <div class="section-title">Yesterday's top production</div>
       <div class="row" style="flex-wrap:wrap;gap:6px">${top.map(([k, v]) => `<span class="chip">${ico(k, 'sm')} ${RESOURCES[k].name} ${fmt(v, 1)}</span>`).join('') || '<span class="faint">Nothing yet.</span>'}</div>
       ${cats}
-      <div class="section-title">Trade</div>
+      ${tradeSection(g, t)}
+      <div class="section-title">Trade partners</div>
       ${partners.length ? partners.map(p => `<div class="row" style="margin:3px 0"><img src="${emblemURL(g.tribes[p].key)}" width="22" class="pix"> Trade agreement with the ${g.tribes[p].name}</div>`).join('') + `<div class="faint" style="font-size:0.85em">${t.stats.tradeTrips || 0} caravans completed. Build markets and assign traders to profit.</div>` : '<div class="prose" style="font-size:0.9em">No trade partners. Research Barter, build a Marketplace and negotiate a Trade Agreement in Diplomacy.</div>'}`;
   },
 };
@@ -322,6 +324,7 @@ const diplomacy = {
             ${D.has('trade', t.id, o.id) ? (D.has('exclusive', t.id, o.id) ? `<button class="btn sm" data-act="dip-cancel" data-to="${o.id}" data-treaty="exclusive">End exclusivity</button>` : `<button class="btn sm" data-act="dip" data-to="${o.id}" data-type="exclusive" data-tip="Trade only with each other: caravans between you earn 50% more, but neither may sign other trade agreements.">${ico('coin', 'sm')} Exclusive trade</button>`) : ''}
             <button class="btn sm" data-act="dip" data-to="${o.id}" data-type="offerTribute" data-tip="Pay them tribute for ten days to win their favour.">${ico('coins', 'sm')} Offer tribute</button>
             <button class="btn sm" data-act="dip" data-to="${o.id}" data-type="tribute">${ico('coins', 'sm')} Demand tribute</button>
+            <button class="btn sm ${D.embargo?.[t.id]?.includes(o.id) ? 'on' : ''}" data-act="embargo" data-to="${o.id}" data-tip="${D.embargo?.[t.id]?.includes(o.id) ? 'Lift the embargo and allow trade again.' : 'Forbid all trade with them. Ends trade agreements and contracts; they will resent it.'}">${ico('lock', 'sm')} ${D.embargo?.[t.id]?.includes(o.id) ? 'Lift embargo' : 'Embargo'}</button>
             <button class="btn sm danger" data-act="dip-war" data-to="${o.id}">${ico('military', 'sm')} Declare war</button>`}</div>${intelActions(g, t.id, o)}</div>`;
       }).join('')}
       ${counterSection(g)}${inboxSection(g)}
@@ -472,27 +475,53 @@ async function chooseResource(t, title, label) {
   { onMount: m => { const a = m.querySelector('#amt'); a.oninput = () => m.querySelector('#amtv').textContent = a.value; m.querySelectorAll('[data-k]').forEach(b => b.onclick = () => closeModal({ res: b.dataset.k, amt: Math.min(+a.value, Math.floor(t.stock[b.dataset.k])) })); m.querySelector('[data-x]').onclick = () => closeModal(null); } });
 }
 
+// Trade deal: what you give and receive, quantities, one-off or ongoing,
+// delivery time and risk, with their likely answer and a fair counter.
 async function exchangeDialog(g, t, o) {
-  const pool = RES_KEYS.filter(k => !['livestock', 'coins'].includes(k) || k === 'coins');
+  const pool = RES_KEYS.filter(k => k !== 'livestock');
   const opts = pool.map(k => `<option value="${k}">${RESOURCES[k].name}</option>`).join('');
-  return modal(`<div class="modal-head">${ico('exchange', 'lg')}<div class="panel-title" style="font-size:1.8em">Exchange with the ${o.name}</div></div>
-    <div class="row" style="gap:16px;align-items:flex-start"><div class="col" style="flex:1"><div class="caps" style="color:var(--gold)">You give</div><select class="text-input" id="gr">${opts}</select><input class="text-input" id="ga" type="number" min="1" value="20"><div class="faint" style="font-size:0.8em" id="gh"></div></div>
-    <div class="col" style="flex:1"><div class="caps" style="color:var(--gold)">You receive</div><select class="text-input" id="rr">${opts}</select><input class="text-input" id="ra" type="number" min="1" value="10"><div class="faint" style="font-size:0.8em" id="rh"></div></div></div>
-    <div class="prose" id="ev" style="margin-top:10px"></div>
-    <div class="modal-actions"><button class="btn" data-x="0">Cancel</button><button class="btn primary" data-x="1">Propose</button></div>`,
+  const r = route(g, t.id, o.id, 'envoy');
+  return modal(`<div class="modal-head">${ico('exchange', 'lg')}<div><div class="caps" style="color:var(--gold)">${esc(o.name)}</div><div class="panel-title" style="font-size:1.8em">Propose a trade deal</div></div></div>
+    <div class="deal-grid"><div class="deal-side"><div class="caps">You give</div><select class="text-input" id="gr">${opts}</select><input class="text-input" id="ga" type="number" min="1" value="20"><div class="faint" id="gh"></div></div>
+    <div class="deal-arrow">${ico('exchange')}</div>
+    <div class="deal-side"><div class="caps">You receive</div><select class="text-input" id="rr">${opts}</select><input class="text-input" id="ra" type="number" min="1" value="10"><div class="faint" id="rh"></div></div></div>
+    <div class="seg" style="margin-top:8px" id="kind"><button class="btn sm on" data-kind="once">One-off exchange</button><button class="btn sm" data-kind="contract">Ongoing contract</button></div>
+    <div class="row" id="terms" style="gap:6px;margin-top:6px;display:none"><span class="faint">Every 5 days, for</span>${[3, 6, 10].map(n => `<button class="btn xs ${n === 6 ? 'on' : ''}" data-times="${n}">${n} deliveries</button>`).join('')}</div>
+    <div class="kvbox" id="sum"></div>
+    <div class="prose" id="ev" style="margin-top:8px"></div>
+    <div class="modal-actions"><button class="btn" data-x="0">Cancel</button><button class="btn" data-x="fair" style="display:none">Use their terms</button><button class="btn primary" data-x="1">Propose</button></div>`,
   { onMount: m => {
     const gr = m.querySelector('#gr'), ga = m.querySelector('#ga'), rr = m.querySelector('#rr'), ra = m.querySelector('#ra');
-    const best = Object.entries(t.stock).filter(([k]) => RESOURCES[k]).sort((a, b) => b[1] - a[1])[0]; if (best) gr.value = best[0];
+    let kind = 'once', times = 6, counter = null;
+    const best = Object.entries(t.stock).filter(([k]) => RESOURCES[k] && k !== 'coins').sort((a, b) => b[1] - a[1])[0]; if (best) gr.value = best[0];
     const want = RES_KEYS.filter(k => (o.stock[k] || 0) > 30 && k !== gr.value).sort((a, b) => scarcity(t, b) - scarcity(t, a))[0]; if (want) rr.value = want;
+    const deal = () => kind === 'once' ? { type: 'exchange', give: { [gr.value]: +ga.value }, get: { [rr.value]: +ra.value } } : { type: 'contract', give: { [gr.value]: +ga.value }, get: { [rr.value]: +ra.value }, every: 5, times };
     const upd = () => {
       m.querySelector('#gh').textContent = `You have ${fmt(t.stock[gr.value] || 0)}`;
-      m.querySelector('#rh').textContent = `They have ${(o.stock[rr.value] || 0) > 200 ? 'plenty' : (o.stock[rr.value] || 0) > 40 ? 'some' : 'little'}`;
-      const ev = g.dip.evaluate(t.id, o.id, { type: 'exchange', give: { [gr.value]: +ga.value }, get: { [rr.value]: +ra.value } });
-      m.querySelector('#ev').innerHTML = `<span class="${ev.accept ? 'good' : 'bad'}">${ev.accept ? 'They would likely accept.' : 'They would likely refuse.'}</span> <span class="faint">${ev.reasons.map(r => esc(r.label) + ' ' + sign(r.v, 0)).join(' · ')}</span>`;
+      const know = !g.fog || intel(g, t.id, o.id, 'economy').lv >= 2;
+      m.querySelector('#rh').textContent = know ? `They have ${(o.stock[rr.value] || 0) > 200 ? 'plenty' : (o.stock[rr.value] || 0) > 40 ? 'some' : 'little'}` : 'Their stores are unknown';
+      m.querySelector('#terms').style.display = kind === 'contract' ? 'flex' : 'none';
+      const p = deal(); const ev = g.dip.evaluate(t.id, o.id, p);
+      counter = ev.accept ? null : counterOffer(g.dip, t.id, o.id, p);
+      const days = g.fog && r ? r.days : 0;
+      m.querySelector('#sum').innerHTML = `<div class="tt-row"><span>You give</span><span>${fmt(+ga.value)} ${RESOURCES[gr.value].name}${kind === 'contract' ? ` × ${times}` : ''}</span></div>
+        <div class="tt-row"><span>You receive</span><span>${fmt(+ra.value)} ${RESOURCES[rr.value].name}${kind === 'contract' ? ` × ${times}` : ''}</span></div>
+        <div class="tt-row"><span>Delivery</span><span>${kind === 'contract' ? `every 5 days for ${5 * times} days` : days ? `${days} day${days === 1 ? '' : 's'} (the envoy carries the goods)` : 'immediate'}</span></div>
+        <div class="tt-row"><span>Risk</span><span class="${(r?.risk || 0) >= 0.2 ? 'bad' : (r?.risk || 0) >= 0.08 ? 'warn' : 'good'}">${g.fog || kind === 'contract' ? (r?.label || 'Low') : 'None'}</span></div>
+        <div class="faint" style="font-size:0.82em">${kind === 'contract' ? 'Ongoing. Deliveries can be raided on dangerous roads. If either side cannot deliver, the contract breaks and the defaulter loses reputation; cancelling early also costs reputation.' : g.fog ? 'Temporary. If the envoy is lost, so are the goods.' : 'Temporary: a single exchange.'}</div>`;
+      m.querySelector('#ev').innerHTML = `<span class="${ev.accept ? 'good' : 'bad'}">${ev.accept ? 'They would likely accept.' : 'They would likely refuse.'}</span> <span class="faint">${ev.reasons.filter(x => x.label).map(x => esc(x.label) + ' ' + sign(x.v, 0)).join(' · ')}</span>${counter ? `<div class="warn" style="font-size:0.9em;margin-top:4px">They might accept: ${esc(dealText(counter))}</div>` : ''}`;
+      m.querySelector('[data-x="fair"]').style.display = counter ? '' : 'none';
     };
-    [gr, ga, rr, ra].forEach(x => x.oninput = upd); upd();
-    m.querySelector('[data-x="0"]').onclick = () => closeModal(null);
-    m.querySelector('[data-x="1"]').onclick = () => closeModal({ give: { [gr.value]: +ga.value }, get: { [rr.value]: +ra.value } });
+    [gr, ga, rr, ra].forEach(x => x.oninput = upd);
+    m.onclick = e => {
+      const k = e.target.closest('[data-kind]'); if (k) { kind = k.dataset.kind; m.querySelectorAll('[data-kind]').forEach(b => b.classList.toggle('on', b === k)); upd(); }
+      const tm = e.target.closest('[data-times]'); if (tm) { times = +tm.dataset.times; m.querySelectorAll('[data-times]').forEach(b => b.classList.toggle('on', b === tm)); upd(); }
+      const x = e.target.closest('[data-x]'); if (!x) return;
+      if (x.dataset.x === '0') closeModal(null);
+      else if (x.dataset.x === 'fair' && counter) { const [gk, gv] = Object.entries(counter.give)[0], [rk, rv] = Object.entries(counter.get)[0]; gr.value = gk; ga.value = gv; rr.value = rk; ra.value = rv; upd(); }
+      else if (x.dataset.x === '1') closeModal(deal());
+    };
+    upd();
   } });
 }
 
@@ -504,6 +533,22 @@ async function peaceDialog(g, t, o) {
 }
 
 const ourProp = p => ({ trade: 'a Trade Agreement', nap: 'a Non-Aggression Pact', alliance: 'a Military Alliance', access: 'Border Access', exclusive: 'Trade Exclusivity', peace: p.terms === 'tribute_a' ? 'peace, with you paying tribute' : p.terms === 'tribute_b' ? 'peace, with them paying tribute' : 'a white peace', gift: `a gift of ${p.amt} ${RESOURCES[p.res]?.name || ''}`, exchange: 'an exchange of goods', tribute: 'that they pay you tribute', offerTribute: 'to pay them tribute' })[p.type] || p.type;
+function tradeSection(g, t) {
+  const D = g.dip, P = t.id;
+  const contracts = D.treaties.filter(x => x.type === 'contract' && (x.a === P || x.b === P));
+  const emb = (D.embargo?.[P] || []).map(i => g.tribes[i].name);
+  const log = (D.tradeLog || []).filter(e => e.a === P || e.b === P).slice(-10).reverse();
+  const other = e => g.tribes[e.a === P ? e.b : e.a].name;
+  const LBL = { trade: 'Trade Agreement signed', exclusive: 'Exclusivity signed', 'trade-end': 'Trade Agreement ended', 'exclusive-end': 'Exclusivity ended', contract: 'Contract agreed', 'contract-end': 'Contract ended', raid: 'Caravan raided', embargo: 'Embargo placed', 'embargo-lifted': 'Embargo lifted' };
+  const trips = Object.entries(D.tradeStats || {}).filter(([k]) => k.startsWith(P + ':')).map(([k, v]) => `${g.tribes[+k.split(':')[1]].name}: ${v}`).join(' · ');
+  return `<div class="section-title">Trade policy</div>
+    <div class="row between" style="gap:8px;flex-wrap:wrap"><span data-tip="Your caravans earn more, but partners resent high tariffs and are less willing to sign new agreements.">${ico('coins', 'sm')} Tariff on your caravans</span><div class="seg">${TARIFFS.map(r => `<button class="btn xs ${(t.tariffRate || 0) === r ? 'on' : ''}" data-act="tariff" data-r="${r}">${Math.round(r * 100)}%</button>`).join('')}</div></div>
+    ${emb.length ? `<div class="faint" style="font-size:0.85em;margin-top:4px">${ico('lock', 'sm')} Embargo on: ${esc(emb.join(', '))}</div>` : ''}
+    ${contracts.length ? `<div class="section-title">Supply contracts</div>${contracts.map(c => { const mine = c.a === P; const p = mine ? c : { give: c.get, get: c.give }; return `<div class="contract"><div><b>${esc(other(c))}</b> · ${esc(dealText({ type: 'contract', give: p.give, get: p.get, every: c.every, times: c.left }))}<div class="faint" style="font-size:0.8em">Next delivery in ${Math.max(0, Math.ceil((c.next - g.tick) / 360))} day(s) · ${c.left} left</div></div><button class="btn xs" data-act="end-contract" data-id="${c.id}">Cancel</button></div>`; }).join('')}` : ''}
+    <div class="section-title">Trade history</div>
+    ${trips ? `<div class="faint" style="font-size:0.82em">Caravans completed — ${esc(trips)}${t.stats.raided ? ` · raided: ${t.stats.raided}` : ''}</div>` : ''}
+    ${log.length ? `<div class="inbox">${log.map(e => `<div class="dispatch"><span class="d-when">${g.day - e.day <= 0 ? 'today' : (g.day - e.day) + ' days ago'}</span><span>${esc(LBL[e.kind] || e.kind)} · ${esc(other(e))}${e.by != null && e.kind.endsWith('end') ? ` · by ${e.by === P ? 'you' : 'them'}${e.why ? ` (${esc(e.why)})` : ''}` : ''}${e.give ? ` · ${esc(dealText({ type: e.every ? 'contract' : 'exchange', give: e.a === P ? e.give : e.get, get: e.a === P ? e.get : e.give, every: e.every, times: e.times }))}` : ''}</span></div>`).join('')}</div>` : '<div class="faint" style="font-size:0.85em">No deals recorded yet.</div>'}`;
+}
 function reportProposal(g, o, res, what) {
   if (res.accept) { sfx('diplomacy'); toast(`The ${o.name} accept`, what, { kind: 'good', icon: 'diplomacy' }); }
   else { sfx('error'); toast(`The ${o.name} refuse`, res.reasons.filter(r => r.label).sort((a, b) => a.v - b.v).slice(0, 3).map(r => `${r.label} (${sign(r.v, 0)})`).join(' · '), { kind: 'bad', icon: 'diplomacy', ms: 7000 }); }
@@ -539,11 +584,12 @@ export const ACTIONS = {
     const g = hud.game, t = g.player, o = g.tribes[+b.dataset.to]; const type = b.dataset.type;
     let p = { type };
     if (type === 'gift') { const r = await chooseResource(t, `A gift for the ${o.name}`, 'Choose a resource to send.'); if (!r) return; p = { type, ...r }; }
-    if (type === 'exchange') { const r = await exchangeDialog(g, t, o); if (!r) return; p = { type, ...r }; }
+    if (type === 'exchange') { const r = await exchangeDialog(g, t, o); if (!r) return; p = r; }
     if (type === 'peace') { const r = await peaceDialog(g, t, o); if (!r) return; p = { type, terms: r }; }
     if (g.fog && !(await confirmJourney(g, o.id, 'envoy', `<div class="prose" style="font-size:0.9em;margin-top:4px">Proposal: <em>${esc(ourProp(p))}</em>. Their answer comes when the envoy arrives.${p.type === 'gift' || p.type === 'exchange' ? ' <span class="warn">Goods travel with the envoy and are lost if the envoy is.</span>' : ''}</div>`))) return;
     const res = await hud.sim.call('propose', o.id, p);
     if (res.sent) { if (res.ok) { sfx('diplomacy'); toast('Envoy dispatched', `To the ${o.name}: about ${res.days} day${res.days === 1 ? '' : 's'} on the road, ${String(res.risk).toLowerCase()} risk. You will hear when they arrive.`, { icon: 'scroll' }); } else fail('Cannot send an envoy', res.why, 'scroll'); return; }
+    if (!res.accept && res.counter) { const yes = await confirmAsync(`The ${o.name} make a counteroffer`, `They refused, but would agree to: <em>${esc(dealText(res.counter))}</em>.`, 'Accept their terms'); if (yes) { const r2 = await hud.sim.call('propose', o.id, res.counter); reportProposal(g, o, r2, 'The deal is agreed.'); } return; }
     reportProposal(g, o, res, { trade: 'A trade agreement is signed.', nap: 'A non-aggression pact is signed.', alliance: 'You are now allies.', access: 'Your borders are open to each other.', exclusive: 'You now trade only with each other.', offerTribute: 'They accept your tribute.', peace: 'The war is over.', gift: 'Your gift is received warmly.', exchange: 'The exchange is complete.', tribute: 'They will pay tribute.' }[type]);
   },
   'intel-send': async (hud, b) => {
@@ -553,6 +599,9 @@ export const ACTIONS = {
     if (r.ok) { sfx('click'); toast('Mission dispatched', `About ${r.days} day${r.days === 1 ? '' : 's'} to reach the ${g.tribes[to].name}; ${String(r.risk).toLowerCase()} risk.`, { icon: 'eye' }); } else fail('Cannot send', r.why, 'eye');
   },
   counter: async (hud, b) => { const r = await hud.sim.call('counterIntel', +b.dataset.n); if (!r.ok) fail('Counter-intelligence', r.why, 'target'); },
+  embargo: (hud, b) => { const to = +b.dataset.to; hud.sim.call('embargo', to, !hud.game.dip.embargo?.[hud.game.playerId]?.includes(to)); },
+  tariff: (hud, b) => { hud.sim.call('tariff', +b.dataset.r); },
+  'end-contract': async (hud, b) => { if (await confirmAsync('Cancel the contract?', 'Ending a supply contract early costs reputation and angers your partner.', 'Cancel contract', true)) hud.sim.call('endContract', +b.dataset.id); },
   'dip-cancel': (hud, b) => { hud.sim.call('cancelTreaty', +b.dataset.to, b.dataset.treaty); },
   'dip-war': async (hud, b) => {
     const g = hud.game, o = g.tribes[+b.dataset.to];
