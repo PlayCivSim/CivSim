@@ -19,7 +19,16 @@ import { makeAgent, isAdult } from './agents.js';
 import { planProgress, executePlan, checkStagnation } from './planner.js';
 import { acceptProposalLocal } from './diplomacy.js';
 
-const countB = (g, t, type, includeSites = true) => { let n = 0; for (const b of g.buildings.values()) if (b.tribe === t.id && b.type === type && (includeSites || b.built)) n++; return n; };
+// Building counts per tribe and type, cached until the set of buildings changes
+// (AI planning asks for these dozens of times per decision).
+function buildingCounts(g) {
+  const key = g.tick * 1e6 + g.buildings.size * 1000 + (g.nextId % 1000);
+  if (g._bcount?.key === key) return g._bcount.m;
+  const m = g.tribes.map(() => ({}));
+  for (const b of g.buildings.values()) { const r = m[b.tribe][b.type] || (m[b.tribe][b.type] = [0, 0]); r[0]++; if (b.built) r[1]++; }
+  g._bcount = { key, m }; return m;
+}
+const countB = (g, t, type, includeSites = true) => { const r = buildingCounts(g)[t.id][type]; return r ? r[includeSites ? 0 : 1] : 0; };
 const countCat = (g, t, pred) => { let n = 0; for (const b of g.buildings.values()) if (b.tribe === t.id && pred(BUILDINGS[b.type], b)) n++; return n; };
 
 // ---------------------------------------------------------------- workforce

@@ -1,4 +1,5 @@
 // CivSim application controller: screens, main loop, input, autosave.
+import './data/registry.js'; // content packs (see docs/MODDING.md)
 import { installTheme } from './ui/theme.js';
 import { ico } from './ui/icons.js';
 import { initTooltips, toast, modalOpen, closeModal, confirmDialog } from './ui/dom.js';

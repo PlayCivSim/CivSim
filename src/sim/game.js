@@ -5,6 +5,7 @@
 //   every 10 ticks  – census, territory refresh, AI fast/steward (staggered)
 //   every 50 ticks  – job + housing assignment, needs/happiness, stage checks
 //   every day       – economy ledger, demographics, regrowth, diplomacy, events, AI strategy
+import '../data/registry.js'; // content packs (see docs/MODDING.md)
 import { updateSupply, checkEra, aiSpecialise } from './logistics.js';
 import { TECH } from '../data/techs.js';
 import { rollPersonality } from './aimind.js';
