@@ -1,5 +1,6 @@
 // CivSim application controller: screens, main loop, input, autosave.
 import { installTheme } from './ui/theme.js';
+import { ico } from './ui/icons.js';
 import { initTooltips, toast, modalOpen, closeModal } from './ui/dom.js';
 import { Renderer } from './render/renderer.js';
 import { SimClient } from './sim/client.js';
@@ -28,6 +29,7 @@ class App {
     installTheme();
     initTooltips();
     this.applySettings();
+    if (!this.settings.inputMode) await this.chooseDevice();
     this.renderer.resize();
     addEventListener('resize', () => this.renderer.resize());
     this.bindInput();
@@ -46,7 +48,31 @@ class App {
     document.documentElement.style.setProperty('--ui', s.uiScale);
     Object.assign(this.renderer.settings, { particles: s.particles, animations: s.animations, territory: s.territory, quality: s.quality });
     setVolumes(s);
+    this.touch = s.inputMode === 'touch';
+    document.body.classList.toggle('touch', this.touch);
     storeSettings(s);
+  }
+
+  // First launch: ask how the player will control the game.
+  chooseDevice() {
+    const boot = document.getElementById('boot'); if (boot) boot.style.display = 'none';
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const root = document.getElementById('screens');
+    const opt = (mode, icon, name, desc, suggested) => `<button class="device-opt ${suggested ? 'suggested' : ''}" data-mode="${mode}">${ico(icon, 'xl')}<span class="device-name">${name}</span><span class="device-desc">${desc}</span>${suggested ? '<span class="chip">Looks like your device</span>' : ''}</button>`;
+    const el = document.createElement('div');
+    el.className = 'screen device-screen enter';
+    el.innerHTML = `<div class="device-box frame"><div class="logo"><div class="word">CivSim</div><div class="sub">A Living World Chronicle</div></div>
+      <div class="divider"></div>
+      <h1 class="panel-title">What type of device are you on?</h1>
+      <div class="device-opts">${opt('touch', 'touch', 'Touch', 'Phone or tablet. Tap, drag and pinch; larger buttons.', coarse)}${opt('keyboard', 'keyboard', 'Keyboard', 'Computer with a mouse or trackpad. Hover tips and shortcuts.', !coarse)}</div>
+      <div class="prose" style="text-align:center">You can change this at any time in Settings, under Controls.</div></div>`;
+    root.appendChild(el);
+    return new Promise(res => el.addEventListener('click', e => {
+      const b = e.target.closest('[data-mode]'); if (!b) return;
+      this.settings.inputMode = b.dataset.mode; this.applySettings();
+      el.remove(); if (boot) boot.style.display = '';
+      setTimeout(res, 30);
+    }));
   }
 
   // ---------------------------------------------------------------- screens
@@ -179,34 +205,65 @@ class App {
   // ---------------------------------------------------------------- input
   bindInput() {
     const cv = this.cv; const r = this.renderer;
-    let drag = null;
+    // Pointer handling covers mouse, pen and touch: one pointer pans or taps,
+    // two pointers pinch-zoom (and pan with their midpoint).
+    const pts = new Map(); let drag = null, pinch = null, lastTap = null;
+    const pinchState = () => { const [a, b] = [...pts.values()]; return { d: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; };
     cv.addEventListener('contextmenu', e => e.preventDefault());
     cv.addEventListener('pointerdown', e => {
       if (this.mode !== 'game') return;
-      cv.setPointerCapture(e.pointerId);
-      drag = { x: e.clientX, y: e.clientY, cx: r.cam.x, cy: r.cam.y, moved: false, button: e.button, t: performance.now() };
+      try { cv.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 1) drag = { x: e.clientX, y: e.clientY, cx: r.cam.x, cy: r.cam.y, moved: false, button: e.button, t: performance.now(), touch: e.pointerType !== 'mouse' };
+      else if (pts.size === 2) { if (drag) drag.moved = true; pinch = pinchState(); r.cam.tx = null; }
     });
     cv.addEventListener('pointermove', e => {
       if (this.mode !== 'game') return;
-      const wpos = r.screenToWorld(e.clientX, e.clientY);
-      r.hover = wpos;
-      this.hud.onHover(wpos, e);
+      if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && pts.size >= 2) {
+        const n = pinchState();
+        r.zoomAt(n.mx, n.my, n.d / pinch.d);
+        r.cam.x -= (n.mx - pinch.mx) / r.cam.zoom; r.cam.y -= (n.my - pinch.my) / r.cam.zoom;
+        pinch = n; return;
+      }
+      if (e.pointerType === 'mouse') { const wpos = r.screenToWorld(e.clientX, e.clientY); r.hover = wpos; if (!this.touch) this.hud.onHover(wpos, e); }
       if (!drag) return;
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-      if (!drag.moved && Math.hypot(dx, dy) > 5) { drag.moved = true; cv.classList.add('grab'); }
-      if (drag.moved && (drag.button === 0 && !this.hud.placing || drag.button === 1 || drag.button === 2)) {
+      if (!drag.moved && Math.hypot(dx, dy) > (drag.touch ? 10 : 5)) { drag.moved = true; cv.classList.add('grab'); }
+      // touch always pans; a mouse pans unless it is positioning a building
+      if (drag.moved && (drag.touch || this.touch || (drag.button === 0 && !this.hud.placing) || drag.button === 1 || drag.button === 2)) {
         r.cam.x = drag.cx - dx / r.cam.zoom; r.cam.y = drag.cy - dy / r.cam.zoom; r.cam.tx = null;
       }
     });
-    cv.addEventListener('pointerup', e => {
+    const release = e => {
+      if (!pts.has(e.pointerId)) return;
+      pts.delete(e.pointerId);
+      if (pts.size >= 2) { pinch = pinchState(); return; }
+      if (pts.size === 1) { // one finger left after a pinch: keep panning from here, never treat it as a tap
+        pinch = null; const [p] = [...pts.values()];
+        drag = { x: p.x, y: p.y, cx: r.cam.x, cy: r.cam.y, moved: true, button: 0, touch: true };
+        return;
+      }
+      pinch = null;
       if (this.mode !== 'game' || !drag) return;
       cv.classList.remove('grab');
       const d = drag; drag = null;
-      if (d.moved && !(this.hud.placing && d.button === 0)) return;
+      if (e.type === 'pointercancel') return;
+      const touchy = d.touch || this.touch;
+      if (d.moved && (touchy || !(this.hud.placing && d.button === 0))) return;
       const wpos = r.screenToWorld(e.clientX, e.clientY);
-      if (d.button === 2) this.hud.onRightClick(wpos, e);
-      else if (d.button === 0) this.hud.onClick(wpos, e);
-    });
+      if (d.button === 2) { this.hud.onRightClick(wpos, e); return; }
+      if (d.button !== 0) return;
+      // double-tap zooms in on touch screens
+      if (d.touch && !this.hud.placing) {
+        const now = performance.now();
+        if (lastTap && now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 36) { r.zoomAt(e.clientX, e.clientY, 1.7); lastTap = null; return; }
+        lastTap = { t: now, x: e.clientX, y: e.clientY };
+      }
+      this.hud.onClick(wpos, e);
+    };
+    cv.addEventListener('pointerup', release);
+    cv.addEventListener('pointercancel', release);
     cv.addEventListener('wheel', e => {
       e.preventDefault();
       const f = Math.pow(1.0015, -e.deltaY * (this.settings.camSpeed || 1));

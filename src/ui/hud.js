@@ -61,7 +61,7 @@ export class Hud {
       </div>
       <div class="rail frame thin">${RAIL.map(([k, n, ic, key], i) => `${i === 1 || i === 4 || i === 8 ? '<div class="sep"></div>' : ''}<button class="btn rb" data-panel="${k}" data-tip="${n} (${key})">${ico(ic)}<span class="badge hidden"></span></button>`).join('')}</div>
       <div id="panel-host"></div>
-      <div class="minimap frame thin"><div class="mm-tools"><button class="btn icon xs" data-act="territory" data-tip="Toggle territory overlay">${ico('flag', 'sm')}</button><button class="btn icon xs" data-act="home" data-tip="Return to capital (H)">${ico('house', 'sm')}</button></div><canvas id="mm"></canvas></div>
+      <div class="minimap frame thin"><div class="mm-tools"><button class="btn icon xs" data-act="zoom-out" data-tip="Zoom out">${ico('minus', 'sm')}</button><button class="btn icon xs" data-act="zoom-in" data-tip="Zoom in">${ico('plus', 'sm')}</button><button class="btn icon xs" data-act="territory" data-tip="Toggle territory overlay">${ico('flag', 'sm')}</button><button class="btn icon xs" data-act="home" data-tip="Return to capital (H)">${ico('house', 'sm')}</button></div><canvas id="mm"></canvas></div>
       <div id="insp-host"></div>
       <div id="place-host"></div>`;
     this.bindResTips();
@@ -274,6 +274,7 @@ export class Hud {
     else if (b.dataset.act === 'esc') this.escMenu();
     else if (b.dataset.act === 'territory') { this.app.settings.territory = !this.app.settings.territory; this.app.applySettings(); }
     else if (b.dataset.act === 'home') this.goHome();
+    else if (b.dataset.act === 'zoom-in' || b.dataset.act === 'zoom-out') { const c = this.renderer.cam; c.tz = Math.max(this.renderer.minZoom(), Math.min(9, c.tz * (b.dataset.act === 'zoom-in' ? 1.5 : 1 / 1.5))); }
   }
   setSpeed(i) { this.sim.setSpeed(i); this.update(1); }
   goHome() { const s = this.game.settlements.get(this.game.player.capital); if (s) this.renderer.flyTo(s.x + 0.5, s.y + 1, Math.max(3, this.renderer.cam.tz)); }
@@ -283,23 +284,37 @@ export class Hud {
     this.placing = type;
     this.renderer.ghost = { type, x: 0, y: 0, ok: false };
     this.app.cv.classList.add('place');
+    this.root.classList.add('placing');
+    // touch: start with the building at the centre of the view, ready to be nudged by taps
+    if (this.app.touch) this.onHover(this.renderer.screenToWorld(innerWidth / 2, innerHeight / 2), {});
     this.updatePlaceHint();
+  }
+  confirmPlace() {
+    const gh = this.renderer.ghost; if (!gh) return;
+    const s = gh.type === '__settle' ? 1 : BUILDINGS[gh.type].size;
+    this.onClick({ x: gh.x + s / 2, y: gh.y + s / 2 }, { confirmed: true, shiftKey: !!this.repeatPlace });
   }
   cancelPlacing() {
     if (!this.placing) return;
-    this.placing = null; this.renderer.ghost = null; this.app.cv.classList.remove('place');
+    this.placing = null; this.renderer.ghost = null; this.app.cv.classList.remove('place'); this.root.classList.remove('placing');
     $('#place-host', this.root).innerHTML = '';
   }
   updatePlaceHint() {
     const host = $('#place-host', this.root); const g = this.game; const t = g.player;
+    const touch = this.app.touch; const gh = this.renderer.ghost;
+    const buttons = touch
+      ? `<div class="row" style="gap:4px"><button class="btn sm primary ${gh?.ok ? '' : 'disabled'}" data-act="confirm-place" ${gh?.ok ? '' : 'disabled'}>${ico('check', 'sm')} Place</button>${this.placing !== '__settle' ? `<button class="btn sm ${this.repeatPlace ? 'on' : ''}" data-act="repeat-place" data-tip="Keep placing more of this building">Repeat</button>` : ''}<button class="btn sm" data-act="cancel-place">${ico('close', 'sm')}</button></div>`
+      : `<button class="btn sm" data-act="cancel-place">Cancel (Esc)</button>`;
+    let html;
     if (this.placing === '__settle') {
       const c = canFound(g, t);
-      host.innerHTML = `<div class="place-hint frame thin">${ico('settle')}<div><div class="caps" style="color:var(--gold)">Found a settlement</div><div class="${c.ok ? '' : 'bad'}" style="font-size:0.88em">${c.ok ? 'Costs 80 wood, 40 stone, 40 grain · 8 settlers move' : esc(c.why)}${this.renderer.ghost?.why && c.ok ? ` · <span class="bad">${esc(this.renderer.ghost.why)}</span>` : ''}</div></div><button class="btn sm" data-act="cancel-place">Cancel (Esc)</button></div>`;
-      return;
+      html = `<div class="place-hint frame thin">${ico('settle')}<div class="ph-text"><div class="caps" style="color:var(--gold)">Found a settlement</div><div class="${c.ok ? '' : 'bad'}" style="font-size:0.88em">${c.ok ? (touch ? 'Tap the map to choose a site' : 'Costs 80 wood, 40 stone, 40 grain · 8 settlers move') : esc(c.why)}${gh?.why && c.ok ? ` · <span class="bad">${esc(gh.why)}</span>` : ''}</div></div>${buttons}</div>`;
+    } else {
+      const def = BUILDINGS[this.placing]; const cost = buildingCost(t, this.placing);
+      const why = gh?.why;
+      html = `<div class="place-hint frame thin">${ico('build')}<div class="ph-text"><div style="color:var(--gold-hi)">${def.name}</div><div class="cost">${Object.entries(cost).map(([r, v]) => `<span class="${(t.stock[r] || 0) < v ? 'lack' : ''}">${ico(r, 'sm')}${v}</span>`).join('')}${why ? `<span class="bad">· ${esc(why)}</span>` : `<span class="faint">· ${touch ? 'Tap the map to move it, then Place' : 'Shift-click to place several'}</span>`}</div></div>${buttons}</div>`;
     }
-    const def = BUILDINGS[this.placing]; const cost = buildingCost(t, this.placing);
-    const why = this.renderer.ghost?.why;
-    host.innerHTML = `<div class="place-hint frame thin">${ico('build')}<div><div style="color:var(--gold-hi)">${def.name}</div><div class="cost">${Object.entries(cost).map(([r, v]) => `<span class="${(t.stock[r] || 0) < v ? 'lack' : ''}">${ico(r, 'sm')}${v}</span>`).join('')}${why ? `<span class="bad">· ${esc(why)}</span>` : '<span class="faint">· Shift-click to place several</span>'}</div></div><button class="btn sm" data-act="cancel-place">Cancel (Esc)</button></div>`;
+    if (html !== this.lastHintHTML || !host.firstElementChild) { host.innerHTML = html; this.lastHintHTML = html; }
   }
 
   onHover(w, e) {
@@ -322,6 +337,8 @@ export class Hud {
     if (this.placing) {
       const gh = this.renderer.ghost;
       this.onHover(w, e);
+      // touch: a tap only positions the building; the Place button commits it
+      if ((this.app.touch || e.pointerType === 'touch') && !e.confirmed) { this.updatePlaceHint(); return; }
       if (this.placing === '__settle') {
         if (!gh.ok) { sfx('error'); toast('Cannot found here', gh.why || '', { kind: 'bad', icon: 'warning', ms: 2500 }); return; }
         this.cancelPlacing();
@@ -408,6 +425,8 @@ export class Hud {
     if (act === 'insp-close') this.select(null);
     else if (act === 'insp-follow') { this.following = this.following === this.selected.id ? null : this.selected.id; this.renderInspector(true); }
     else if (act === 'cancel-place') this.cancelPlacing();
+    else if (act === 'confirm-place') this.confirmPlace();
+    else if (act === 'repeat-place') { this.repeatPlace = !this.repeatPlace; this.updatePlaceHint(); }
     else if (ACTIONS[act]) { ACTIONS[act](this, b, e); this.renderInspector(true); }
   }
 

@@ -97,6 +97,8 @@ const DRAW = {
   handshake: p => DRAW.diplomacy(p),
   peace: p => { p.ellipse(6, 6, 5, 5, '#e8eef8'); p.vline(6, 1, 11, '#5f8fe0'); p.px(4, 8, '#5f8fe0'); p.px(3, 9, '#5f8fe0'); p.px(8, 8, '#5f8fe0'); p.px(9, 9, '#5f8fe0'); },
   sword: p => DRAW.weapons(p),
+  touch: p => { p.rect(5, 1, 2, 6, '#f1c9a5'); p.rect(4, 6, 6, 5, '#f1c9a5'); p.rect(7, 4, 1, 3, '#d9a77f'); p.rect(8, 5, 2, 2, '#f1c9a5'); p.rect(3, 7, 1, 2, '#f1c9a5'); p.hline(4, 10, 6, '#b98f6a'); p.px(5, 1, '#fff0e0'); p.px(2, 2, '#f2c84b'); p.px(9, 2, '#f2c84b'); p.px(3, 0, '#f2c84b'); p.px(8, 0, '#f2c84b'); },
+  keyboard: p => { p.rect(0, 3, 12, 7, '#3a3e4c'); p.outline(0, 3, 12, 7, '#07080c'); for (let y = 4; y < 8; y += 2) for (let x = 1; x < 11; x += 2) p.px(x, y, '#cfd8e8'); p.hline(3, 8, 6, '#cfd8e8'); p.hline(1, 3, 10, '#5a6074'); },
   exchange: p => { p.hline(2, 4, 7, '#efe6cf'); p.px(8, 3, '#efe6cf'); p.px(8, 5, '#efe6cf'); p.hline(3, 8, 7, '#d8b25a'); p.px(3, 7, '#d8b25a'); p.px(3, 9, '#d8b25a'); },
 };
 

@@ -506,7 +506,14 @@ export const ACTIONS = {
   'work-prio': (hud, b) => { hud.game.player.workPriority = b.dataset.k || null; hud.sim.call('workPriority', b.dataset.k || null); },
   alloc: (hud, b, e) => { let d = +b.dataset.d; if (e.shiftKey) d *= 5; hud.game.player.steward.work = false; hud.sim.call('alloc', b.dataset.job, d); },
   research: async (hud, b) => {
-    const t = hud.game.player; const k = b.dataset.key; if (t.techs.includes(k)) return;
+    const t = hud.game.player; const k = b.dataset.key;
+    // touch has no hover: show the details first, with a button to commit
+    if (hud.app.touch) {
+      const st = techState(t, k);
+      const go = await modal(`${techTip(hud, k)}<div class="modal-actions"><button class="btn" data-v="0">Close</button>${st !== 'done' ? `<button class="btn primary" data-v="1">${ico('research', 'sm')} Research</button>` : ''}</div>`, { onMount: m => m.querySelectorAll('[data-v]').forEach(x => x.onclick = () => closeModal(x.dataset.v === '1')) });
+      if (!go) return;
+    }
+    if (t.techs.includes(k)) return;
     if (!(await hud.sim.call('research', k))) fail('Cannot research yet', techState(t, k) === 'stage' ? 'Your civilisation must advance to a later stage.' : 'Prerequisites are missing.', 'lock');
   },
   'prop-yes': async (hud, b) => { const g = hud.game; const p = g.pendingProposals[+b.dataset.i]; if (!p) return; if (await hud.sim.call('answerProposal', p.from, p.tick, p.p.type, true)) toast(`Agreement with the ${g.tribes[p.from].name}`, proposalText(p.p), { icon: 'diplomacy', kind: 'good' }); },

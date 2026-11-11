@@ -27,7 +27,21 @@ export function sign(n, d = 1) { if (Math.abs(n) < 0.05) return '±0'; return (n
 let tipEl, tipTarget = null;
 export function initTooltips() {
   tipEl = document.getElementById('tooltip');
+  // touch: press and hold shows the tip and swallows the tap that would follow
+  let holdTimer = 0, held = false, hideTimer = 0;
+  document.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;
+    const t = e.target.closest('[data-tip], .has-tip'); if (!t) return;
+    held = false; clearTimeout(holdTimer);
+    const x = e.clientX, y = e.clientY;
+    holdTimer = setTimeout(() => { held = true; tipTarget = t; renderTip(); placeTip(x, y - 70); clearTimeout(hideTimer); hideTimer = setTimeout(() => { tipEl.classList.remove('show'); tipTarget = null; }, 4000); }, 420);
+  }, true);
+  const cancelHold = () => clearTimeout(holdTimer);
+  document.addEventListener('pointerup', cancelHold, true); document.addEventListener('pointercancel', cancelHold, true); document.addEventListener('pointermove', e => { if (e.pointerType !== 'mouse' && Math.abs(e.movementX) + Math.abs(e.movementY) > 6) cancelHold(); }, true);
+  document.addEventListener('click', e => { if (held) { held = false; e.stopPropagation(); e.preventDefault(); } }, true);
+  document.addEventListener('contextmenu', e => { if (document.body.classList.contains('touch')) e.preventDefault(); });
   document.addEventListener('mouseover', e => {
+    if (document.body.classList.contains('touch')) return;
     const t = e.target.closest('[data-tip], .has-tip');
     if (t === tipTarget) return;
     tipTarget = t;
@@ -35,7 +49,7 @@ export function initTooltips() {
     renderTip();
   });
   document.addEventListener('mousemove', e => { if (tipTarget) placeTip(e.clientX, e.clientY); });
-  document.addEventListener('mousedown', () => { tipEl.classList.remove('show'); tipTarget = null; });
+  document.addEventListener('mousedown', () => { if (document.body.classList.contains('touch')) return; tipEl.classList.remove('show'); tipTarget = null; });
 }
 function renderTip() {
   const t = tipTarget; if (!t) return;
