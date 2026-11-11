@@ -1,10 +1,10 @@
 // Main menu, new-run setup (world + tribe selection), load-run browser,
 // settings and credits.
-import { h, $, $$, esc, toast, confirmDialog, promptDialog, toggleHTML } from './dom.js';
+import { h, $, $$, esc, toast, modal, closeModal, confirmDialog, promptDialog, toggleHTML } from './dom.js';
 import { ico, emblemURL, spriteURL } from './icons.js';
 import { TRIBES } from '../data/tribes.js';
 import { MAP_SIZES, DIFFICULTIES, STARTS, SEASONS } from '../core/constants.js';
-import { listRuns, deleteRun, renameRun, SLOT_NAMES } from '../save/saves.js';
+import { listRuns, deleteRun, renameRun, storeSettings, SLOT_NAMES } from '../save/saves.js';
 import { generateWorld } from '../world/worldgen.js';
 import { BIOMES, isWater } from '../world/biomes.js';
 import { hashString } from '../core/rng.js';
@@ -49,7 +49,7 @@ export class MainMenu {
       const a = b.dataset.act;
       if (a === 'continue') this.app.loadRun(last.runId);
       else if (a === 'tutorial') this.app.startTutorial();
-      else if (a === 'new') this.newRun();
+      else if (a === 'new') this.offerTutorial().then(go => go && this.newRun());
       else if (a === 'load') this.loadRuns();
       else if (a === 'settings') openSettings(this.app, () => {});
       else if (a === 'credits') this.credits();
@@ -60,6 +60,18 @@ export class MainMenu {
     this.unsub = this.app.game.bus.on('log', e => { if (e.imp >= 1 && e.type !== 'law') this.tick(e); });
     const recent = this.app.game.history.filter(e => e.imp >= 1).slice(-3);
     recent.forEach(e => this.tick(e));
+  }
+
+  // first-timers are strongly encouraged (never forced) to play the tutorial before a real run
+  async offerTutorial() {
+    const s = this.app.settings;
+    if (s.tutorialDone || s.tutorialSkipped) return true;
+    const v = await modal(`<div class="modal-head">${ico('scroll', 'lg')}<div class="panel-title" style="font-size:1.8em">New to CivSim?</div></div>
+      <div class="prose">CivSim has a lot of systems, so we strongly recommend the short guided tutorial first. It takes about 15 minutes, introduces one feature at a time and shows how they connect. You can leave it at any time.</div>
+      <div class="modal-actions"><button class="btn" data-v="skip">Skip, I know what I'm doing</button><button class="btn primary" data-v="tut">${ico('play', 'sm')} Play the tutorial</button></div>`,
+    { dismissable: false, onMount: m => m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { sfx('click'); closeModal(b.dataset.v); }) });
+    if (v === 'tut') { this.app.startTutorial(); return false; }
+    s.tutorialSkipped = true; storeSettings(s); return true;
   }
 
   tick(e) {

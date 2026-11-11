@@ -12,6 +12,8 @@ import { normaliseAlloc, assignJobs } from './population.js';
 import { enactLaw, adoptGov } from './government.js';
 import { launchCampaign, recallArmy } from './military.js';
 import { addRes } from './economy.js';
+import { LAWS } from '../data/laws.js';
+import { DAY_TICKS } from '../core/constants.js';
 
 const FAST_MS = 50, SLOW_MS = 250, WORLD_MS = 3000, VIEW_PAD = 6;
 
@@ -123,6 +125,18 @@ export function createHost(post) {
       if (!game.tutorial) return false;
       if (kind === 'grant') { for (const [r, v] of Object.entries(arg)) addRes(game, P(), r, v); return true; }
       if (kind === 'tech') { for (const k of prereqPath(P(), arg)) completeTech(game, P(), k); return true; }
+      const pid = game.playerId, rivals = game.tribes.filter(t => t.id !== pid && t.alive !== false);
+      if (kind === 'goodwill') { for (const o of rivals) { game.dip.contact[pid][o.id] = game.dip.contact[o.id][pid] = true; // scripted first contact
+         game.dip.addMod(o.id, pid, 'tut', 35, { label: 'Welcoming envoys', decay: 0.02, noMod: true }); game.dip.addMod(pid, o.id, 'tut', 35, { label: 'Welcoming envoys', decay: 0.02, noMod: true }); } return true; }
+      // a rival's envoy arrives with a proposal (kind 'trade'), or an ultimatum that is safe to refuse here
+      if (kind === 'envoy' || kind === 'ultimatum') {
+        const r = kind === 'envoy' ? rivals[0] : rivals[rivals.length - 1]; if (!r) return false;
+        const p = kind === 'envoy' ? { type: 'trade' } : { type: 'tribute', ultimatum: true, reason: 'they wish to show their strength' };
+        game.pendingProposals.push({ from: r.id, to: pid, p, tick: game.tick, ...(kind === 'ultimatum' ? { expires: game.tick + DAY_TICKS * 8 } : {}) });
+        game.bus.emit('proposal', { from: r.id, to: pid, p }); return true;
+      }
+      // free the law slot and the council's cooldown so a law can always be enacted
+      if (kind === 'law') { const t = P(); for (const l of LAWS) t.laws[l.key] = l.options[0].key; t.lawCooldown = 0; t.modsDirty = true; return true; }
       return false;
     },
     steward(k, v) { P().steward[k] = v; return v; },
