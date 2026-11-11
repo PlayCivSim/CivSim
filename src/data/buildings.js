@@ -17,9 +17,9 @@ export const BUILDINGS = {
     desc: 'The heart of a settlement. Stores goods, shelters the elders and anchors territory.', influence: 9, noBuild: true },
   council: { name: 'Council Hall', cat: 'government', size: 3, cost: { wood: 60, stone: 40 }, work: 140, tech: 'formalleadership', influence: 3, hp: 400,
     desc: 'Where elders deliberate. Enables councils, more law slots and +stability.', effect: { stability: 6 }, unique: true },
-  admin: { name: 'Administrative Hall', cat: 'government', size: 3, cost: { stone: 120, wood: 60, coins: 60 }, work: 220, tech: 'administration', influence: 4, hp: 500,
+  admin: { name: 'Administrative Hall', cat: 'government', size: 3, cost: { stone: 120, wood: 60, clay: 30 }, work: 220, tech: 'administration', influence: 4, hp: 500,
     desc: 'Clerks and records. Reduces the strain of a large realm and improves tax collection.', effect: { stability: 8, tax: 0.15, sprawl: -0.4 }, unique: true },
-  capitol: { name: 'Grand Capitol', cat: 'government', size: 3, cost: { stone: 300, steel: 40, gold: 30, coins: 150 }, work: 420, tech: 'statecraft', influence: 5, hp: 900,
+  capitol: { name: 'Grand Capitol', cat: 'government', size: 3, cost: { stone: 300, steel: 40, gold: 20, goods: 60 }, work: 420, tech: 'statecraft', influence: 5, hp: 900,
     desc: 'The seat of a mature state. Large stability, relation and law bonuses.', effect: { stability: 14, relation: 0.15, lawSlots: 1 }, unique: true },
 
   // ---------------- Housing
@@ -42,7 +42,7 @@ export const BUILDINGS = {
   fishery: { name: 'Fishing Hut', cat: 'production', size: 2, cost: { wood: 18 }, work: 35, job: 'fisher', slots: 3, tech: 'fishing', hp: 70,
     prod: { out: 'fish', amt: 3, time: 50, mod: 'fish', gather: 'fish', radius: 8 }, desc: 'Must be built beside water. Fish stocks slowly replenish.', site: 'water' },
   quarry: { name: 'Quarry', cat: 'production', size: 2, cost: { wood: 20 }, work: 40, job: 'miner', slots: 4, tech: 'stoneworking', hp: 100,
-    prod: { out: 'stone', amt: 2.6, time: 55, mod: 'mine', gather: 'deposit', deps: ['stone', 'clay', 'salt'], radius: 6 }, desc: 'Cuts stone, clay or salt from nearby deposits.', site: 'deposit:stone,clay,salt' },
+    prod: { out: 'stone', amt: 2.6, time: 55, mod: 'mine', gather: 'deposit', deps: ['stone', 'clay', 'salt'], radius: 6 }, desc: 'Cuts stone, clay or salt from deposits — or slowly quarries bare rock from nearby hills and mountains.', site: 'rock' },
   mine: { name: 'Mine', cat: 'production', size: 2, cost: { wood: 40, stone: 20 }, work: 70, job: 'miner', slots: 4, tech: 'mining', hp: 140,
     prod: { out: 'iron', amt: 2, time: 65, mod: 'mine', gather: 'deposit', deps: ['iron', 'copper', 'coal', 'silver', 'gold', 'gems'], radius: 6 }, desc: 'Extracts ores within reach. Some ores need deeper mining knowledge.', site: 'deposit:iron,copper,coal,silver,gold,gems' },
   derrick: { name: 'Oil Derrick', cat: 'production', size: 2, cost: { steel: 25, stone: 30, machinery: 4 }, work: 120, job: 'miner', slots: 3, tech: 'industrialextraction', hp: 160,
@@ -78,7 +78,7 @@ export const BUILDINGS = {
     prod: { research: 1.0, time: 40 }, desc: 'Elders teach and record knowledge. Produces research.' },
   library: { name: 'Library', cat: 'research', size: 2, cost: { wood: 40, stone: 40, clay: 20 }, work: 100, job: 'researcher', slots: 4, tech: 'writing', hp: 150,
     prod: { research: 1.6, time: 40 }, desc: 'Scrolls and scribes. Researchers work far faster here.' },
-  academy: { name: 'Academy', cat: 'research', size: 3, cost: { stone: 100, wood: 40, coins: 40 }, work: 200, job: 'researcher', slots: 6, tech: 'education', hp: 260,
+  academy: { name: 'Academy', cat: 'research', size: 3, cost: { stone: 100, wood: 40, goods: 15 }, work: 200, job: 'researcher', slots: 6, tech: 'education', hp: 260,
     prod: { research: 2.4, time: 40 }, desc: 'A seat of higher learning. Large research output.', effect: { research: 0.05 } },
 
   // ---------------- Military

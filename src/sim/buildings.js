@@ -2,7 +2,7 @@
 import { BUILDINGS } from '../data/buildings.js';
 import { BIOMES, B, isWater } from '../world/biomes.js';
 import { DEPOSITS, DEP } from '../data/resources.js';
-import { buildingCost, canAfford, pay, mod, addRes } from './economy.js';
+import { buildingCost, canAfford, pay, mod, addRes, scarcity } from './economy.js';
 
 export function centreOf(b) { return { x: b.x + b.size / 2, y: b.y + b.size / 2 }; }
 export function doorTile(game, b) {
@@ -46,6 +46,12 @@ export function depositsNear(game, tribe, cx, cy, r, keys) {
   return { n, found };
 }
 
+export function rockNear(game, cx, cy, r) {
+  const w = game.world; let n = 0;
+  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const x = Math.round(cx + dx), y = Math.round(cy + dy); if (w.inb(x, y)) { const b = w.biome[w.idx(x, y)]; if (b === B.HILLS || b === B.MOUNTAIN) n++; } }
+  return n;
+}
+
 export function placementCheck(game, tribe, type, x, y, opts = {}) {
   const def = BUILDINGS[type]; const w = game.world; const s = def.size;
   if (!opts.ignoreUnlock && !isUnlocked(tribe, type) && type !== 'centre') return { ok: false, why: 'Not yet discovered' };
@@ -66,6 +72,11 @@ export function placementCheck(game, tribe, type, x, y, opts = {}) {
       const xx = x + dx, yy = y + dy; if (!w.inb(xx, yy)) continue;
       if (w.occ[w.idx(xx, yy)]) return { ok: false, why: 'Too cramped' };
     }
+  }
+  if (def.site === 'rock') {
+    const r = def.prod?.radius || 6;
+    const dep = depositsNear(game, tribe, x + s / 2, y + s / 2, r, accessibleDeposits(tribe, def.prod.deps)).n;
+    if (!dep && !rockNear(game, x + s / 2, y + s / 2, r)) return { ok: false, why: 'No stone deposits, hills or mountains nearby' };
   }
   if (def.site === 'water' || def.site === 'fertile' || def.site === 'open' || (def.site && def.site.startsWith('deposit'))) {
     if (def.site === 'water') {
@@ -243,9 +254,10 @@ export function scoreSpot(game, tribe, s, type, x, y) {
     case 'gatherer': score += around(8, i => (BIOMES[w.biome[i]].fert || 0) + (w.trees[i] ? 0.2 : 0)) * 0.06; break;
     case 'fishery': case 'harbor': score += around(6, i => isWater(w.biome[i]) ? w.fauna[i] / 255 : 0) * 0.4; break;
     case 'quarry': case 'mine': case 'derrick': {
-      const keys = accessibleDeposits(tribe, def.site.split(':')[1].split(','));
-      const r = depositsNear(game, tribe, cx, cy, def.prod.radius, keys); score += r.n * 2;
-      for (const k of Object.keys(r.found)) score += (DEPOSITS[DEP[k]].key === 'iron' ? 3 : 1);
+      const keys = accessibleDeposits(tribe, def.prod.deps);
+      if (type === 'quarry') score += Math.min(12, rockNear(game, cx, cy, def.prod.radius)) * 0.5 * scarcity(tribe, 'stone');
+      const r = depositsNear(game, tribe, cx, cy, def.prod.radius, keys);
+      for (const [k, n] of Object.entries(r.found)) score += Math.min(6, n) * 1.2 * scarcity(tribe, DEPOSITS[DEP[k]].res) + (k === 'iron' ? 3 : 0);
       break;
     }
     case 'farm': case 'orchard': case 'pasture': {
@@ -262,7 +274,7 @@ export function scoreSpot(game, tribe, s, type, x, y) {
   return score;
 }
 
-export function findSpot(game, tribe, s, type, maxEval = 260) {
+export function findSpot(game, tribe, s, type, maxEval = 260, tight = false) {
   const def = BUILDINGS[type]; const w = game.world;
   const R = territoryRadius(game, s) + 4;
   let best = null, bestScore = -1e9, evals = 0;
@@ -277,12 +289,14 @@ export function findSpot(game, tribe, s, type, maxEval = 260) {
   const pool = cands.length > maxEval * 2 ? cands.filter((_, i) => i < maxEval || game.rng.next() < maxEval / cands.length) : cands;
   for (const [x, y] of pool) {
     if (evals > maxEval) break;
-    const c = placementCheck(game, tribe, type, x, y, { margin: true, free: true });
+    const c = placementCheck(game, tribe, type, x, y, { margin: !tight, free: true });
     if (!c.ok) continue;
     evals++;
     const sc = scoreSpot(game, tribe, s, type, x, y);
     if (sc > bestScore) { bestScore = sc; best = { x, y, score: sc }; }
   }
+  // crowded towns: allow buildings to touch rather than fail outright
+  if (!best && !tight) return findSpot(game, tribe, s, type, maxEval, true);
   return best;
 }
 

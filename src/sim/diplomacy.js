@@ -313,7 +313,7 @@ export class Diplomacy {
       if (this.enemies(a).length) warDesire -= 25;
       if (tribe.stage < 2 || g.day < 25) warDesire -= 60;
       if ((this.truce?.[a * 8 + b] || 0) > g.tick || (this.truce?.[b * 8 + a] || 0) > g.tick) continue;
-      if ((tribe.jobCounts?.soldier || 0) < 8) warDesire -= 30;
+      if ((tribe.jobCounts?.soldier || 0) < 5) warDesire -= 30;
       if (rs < 1.35) warDesire -= 30; // recognise weakness
       if (other.isPlayer) warDesire += g.difficultyDef.aiBonus * 30;
       if (warDesire > 22 && rng.chance(0.25)) { this.declareWar(a, b, warReason(tribe, other, border)); continue; }
@@ -368,7 +368,8 @@ export function tradeTrip(game, a, t) {
   const partners = game.dip.partners(tribe.id).filter(p => game.tribes[p].alive);
   if (t.stage === 'start') {
     const wb = game.buildings.get(t.b);
-    if (!partners.length) {
+    const critical = ['stone', 'wood', 'clay'].some(r => scarcity(tribe, r) > 2.2);
+    if (!partners.length || (critical && game.rng.chance(0.5))) {
       // local barter at the market: turn surplus into scarce goods
       a.state = 'work'; a.timer = 70; a.task = { kind: 'barter', b: t.b }; a.hidden = false;
       localBarter(game, tribe, wb);
@@ -394,9 +395,13 @@ export function tradeTrip(game, a, t) {
     if (tribe.techs.includes('currency')) addRes(game, tribe, 'coins', base * 1.6 * (1 + mod(tribe, 'tariff')));
     else addRes(game, tribe, 'goods', base * 0.25);
     // exchange surpluses: each side receives something the other has in excess
-    const give = topSurplus(tribe), get = topSurplus(partner, give);
+    // bring home what we lack most among the partner's surpluses
+    const give = topSurplus(tribe);
+    let get = null, gv = 1.2;
+    for (const r of ['stone', 'wood', 'clay', 'grain', 'fish', 'tools', 'iron', 'herbs', 'salt', 'fibre']) { if (r === give || (partner.stock[r] || 0) < 60) continue; const s = scarcity(tribe, r); if (s > gv) { gv = s; get = r; } }
+    if (!get) get = topSurplus(partner, give);
     if (give && get) {
-      const amt = 6;
+      const amt = 8;
       const g1 = takeRes(tribe, give, amt); addRes(game, partner, give, g1);
       const g2 = takeRes(partner, get, amt); addRes(game, tribe, get, g2);
     }
@@ -422,7 +427,7 @@ function localBarter(game, tribe, wb) {
   if (!give) { if (tribe.techs.includes('currency')) addRes(game, tribe, 'coins', 1); return; }
   let need = null, nv = 0;
   for (const r of ['grain', 'wood', 'stone', 'clay', 'tools', 'herbs', 'salt', 'fibre']) { if (r === give) continue; const s = scarcity(tribe, r); if (s > nv) { nv = s; need = r; } }
-  const t = takeRes(tribe, give, 6);
+  const t = takeRes(tribe, give, 10);
   if (need) addRes(game, tribe, need, t * 0.5 * (1 + mod(tribe, 'trade')) * (RESOURCES[give].value / RESOURCES[need].value));
   if (tribe.techs.includes('currency')) addRes(game, tribe, 'coins', 1.5 * (1 + mod(tribe, 'trade')));
 }

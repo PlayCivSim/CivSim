@@ -34,9 +34,12 @@ export function autoAllocate(game, t) {
   const order = ['farmer', 'fisher', 'hunter', 'gatherer'].sort((a, b) => per[b] - per[a]);
   // minimum soldiers first when threatened
   const threat = t.threat || t.atWar;
-  give('soldier', Math.max(1, t.adults * (0.03 + ai.military * 0.07 + (threat ? 0.18 : 0) + (t.warPrep ? 0.12 : 0))));
+  const wantSoldiers = Math.max(1, t.adults * (0.03 + ai.military * 0.07 + (ai.aggression > 0.7 && t.stage >= 2 ? 0.05 : 0) + (threat ? 0.18 : 0) + (t.warPrep ? 0.12 : 0)));
+  // a small standing guard, then feed everyone, then the rest of the army
+  give('soldier', Math.min(wantSoldiers, Math.max(1, t.adults * 0.06)));
   for (const k of order) { if (foodNeed <= 0) break; const n = Math.ceil(foodNeed / per[k]); const before = alloc[k]; give(k, n); foodNeed -= (alloc[k] - before) * per[k]; }
   if (foodNeed > 0) give('gatherer', Math.ceil(foodNeed / 2));
+  give('soldier', Math.min(wantSoldiers, t.adults * (days < 3 ? 0.12 : 0.35)) - alloc.soldier);
   const sites = (t._sites || []).length;
   give('builder', Math.min(t.adults * 0.3, Math.max(2, t.adults * 0.08) + sites * 1.5));
   give('woodcutter', Math.max(2, t.adults * 0.12 * scarcity(t, 'wood')));

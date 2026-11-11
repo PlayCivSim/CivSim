@@ -6,7 +6,7 @@ import { BUILDINGS } from '../data/buildings.js';
 import { BIOMES, B, isWater } from '../world/biomes.js';
 import { DEPOSITS, DEP } from '../data/resources.js';
 import { addRes, takeRes, mod, scarcity } from './economy.js';
-import { doorTile, addProgress, accessibleDeposits, centreOf } from './buildings.js';
+import { doorTile, addProgress, accessibleDeposits, centreOf, rockNear } from './buildings.js';
 import { updateSoldier } from './military.js';
 import { tradeTrip } from './diplomacy.js';
 import { tribeName } from '../data/tribes.js';
@@ -293,7 +293,17 @@ function gatherTask(game, tribe, a, s, job, wb) {
       const v = scarcity(tribe, DEPOSITS[d].res) * (0.8 + r.next() * 0.4);
       if (v > bv) { bv = v; best = i; }
     }
-    if (best < 0) { wb.flags |= 1; socialise(game, a, s); return; }
+    // quarries may instead cut bare rock when stone is what the people need
+    if (wb.type === 'quarry' && (!wb.focus || wb.focus === 'stone')) {
+      if (wb._rock == null) wb._rock = rockNear(game, origin.x, origin.y, prod.radius);
+      const rv = wb._rock ? scarcity(tribe, 'stone') * 0.75 : 0;
+      if (rv > bv) best = -1;
+    }
+    if (best < 0) {
+      // quarries fall back to cutting bare rock: slower but inexhaustible
+      if (wb.type === 'quarry' && (wb._rock ?? rockNear(game, origin.x, origin.y, prod.radius))) { wb.flags &= ~1; return goTo(game, a, doorTile(game, wb), 'gather', { time: prod.time * 1.4, b: wb.id, kind: 'rock', hide: true }) === 'fail' ? failTask(game, a) : null; }
+      wb.flags |= 1; socialise(game, a, s); return;
+    }
     wb.flags &= ~1;
     // miners work inside the building and draw from the deposit
     return goTo(game, a, doorTile(game, wb), 'gather', { time: prod.time, b: wb.id, kind, dep: best, hide: true }) === 'fail' ? failTask(game, a) : null;
@@ -389,11 +399,14 @@ function doWork(game, a, dt) {
       if (def.prod.alt) { add(def.prod.out, amt * 0.6); add(def.prod.alt, amt * 0.4); } else add(def.prod.out, amt);
     }
     skillUp(game, tribe, a, job);
+  } else if (t.kind === 'rock') {
+    add('stone', 3 * p * (1 + mod(tribe, 'mine')) * toolFactor(tribe));
+    skillUp(game, tribe, a, job);
   } else if (t.kind === 'deposit') {
     const i = t.dep; const d = w.deposit[i];
     if (d && w.depAmt[i] > 0) {
       const dd = DEPOSITS[d];
-      const amt = (def.prod.amt + (dd.res === 'stone' || dd.res === 'clay' ? 0.6 : 0)) * p * (1 + mod(tribe, def.prod.mod)) * toolFactor(tribe);
+      const amt = (def.prod.amt + (dd.res === 'stone' ? 1.4 : dd.res === 'clay' ? 0.6 : 0)) * p * (1 + mod(tribe, def.prod.mod)) * toolFactor(tribe);
       const deplete = Math.ceil(amt * Math.max(0.2, 1 + mod(tribe, 'depletion')));
       w.depAmt[i] = Math.max(0, w.depAmt[i] - deplete);
       if (w.depAmt[i] === 0) { w.deposit[i] = 0; game.markTiles(i % w.w, (i / w.w) | 0, 1, 1); game.bus.emit('depleted', { tribe, res: dd.res }); }

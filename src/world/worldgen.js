@@ -203,7 +203,7 @@ export function generateWorld(seed, sizeKey, sizeDef) {
   };
   const rocky = b => b === B.HILLS || b === B.MOUNTAIN;
   const mountain = b => b === B.MOUNTAIN;
-  place('stone', 14 * area, b => rocky(b) || b === B.TUNDRA || b === B.GRASS && rng.chance(0.08), [3, 7]);
+  place('stone', 20 * area, b => rocky(b) || b === B.TUNDRA || b === B.GRASS && rng.chance(0.08), [3, 7]);
   place('clay', 8 * area, (b, i) => (b === B.SWAMP || b === B.VALLEY || b === B.GRASS) && world.riverDist[i] <= 3, [2, 5]);
   place('iron', 7 * area, rocky, [2, 5]);
   place('copper', 6 * area, rocky, [2, 4]);
