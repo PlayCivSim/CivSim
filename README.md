@@ -2,7 +2,7 @@
 
 ![A Vaelith town at midsummer](docs/shots/settlement.jpg)
 
-**[Play in your browser](https://OWNER.github.io/civsim/game.html)** · [Website](https://OWNER.github.io/civsim/)
+**[Play in your browser](https://dashryerson-design.github.io/CivSim/game.html)** · [Website](https://dashryerson-design.github.io/CivSim/)
 
 A living-world civilisation builder in the browser. Four distinct tribes — the diplomatic **Oruvai**, the martial **Kharvak**, the agrarian **Thalori** and the inventive **Vaelith** — grow from a single hearth on a procedurally generated continent. You lead one; the other three are run by a personality-driven AI.
 
