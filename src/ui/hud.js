@@ -21,7 +21,9 @@ import { SLOT_NAMES, MANUAL_SLOTS, getRun, slotLabel } from '../save/saves.js';
 import { techCost } from '../sim/progress.js';
 import { unread, openHappiness, manpower, manpowerTip, openHudCustomise, hudHidden } from './notices.js';
 import { isAlert } from '../sim/records.js';
-import { fogged } from '../sim/intel.js';
+import { fogged, intel } from '../sim/intel.js';
+import './encyclopedia.js';
+import { t as tr } from '../i18n.js';
 
 const SPEED_INFO = ['Paused: the world holds still, but you can still give orders', 'Normal: 1x speed', 'Fast: 3x speed', 'Very fast: 8x speed'];
 
@@ -29,7 +31,7 @@ const TOP_RES = ['food', 'wood', 'stone', 'clay', 'iron', 'tools', 'coins', 'res
 const RAIL = [
   ['overview', 'Overview', 'overview', 'F1'], ['build', 'Build', 'build', 'B'], ['population', 'Population', 'population', 'P'],
   ['economy', 'Economy', 'economy', 'O'], ['technology', 'Technology', 'technology', 'T'], ['diplomacy', 'Diplomacy', 'diplomacy', 'G'],
-  ['government', 'Government', 'government', 'L'], ['military', 'Military', 'military', 'M'], ['chronicle', 'Chronicle', 'chronicle', 'C'],
+  ['government', 'Government', 'government', 'L'], ['military', 'Military', 'military', 'M'], ['chronicle', 'Chronicle', 'chronicle', 'C'], ['help', 'Encyclopedia', 'scroll', '/'],
 ];
 
 export class Hud {
@@ -43,7 +45,7 @@ export class Hud {
   blocking() { return !!this.pausedForChoice; }
 
   hide() { this.root.classList.add('hidden'); }
-  detach() { this.offs.forEach(f => f()); this.offs = []; this.root.innerHTML = ''; this.hide(); this.panel = null; this.placing = null; this.renderer.ghost = null; }
+  detach() { this.app.hints?.reset(); this.offs.forEach(f => f()); this.offs = []; this.root.innerHTML = ''; this.hide(); this.panel = null; this.placing = null; this.renderer.ghost = null; }
 
   attach(game) {
     this.detach();
@@ -115,7 +117,7 @@ export class Hud {
     on('campaign', ({ tribe, target }) => { if (target.tribe === P) { sfx('war'); toast('Invasion!', `A ${tribe.name} army marches on ${target.name}!`, { icon: 'military', kind: 'bad', ms: 8000, onClick: () => this.renderer.flyTo(target.x, target.y, 3) }); } });
     on('sfx', ({ k, x, y }) => { const r = this.renderer; if (!r.view) return; const X = x * TILE, Y = y * TILE; if (X < r.view.x0 || X > r.view.x1 || Y < r.view.y0 || Y > r.view.y1 || r.cam.zoom < 2.5) return; sfx(k, { vol: Math.min(1, r.cam.zoom / 6) * 0.6, pan: Math.max(-1, Math.min(1, (X - r.cam.x) / ((r.view.x1 - r.view.x0) / 2))) }); });
     on('placed', ({ tribe }) => { if (tribe.id === P) sfx('place'); });
-    on('log', e => { if (isAlert(e, P)) $('.bell', this.root)?.classList.add('ring'); this.updateBell(); });
+    on('log', e => { this.app.hints?.onRecord(g, e); if (isAlert(e, P)) $('.bell', this.root)?.classList.add('ring'); this.updateBell(); });
     on('depleted', ({ tribe, res }) => { if (tribe.id === P && performance.now() - (this.state['dep' + res] || 0) > 60000) { this.state['dep' + res] = performance.now(); toast('Deposit exhausted', `A ${RESOURCES[res].name} deposit has run dry.`, { icon: res }); } });
   }
 
@@ -185,6 +187,7 @@ export class Hud {
     const sh = bad.length ? `${ico('warning', 'sm')}<span>${esc(bad[0].text)}</span>${bad.length > 1 ? `<small>+${bad.length - 1} more</small>` : ''}` : '';
     if (strip._h !== sh) { strip._h = sh; strip.innerHTML = sh; strip.classList.toggle('hidden', !bad.length); }
     this.updateBell();
+    this.app.hints?.check(g, this.panel);
     refreshTip();
   }
 
@@ -251,6 +254,19 @@ export class Hud {
     if (t.threat) W.push({ bad: true, icon: 'military', text: 'Enemies are inside your lands!' });
     if (g.dip.coalition?.against === t.id) W.push({ bad: true, icon: 'diplomacy', text: `A coalition of the ${g.dip.coalition.members.map(m => g.tribes[m].name).join(' and ')} has formed against your growing power.` });
     if ((t.stock.wood || 0) < 15) W.push({ bad: false, icon: 'wood', text: 'Wood is nearly exhausted.' });
+    // advisor: intelligence, supply, contracts and money
+    if (g.fog) for (const o of g.tribes) {
+      if (o === t || !o.alive || !g.dip.contact[t.id][o.id]) continue;
+      const hostile = g.dip.atWar(t.id, o.id) || g.dip.opinion(o.id, t.id) < -25;
+      if (!hostile) continue;
+      const r = intel(g, t.id, o.id, 'military');
+      if (r.lv === 0) W.push({ bad: true, icon: 'eye', text: tr('adv.noIntel', { name: o.name }) });
+      else if (r.age > 15) W.push({ bad: false, icon: 'eye', text: tr('adv.staleIntel', { name: o.name, age: `${r.age} days old` }) });
+    }
+    for (const ar of g.armies) if (ar.tribe === t.id && (ar.supply ?? 1) < 0.6) { W.push({ bad: true, icon: 'military', text: tr('adv.supply', { pct: Math.round(ar.supply * 100) }) }); break; }
+    for (const c of g.dip.treaties) if (c.type === 'contract' && (c.a === t.id || c.b === t.id)) { const give = c.a === t.id ? c.give : c.get; const lack = Object.entries(give).find(([r, v]) => (t.stock[r] || 0) < v); if (lack) { W.push({ bad: true, icon: lack[0], text: tr('adv.contract', { res: RESOURCES[lack[0]].name, name: g.tribes[c.a === t.id ? c.b : c.a].name }) }); break; } }
+    if (t.techs.includes('currency') && (t.rates.coins || 0) < -0.5 && (t.stock.coins || 0) < 40) W.push({ bad: false, icon: 'coins', text: tr('adv.coins', { rate: (t.rates.coins).toFixed(1) }) });
+    for (const m of g.dip.missions || []) if (m.from === t.id && m.kind === 'envoy' && m.status === 'missing' && g.tick > m.eta) { W.push({ bad: false, icon: 'scroll', text: tr('adv.envoyLate', { name: g.tribes[m.to].name }) }); break; }
     if (t.lastLedger?.wasted > 5) W.push({ bad: false, icon: 'warning', text: 'Storage is full — goods are being lost. Build storehouses.' });
     return W;
   }
@@ -502,6 +518,7 @@ export class Hud {
     const map = { n: 'notices', b: 'build', p: 'population', o: 'economy', t: 'technology', g: 'diplomacy', l: 'government', m: 'military', c: 'chronicle' };
     if (map[k.toLowerCase()] && !e.ctrlKey) { this.openPanel(map[k.toLowerCase()]); return; }
     if (k.toLowerCase() === 'h') this.goHome();
+    if (k === '/' || k === '?') { e.preventDefault(); this.openPanel('help'); }
   }
 
   // ---------------------------------------------------------------- dialogs

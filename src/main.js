@@ -7,6 +7,7 @@ import { SimClient } from './sim/client.js';
 import { initAudio, resumeAudio, setVolumes, setAmbience, sfx, setMusicMood } from './audio/audio.js';
 import { loadSettings, storeSettings, saveGame, listRuns, loadSlot, latestSlot, slotLabel, clearRecovery } from './save/saves.js';
 import { SAVE_VERSION } from './sim/game.js';
+import { Hints } from './ui/hints.js';
 import { MainMenu } from './ui/menu.js';
 import { Hud } from './ui/hud.js';
 import { TILE } from './core/constants.js';
@@ -44,6 +45,7 @@ class App {
     addEventListener('keydown', unlock, { once: false });
     this.menu = new MainMenu(this);
     this.hud = new Hud(this);
+    this.hints = new Hints(this);
     await this.showMenu();
     requestAnimationFrame(t => this.loop(t));
     document.getElementById('boot')?.remove();
