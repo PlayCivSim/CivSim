@@ -14,6 +14,7 @@ import { availableTechs, techCost, setResearch, MAX_SETTLEMENTS } from './progre
 import { enactLaw, canEnact, lawSlots, enactedCount, adoptGov, canAdoptGov } from './government.js';
 import { jobCap, normaliseAlloc } from './population.js';
 import { launchCampaign, militaryStrength } from './military.js';
+import { autoPlan } from '../data/warfare.js';
 import { siteStats } from '../world/worldgen.js';
 import { BIOMES } from '../world/biomes.js';
 import { makeAgent, isAdult } from './agents.js';
@@ -343,7 +344,7 @@ function aiWar(game, t) {
     }
   }
   const already = game.armies.some(ar => ar.tribe === t.id && ar.state !== 'return');
-  if (target && !already && tv > 1.1 - aiOf(t).aggression * 0.3) { launchCampaign(game, t, target.id, 0.75, target._est?.food); t.lastDecision = `Marching on ${target.name}: ${target._est ? Math.round(target._est.days) + ' days away, carrying ' + target._est.food + ' food' : ''}`; t.raidCooldown = t.raidCooldown || {}; t.raidCooldown[target.id] = game.tick + 360 * 3; }
+  if (target && !already && tv > 1.1 - aiOf(t).aggression * 0.3) { { const pl = autoPlan(t, target, game); const r = game.rng.next(); pl.approach = r < 0.55 ? 'direct' : r < 0.7 ? 'left' : r < 0.85 ? 'right' : r < 0.93 ? 'surround' : 'rear'; if (pl.lead === 'together' && game.rng.chance(0.4)) pl.lead = pl.mix.spear ? 'spear' : pl.mix.archer ? 'archer' : 'together'; launchCampaign(game, t, target.id, 0.75, target._est?.food, pl); } t.lastDecision = `Marching on ${target.name}: ${target._est ? Math.round(target._est.days) + ' days away, carrying ' + target._est.food + ' food' : ''}`; t.raidCooldown = t.raidCooldown || {}; t.raidCooldown[target.id] = game.tick + 360 * 3; }
 }
 
 // ---------------------------------------------------------------- main

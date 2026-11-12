@@ -31,7 +31,8 @@ import { rollEvents, resolveChoice, EVENTS } from './events.js';
 import { aiThink, stewardThink, autoAllocate } from './ai.js';
 import { isWater, BIOMES } from '../world/biomes.js';
 
-export const SAVE_VERSION = 6; // 4: event records carry cat/with/alert; seenSeq. 5: fog, intel, missions (all optional)
+export const SAVE_VERSION = 7; // 7: soldier units, armour choice, battle plans, burning (all optional)
+// 4: event records carry cat/with/alert; seenSeq. 5: fog, intel, missions (all optional)
 
 // The shared event record keeps up to HISTORY_CAP entries. When full, minor
 // news about other peoples goes first; anything major or involving the player

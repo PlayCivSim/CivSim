@@ -41,6 +41,7 @@ export function personSprite(tribeKey, job, frame, female, child, look, carry, t
   const key = `p|${tribeKey}|${job}|${frame}|${female ? 1 : 0}|${child ? 1 : 0}|${look % 9}|${carry || ''}|${tier >= 4 ? 1 : 0}|${flip ? 1 : 0}`;
   return memo(key, () => {
     const c = canvas(9, 12); const p = new Pen(c.getContext('2d'));
+    let unit = null, armour = null; [job, unit, armour] = job.split('.');
     const def = TRIBES.find(t => t.key === tribeKey) || TRIBES[0];
     const pal = def.pal, styleKey = def.style || def.key;
     const skin = pal.skin[look % 3], hair = pal.hair[(look >> 2) % 3];
@@ -49,6 +50,10 @@ export function personSprite(tribeKey, job, frame, female, child, look, carry, t
     let body = pal.primary, bodyD = pal.dark, trim = pal.accent;
     if (job === 'idle' || child) { body = mix(pal.primary, '#9a8a70', 0.45); bodyD = shade(body, -0.3); }
     if (job === 'farmer' || job === 'gatherer') { body = mix(pal.primary, '#b89a60', 0.35); }
+    if (job === 'soldier' && armour && armour !== 'none') {
+      const AC = { hide: ['#8a6a48', '#5e4630'], scale: ['#b88f4a', '#7a5e30'], mail: ['#8f949e', '#5e636c'], plate: ['#c8ced8', '#7d848f'] }[armour];
+      if (AC) { body = mix(AC[0], pal.primary, 0.2); bodyD = AC[1]; trim = pal.primary; }
+    }
     const legs = shade(pal.dark, -0.2), boots = '#2a1e18';
     const X = 3; // body left
     if (child) {
@@ -114,8 +119,22 @@ export function personSprite(tribeKey, job, frame, female, child, look, carry, t
           if (styleKey === 'kharvak') { p.px(X - 1, y0 - 1, '#e8dcc0'); p.px(X + 3, y0 - 1, '#e8dcc0'); }
           if (styleKey === 'oruvai') p.px(X + 1, y0 - 2, pal.primary);
           if (styleKey === 'vaelith') p.px(X + 1, y0 - 2, pal.light);
-          p.vline(hx, (up ? hy - 5 : hy - 4), 7, wood); p.px(hx, up ? hy - 6 : hy - 5, iron);
-          p.rect(X - 2, ty, 2, 3, pal.primary); p.px(X - 2, ty, pal.light); p.px(X - 1, ty + 1, pal.accent);
+          if (unit === 'archer') {
+            // bow and quiver
+            p.px(hx + 1, hy - 3, wood); p.vline(hx + 2, hy - 2, 4, wood); p.px(hx + 1, hy + 2, wood); p.vline(hx + 1, hy - 2, 4, '#e8dcc0');
+            p.vline(X - 1, ty - 1, 3, '#7a5a3a'); p.px(X - 1, ty - 2, '#e8dcc0');
+          } else if (unit === 'sword') {
+            p.vline(hx, up ? hy - 4 : hy - 2, 3, '#dfe6ee'); p.px(hx - 1, up ? hy - 1 : hy + 1, iron); p.px(hx + 1, up ? hy - 1 : hy + 1, iron);
+            p.rect(X - 2, ty - 1, 3, 4, pal.primary); p.px(X - 2, ty - 1, pal.light); p.px(X - 1, ty + 1, iron);
+          } else if (unit === 'warrior') {
+            p.vline(hx, up ? hy - 3 : hy - 1, 3, wood); p.rect(hx - 1, up ? hy - 4 : hy - 2, 2, 1, '#6a4a2a');
+          } else if (unit === 'sapper') {
+            p.rect(X - 2, ty - 1, 2, 3, '#6a4a2a'); p.px(X - 2, ty, '#3a2a1a'); p.px(X - 1, ty - 2, '#f2c84b');
+            p.px(hx, hy, '#c04a2a');
+          } else {
+            p.vline(hx, (up ? hy - 5 : hy - 4), 7, wood); p.px(hx, up ? hy - 6 : hy - 5, iron);
+            p.rect(X - 2, ty, 2, 3, pal.primary); p.px(X - 2, ty, pal.light); p.px(X - 1, ty + 1, pal.accent);
+          }
           break;
         }
       }

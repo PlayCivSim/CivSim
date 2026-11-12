@@ -12,6 +12,7 @@ import { personSprite, treeSprite, buildingSprite, scaffoldSprite, glowSprite, c
 import { ageYears } from '../sim/agents.js';
 import { Lighting } from './lighting.js';
 import { WORK_AGE } from '../core/constants.js';
+import { unitOf, armourOf } from '../data/warfare.js';
 
 export class Camera {
   constructor() { this.x = 0; this.y = 0; this.zoom = 3; this.tz = 3; this.tx = null; this.ty = null; this.vx = 0; this.vy = 0; }
@@ -275,6 +276,24 @@ export class Renderer {
     }
   }
 
+  // a trebuchet with its crew: frame, counterweight and a throwing arm that swings when it fires
+  drawEngine(ctx, a, ax, ay, tribe) {
+    const wood = '#7a5a3a', dark = '#4a3422';
+    const fire = a.anim === 'attack' ? Math.max(0, Math.sin(this.time * 3 + a.id)) : 0;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(ax - 6, ay - 0.5, 12, 1.5);
+    ctx.fillStyle = dark; ctx.fillRect(ax - 6, ay - 2, 12, 2); // base
+    ctx.fillStyle = '#2a1e18'; ctx.fillRect(ax - 5, ay - 1, 2, 2); ctx.fillRect(ax + 3, ay - 1, 2, 2); // wheels
+    ctx.fillStyle = wood; ctx.fillRect(ax - 3, ay - 10, 1, 8); ctx.fillRect(ax + 2, ay - 10, 1, 8); ctx.fillRect(ax - 3, ay - 10, 6, 1);
+    // arm pivots at the top
+    const ang = -0.6 + fire * 2.2, L = 9;
+    const px = ax, py = ay - 10;
+    const ex = px + Math.cos(Math.PI + ang) * L * a.facing * -1, ey = py + Math.sin(Math.PI + ang) * L;
+    ctx.strokeStyle = wood; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(px - (ex - px) * 0.35, py - (ey - py) * 0.35); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.fillStyle = '#5e5a5c'; ctx.fillRect(px - (ex - px) * 0.35 - 1.5, py - (ey - py) * 0.35, 3, 3); // counterweight
+    ctx.fillStyle = tribe.color; ctx.fillRect(ax - 1, ay - 13, 3, 2); // banner
+    if (a.hp < 20) { ctx.fillStyle = '#300'; ctx.fillRect(ax - 3, ay - 15, 6, 1); ctx.fillStyle = '#e44'; ctx.fillRect(ax - 3, ay - 15, 6 * Math.max(0, a.hp) / 30, 1); }
+  }
+
   drawAgent(ctx, a, z, sel) {
     const tribe = TRIBES[a.tribe];
     const ax = a.x * TILE, ay = a.y * TILE;
@@ -285,7 +304,13 @@ export class Renderer {
     if (a.moving) frame = 1 + (((t * 7 + a.id) | 0) % 2);
     else if (a.state === 'work' || a.state === 'build' || (a.state === 'fight' && a.anim === 'attack')) frame = ((t * 4 + a.id) | 0) % 2 ? 3 : 0;
     const carry = a.carry ? Object.keys(a.carry)[0] : null;
-    const spr = personSprite(tribe.key, child ? 'idle' : a.job, frame, a.female, child, a.look, carry, this.game.tribes[a.tribe].stage, a.facing < 0);
+    let jobKey = child ? 'idle' : a.job;
+    if (a.job === 'soldier') {
+      const mt = this.game.tribes[a.tribe], u = unitOf(mt, a);
+      if (u === 'treb') { this.drawEngine(ctx, a, ax, ay, tribe); return; }
+      jobKey = `soldier.${u}.${armourOf(mt)}`;
+    }
+    const spr = personSprite(tribe.key, jobKey, frame, a.female, child, a.look, carry, this.game.tribes[a.tribe].stage, a.facing < 0);
     // shadow
     ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(ax - 2, ay - 0.5, 4, 1);
     ctx.drawImage(spr, Math.round(ax - 4.5), Math.round(ay - 11));
@@ -347,7 +372,9 @@ export class Renderer {
         case 'glyph': ctx.globalAlpha = 1 - p; ctx.fillStyle = TRIBES[f.tribe]?.pal.light || '#fff'; ctx.fillRect(X, Y - 4 - p * 10, 1, 3); ctx.fillRect(X - 1, Y - 3 - p * 10, 3, 1); ctx.globalAlpha = 1; break;
         case 'hit': ctx.fillStyle = p < 0.5 ? '#fff' : '#e04040'; ctx.fillRect(X - 1, Y - 6, 2, 2); break;
         case 'fallen': ctx.globalAlpha = 1 - p * p; ctx.fillStyle = '#8a7a6a'; ctx.fillRect(X - 0.5, Y - 4, 1, 4); ctx.fillRect(X - 1.5, Y - 3, 3, 1); ctx.globalAlpha = 1; break;
-        case 'arrow': { const ax = X + (f.tx * TILE - X) * p, ay = Y + (f.ty * TILE - Y) * p - Math.sin(p * Math.PI) * 6; ctx.fillStyle = '#3a2a1a'; ctx.fillRect(ax - 1, ay, 2, 1); break; }
+        case 'arrow': { const ax = X + (f.tx * TILE - X) * p, ay = Y + (f.ty * TILE - Y) * p - Math.sin(p * Math.PI) * 6; ctx.fillStyle = f.fire ? '#ff9a30' : '#3a2a1a'; ctx.fillRect(ax - 1, ay, 2, 1); if (f.fire) { ctx.fillStyle = '#ffe070'; ctx.fillRect(ax + (f.tx * TILE > X ? 1 : -2), ay, 1, 1); } break; }
+        case 'stone': { const sx = X + (f.tx * TILE - X) * p, sy = Y + (f.ty * TILE - Y) * p - Math.sin(p * Math.PI) * 26; ctx.fillStyle = f.blast ? '#3a2a1a' : '#7d7a80'; ctx.fillRect(sx - 1.5, sy - 1.5, 3, 3); if (f.blast) { ctx.fillStyle = '#ffd060'; ctx.fillRect(sx, sy - 2.5, 1, 1); } break; }
+        case 'blast': { const r = (f.big ? 14 : 9) * Math.sqrt(p); ctx.globalAlpha = 1 - p; ctx.fillStyle = p < 0.3 ? '#fff4c0' : '#ff8a30'; ctx.beginPath(); ctx.arc(X, Y - 2, r, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#5a4a40'; for (let k = 0; k < 8; k++) ctx.fillRect(X + Math.cos(k * 0.8) * r * 1.2, Y - 2 + Math.sin(k * 0.8) * r * 0.8 - p * 8, 2, 2); ctx.globalAlpha = 1; break; }
         case 'fire': if (Math.random() < 0.6 && this.settings.particles) this.particles.push({ k: 'flame', x: X + (Math.random() - 0.5) * 6, y: Y - 1, vx: 0, vy: -8, t: 0, life: 0.6 }); break;
         case 'ping': { ctx.strokeStyle = `rgba(255,236,160,${1 - p})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(X, Y, 4 + p * 30, 0, Math.PI * 2); ctx.stroke(); break; }
         case 'caravan': { const cxp = X + (f.tx * TILE - X) * p, cyp = Y + (f.ty * TILE - Y) * p; if (z < 2.5) { ctx.fillStyle = TRIBES[f.tribe].color; ctx.fillRect(cxp - 1.5, cyp - 1.5, 3, 3); ctx.fillStyle = '#e8d0a0'; ctx.fillRect(cxp - 0.5, cyp - 2.5, 1, 1); } break; }

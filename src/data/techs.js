@@ -48,11 +48,18 @@ export const TECHS = [
   // Military
   T('militaryorganisation', 'Military Organisation', 'military', 1, ['carpentry'], 'Ranks, drills and barracks.', { unlocks: ['barracks', 'w_kharvak'], mods: { military: 0.1 } }),
   T('palisades', 'Palisades', 'military', 1, ['carpentry'], 'Sharpened stakes and watchtowers.', { unlocks: ['tower'], mods: { defense: 0.1 } }),
-  T('bronzeweapons', 'Bronze Weapons', 'military', 3, ['militaryorganisation', 'mining'], 'Cast blades. Unlocks the Armory.', { unlocks: ['armory'], equip: 1 }),
-  T('ironweapons', 'Iron Weapons', 'military', 4, ['bronzeweapons', 'metalworking'], 'Forged iron arms and armour.', { equip: 2 }),
+  T('spearcraft', 'Spearcraft', 'military', 0, [], 'Fire-hardened spears held in a bristling line.', { units: ['spear'] }),
+  T('archery', 'Archery', 'military', 1, ['carpentry'], 'Bows of yew and sinew. Archers shoot from behind the line.', { units: ['archer'] }),
+  T('hidearmour', 'Hide Armour', 'military', 1, ['animalhusbandry'], 'Boiled leather jerkins turn arrows aside.', { armours: ['hide'] }),
+  T('flamingarrows', 'Flaming Arrows', 'military', 2, ['archery'], 'Pitch-soaked arrows. Archers set buildings ablaze.', { fire: true }),
+  T('bronzeweapons', 'Bronze Weapons', 'military', 3, ['militaryorganisation', 'mining'], 'Cast blades and scale armour. Swordsmen. Unlocks the Armory.', { unlocks: ['armory'], equip: 1, units: ['sword'], armours: ['scale'] }),
+  T('ironweapons', 'Iron Weapons', 'military', 4, ['bronzeweapons', 'metalworking'], 'Forged iron arms and mail coats.', { equip: 2, armours: ['mail'] }),
   T('fortification', 'Fortification', 'military', 4, ['palisades', 'masonry', 'metalworking'], 'Stone keeps and curtain walls.', { unlocks: ['fort'], mods: { defense: 0.15 } }),
+  T('siegeengines', 'Siege Engines', 'military', 4, ['mathematics', 'bronzeweapons'], 'Counterweight trebuchets hurl stones over walls.', { units: ['treb'] }),
+  T('explosives', 'Black Powder', 'military', 5, ['deepmining', 'mathematics'], 'Coal, salt and sulphur. Sappers blast walls apart.', { units: ['sapper'] }),
   T('tactics', 'Tactics', 'military', 5, ['ironweapons'], 'Formations and coordinated manoeuvre.', { mods: { military: 0.2 } }),
-  T('steelarms', 'Steel Arms', 'military', 6, ['tactics', 'deepmining'], 'Tempered steel weapons and plate.', { equip: 3 }),
+  T('explosiveshot', 'Explosive Shot', 'military', 6, ['explosives', 'siegeengines'], 'Trebuchets hurl powder kegs that burst among the defenders.', { blastShot: true }),
+  T('steelarms', 'Steel Arms', 'military', 6, ['tactics', 'deepmining'], 'Tempered steel weapons and plate armour.', { equip: 3, armours: ['plate'] }),
 
   // Economics
   T('barter', 'Barter', 'economics', 1, ['oraltradition'], 'Marketplaces and exchange between peoples.', { unlocks: ['market'], tradeTreaty: true }),

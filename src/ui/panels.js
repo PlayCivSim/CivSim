@@ -13,6 +13,7 @@ import { canAfford, foodTotal, dailyFoodNeed, scarcity, buildingCost } from '../
 import { jobCap, normaliseAlloc, assignJobs, traitName } from '../sim/population.js';
 import { lawSlots, enactedCount, canEnact, enactLaw, canAdoptGov, adoptGov, policyInteractions, LEADER_TRAITS } from '../sim/government.js';
 import { launchCampaign, equipTier, recallArmy } from '../sim/military.js';
+import { UNITS, ARMOURS, ARMOUR_KEYS, APPROACHES, FOCUS, LEADS, LINE_UNITS, unitOk, armourOk, armourOf, autoPlan } from '../data/warfare.js';
 import { canFound, ENVOY_DEFAULTS, WORK_PRIORITIES } from '../sim/ai.js';
 import { planProgress } from '../sim/planner.js';
 import { TREATY_NAMES } from '../sim/diplomacy.js';
@@ -401,6 +402,10 @@ const military = {
         ${stat('flag', 'Defences', towers, 'towers & forts')}${stat('sad', 'War weariness', Math.round(t.warWeariness || 0))}${stat('coin', 'Upkeep', soldiers ? fmt(soldiers * 0.15 * Math.max(0.2, 1 + (t.mods.upkeep || 0)), 1) : 0, 'wood/day')}</div>
       <div class="section-title">Balance of power</div>
       ${g.tribes.filter(o => o.alive).map(o => { const r = o === t ? { lv: 3, val: o.strength } : intel(g, t.id, o.id, 'military'); const v = r.val ?? 0; const known = r.lv > 0 && r.val != null; return `<div class="gauge" style="margin:4px 0" data-tip="${esc(o === t ? 'Your own forces' : known ? `${['Unknown', 'Rumoured', 'Reported', 'Verified'][r.lv]} estimate${r.age ? `, ${r.age} days old` : ''}` : 'Unknown: send a scout or agent')}"><img src="${emblemURL(o.key)}" width="20" class="pix"><span style="width:80px;color:${o.def.pal.light}">${(o === t || g.dip.contact[t.id][o.id]) ? o.name : 'Unknown'}</span><div class="bar" style="flex:1;height:12px"><i style="width:${known ? Math.min(100, v / maxS * 100) : 0}%;background:${o.color};${r.lv < 3 ? 'opacity:0.55' : ''}"></i></div><span class="num" style="width:40px;text-align:right">${known ? (r.lv < 3 ? '~' : '') + Math.round(v) : '?'}</span></div>`; }).join('')}
+      <div class="section-title">Armour</div>
+      <div class="seg" style="flex-wrap:wrap;margin-bottom:4px">${ARMOUR_KEYS.map(k => { const A = ARMOURS[k], ok = armourOk(t, k); const fx = Object.entries(A.take).map(([d, v]) => `${d} ${v < 1 ? '−' + Math.round((1 - v) * 100) : '+' + Math.round((v - 1) * 100)}%`).join(', '); return `<button class="btn xs ${armourOf(t) === k ? 'on' : ''}" ${ok ? '' : 'disabled'} data-act="armour" data-k="${k}" data-tip="${esc(`${A.name}: ${A.desc}${fx ? ' Damage taken: ' + fx + '.' : ''}${A.speed < 1 ? ` Speed ${Math.round(A.speed * 100)}%.` : ''}${A.hot ? ' Weaker in deserts.' : ''}${ok ? '' : ' Not yet researched.'}`)}">${esc(A.name)}</button>`; }).join('')}</div>
+      <div class="section-title">Arsenal</div>
+      <div class="faint" style="font-size:0.85em;margin-bottom:6px">${Object.entries(UNITS).map(([k, U]) => `<span class="${unitOk(t, k) ? '' : 'faint'}" style="${unitOk(t, k) ? 'color:var(--gold)' : 'opacity:0.5'}" data-tip="${esc(U.desc + (U.tech && !unitOk(t, k) ? ' (research needed)' : ''))}">${esc(U.name)}</span>`).join(' · ')}${t.techs.includes('flamingarrows') ? ' · <span style="color:var(--gold)" data-tip="Archers and towers shoot burning arrows that set buildings alight.">Flaming arrows</span>' : ''}${t.techs.includes('explosiveshot') ? ' · <span style="color:var(--gold)" data-tip="Trebuchets hurl bursting powder kegs.">Explosive shot</span>' : ''}<br>Spears hold off swords, swords cut down archers, archers shoot down spear lines. Choose the mix, angle and focus when you plan an attack.</div>
       <div class="section-title">Recruitment</div>
       <div class="alloc">${ico('soldier')}<div class="nm"><span>Soldiers</span><small>${t.slots.soldier} places · build barracks to raise the cap</small></div><div class="cnt num">${t.alloc.soldier || 0}</div><div class="ctl"><button class="btn xs icon" data-act="alloc" data-job="soldier" data-d="-1">${ico('minus', 'sm')}</button><button class="btn xs icon" data-act="alloc" data-job="soldier" data-d="1">${ico('plus', 'sm')}</button><button class="btn xs icon" data-act="alloc" data-job="soldier" data-d="5">+5</button></div></div>
       <div class="prose" style="font-size:0.85em">Soldiers eat more, consume wood and coin, and produce nothing — but strength deters rivals. Equipment depends on your weapons technology and the weapons in your stores.</div>
@@ -410,7 +415,7 @@ const military = {
           ${o.settlements.map(sid => { const s = g.settlements.get(sid); const c = g.buildings.get(s.centre); return `<div class="row between" style="padding:3px 0"><span>${s.capital ? ico('crown', 'sm') : ico('house', 'sm')} ${esc(s.name)} <span class="faint">· ${!g.hardIntel || intel(g, t.id, o.id, 'military').lv >= 3 ? `${s.pop} people${c ? ' · walls ' + Math.round(c.hp / c.maxHp * 100) + '%' : ''}` : 'defences unknown'}${s.capital ? ' · capital (can be sacked)' : ''}</span></span><button class="btn xs" data-act="campaign" data-sid="${sid}" data-tip="Plan a campaign: route, food, supply and risks">${ico('target', 'sm')} Plan attack</button></div>`; }).join('')}</div>`; }).join('')
         + `<div class="row" style="gap:8px"><span class="dim" style="font-size:0.85em">Commit</span>${[0.5, 0.75, 1].map(f => `<button class="btn xs ${st.commit === f ? 'on' : ''}" data-act="commit" data-f="${f}">${f * 100}%</button>`).join('')}<span class="faint" style="font-size:0.8em">of idle soldiers to each attack</span></div>`
         : '<div class="prose" style="font-size:0.9em">You are at peace. Declare war from the Diplomacy panel.</div>'}
-      ${armies.length ? `<div class="section-title">Armies in the field</div>${armies.map(a => `<div class="row between" style="padding:4px 0"><span>${ico('flag', 'sm')} ${a.alive ?? a.size} soldiers › ${esc(g.settlements.get(a.target)?.name || '?')} <span class="faint">· ${a.state} · ${a.kills} kills, ${a.losses} lost${a.attrition ? ` (${a.attrition} to attrition)` : ''}</span><span class="supply" data-tip="${esc(`Supply ${Math.round((a.supply ?? 1) * 100)}%: ${a.supplyWhy || 'within reach of your towns'}. Effectiveness ${Math.round((0.6 + 0.4 * (a.supply ?? 1)) * 100)}%. Below 50% soldiers fall sick and desert. Friendly or allied land, border access, roads and Military towns extend supply; winter shortens it.`)}">Supply ${bar(a.supply ?? 1, (a.supply ?? 1) < 0.5 ? 'red' : (a.supply ?? 1) < 0.8 ? '' : 'green')}</span></span><span class="row"><button class="btn xs" data-act="army-view" data-id="${a.id}">${ico('eye', 'sm')}</button>${a.state !== 'return' ? `<button class="btn xs" data-act="recall" data-id="${a.id}">Recall</button>` : ''}</span></div>`).join('')}` : ''}`;
+      ${armies.length ? `<div class="section-title">Armies in the field</div>${armies.map(a => `<div class="row between" style="padding:4px 0"><span>${ico('flag', 'sm')} ${a.alive ?? a.size} soldiers › ${esc(g.settlements.get(a.target)?.name || '?')} <span class="faint">· ${a.state}${a.comp ? ' · ' + Object.entries(a.comp).map(([u, n]) => n + ' ' + (UNITS[u]?.name || u).toLowerCase()).join(', ') : ''}${a.plan ? ' · ' + (APPROACHES[a.plan.approach]?.name || '') + ', ' + (FOCUS[a.plan.focus]?.name || '').toLowerCase() : ''} · ${a.kills} kills, ${a.losses} lost${a.attrition ? ` (${a.attrition} to attrition)` : ''}</span><span class="supply" data-tip="${esc(`Supply ${Math.round((a.supply ?? 1) * 100)}%: ${a.supplyWhy || 'within reach of your towns'}. Effectiveness ${Math.round((0.6 + 0.4 * (a.supply ?? 1)) * 100)}%. Below 50% soldiers fall sick and desert. Friendly or allied land, border access, roads and Military towns extend supply; winter shortens it.`)}">Supply ${bar(a.supply ?? 1, (a.supply ?? 1) < 0.5 ? 'red' : (a.supply ?? 1) < 0.8 ? '' : 'green')}</span></span><span class="row"><button class="btn xs" data-act="army-view" data-id="${a.id}">${ico('eye', 'sm')}</button>${a.state !== 'return' ? `<button class="btn xs" data-act="recall" data-id="${a.id}">Recall</button>` : ''}</span></div>`).join('')}` : ''}`;
   },
 };
 
@@ -591,6 +596,25 @@ function tradeSection(g, t) {
 function campaignPlanner(hud, sid) {
   const g = hud.game, t = g.player;
   let frac = hud.panelState.commit || 0.75;
+  const tgtS = g.settlements.get(sid);
+  const plan = hud.panelState.plan ? JSON.parse(JSON.stringify(hud.panelState.plan)) : autoPlan(t, tgtS, g);
+  for (const u of Object.keys(plan.mix)) if (!unitOk(t, u)) delete plan.mix[u];
+  if (!unitOk(t, 'treb')) plan.siege = 0; if (!unitOk(t, 'sapper')) plan.sappers = 0;
+  const seg = (key, defs, ok = () => true) => `<div class="seg wrap" style="margin:2px 0 6px;flex-wrap:wrap">${Object.entries(defs).filter(([k]) => ok(k)).map(([k, d]) => `<button class="btn xs ${plan[key] === k ? 'on' : ''}" data-pk="${key}" data-pv="${k}" data-tip="${esc(d.desc)}">${esc(d.name)}</button>`).join('')}</div>`;
+  const planBox = () => {
+    const units = LINE_UNITS.filter(u => unitOk(t, u));
+    const tot = units.reduce((x, u) => x + (plan.mix[u] || 0), 0) || 1;
+    const stepper = (label, tip, val, key, extra = '') => `<div class="row between" style="padding:2px 0" data-tip="${esc(tip)}"><span>${label}${extra}</span><span class="row" style="gap:4px"><button class="btn xs icon" data-pm="${key}" data-d="-1">${ico('minus', 'sm')}</button><span class="num" style="min-width:34px;text-align:center">${val}</span><button class="btn xs icon" data-pm="${key}" data-d="1">${ico('plus', 'sm')}</button></span></div>`;
+    const arm = ARMOURS[armourOf(t)];
+    return `<div class="section-title">Order of battle</div>
+      <div class="kvbox">${units.map(u => stepper(UNITS[u].name, UNITS[u].desc, Math.round((plan.mix[u] || 0) / tot * 100) + '%', 'mix:' + u)).join('')}
+      ${unitOk(t, 'treb') ? stepper(UNITS.treb.name, UNITS.treb.desc + ' Each costs 25 wood and takes one soldier as crew.', plan.siege, 'siege', ` <span class="faint">(${plan.siege * 25} wood)</span>`) : ''}
+      ${unitOk(t, 'sapper') ? stepper(UNITS.sapper.name, UNITS.sapper.desc + ' Each costs 3 coal and 2 salt.', plan.sappers, 'sappers', ` <span class="faint">(${plan.sappers * 3} coal, ${plan.sappers * 2} salt)</span>`) : ''}
+      <div class="faint" style="font-size:0.8em;margin-top:2px">Armour: ${esc(arm.name)} · ${esc(arm.desc)}</div></div>
+      <div class="caps dim" style="margin-top:6px">Angle of attack</div>${seg('approach', APPROACHES)}
+      <div class="caps dim">Point of focus</div>${seg('focus', FOCUS)}
+      <div class="caps dim">Who goes first</div>${seg('lead', LEADS, k => k === 'together' || (k === 'siege' ? plan.siege + plan.sappers > 0 : unitOk(t, k) && (plan.mix[k] || 0) > 0))}`;
+  };
   const range = (a, b) => a === b ? `${a}` : `${a}–${b}`;
   const pct = v => Math.round(v * 100) + '%';
   const body = () => {
@@ -610,7 +634,7 @@ function campaignPlanner(hud, sid) {
         <div class="tt-row"><span>${ico('military', 'sm')} Expected losses</span><span>${range(...e.losses)} of ${e.n}</span></div>
         <div class="tt-row"><span>${ico('eye', 'sm')} Interception / ambush</span><span class="${e.ambush > 0.3 ? 'bad' : e.ambush > 0.15 ? 'warn' : ''}">${pct(e.ambush)}</span></div>
       </div>${unsure}
-      <div style="margin-top:8px">Assessment: <b class="${cls}">${esc(e.verdict)}</b></div>`;
+      <div style="margin-top:8px">Assessment: <b class="${cls}">${esc(e.verdict)}</b></div>${planBox()}`;
   };
   return modal(`<div class="modal-head">${ico('military', 'xl')}<div><div class="caps" style="color:var(--gold)">Campaign plan</div><div class="panel-title">${esc(g.settlements.get(sid)?.name || '')}</div></div></div>
     <div class="plan-body">${body()}</div>
@@ -619,8 +643,17 @@ function campaignPlanner(hud, sid) {
   { wide: true, onMount: m => {
     m.onclick = e => {
       const f = e.target.closest('[data-f]'); if (f) { frac = +f.dataset.f; hud.panelState.commit = frac; m.querySelector('.plan-body').innerHTML = body(); return; }
+      const pk = e.target.closest('[data-pk]'); if (pk) { plan[pk.dataset.pk] = pk.dataset.pv; hud.panelState.plan = plan; m.querySelector('.plan-body').innerHTML = body(); return; }
+      const pm = e.target.closest('[data-pm]'); if (pm) {
+        const d = +pm.dataset.d, k = pm.dataset.pm;
+        if (k.startsWith('mix:')) { const u = k.slice(4); plan.mix[u] = Math.max(0, Math.min(6, (plan.mix[u] || 0) + d)); if (!Object.values(plan.mix).some(v => v > 0)) plan.mix[u] = 1; }
+        else plan[k] = Math.max(0, Math.min(6, (plan[k] || 0) + d));
+        if (plan.lead === 'siege' && !(plan.siege + plan.sappers)) plan.lead = 'together';
+        if (LINE_UNITS.includes(plan.lead) && !(plan.mix[plan.lead] > 0)) plan.lead = 'together';
+        hud.panelState.plan = plan; m.querySelector('.plan-body').innerHTML = body(); return;
+      }
       const x = e.target.closest('[data-x]'); if (!x) return;
-      if (x.dataset.x === '1') { const est = estimateCampaign(g, t, sid, frac, intel); closeModal({ frac, food: est?.food }); } else closeModal(null);
+      if (x.dataset.x === '1') { const est = estimateCampaign(g, t, sid, frac, intel); closeModal({ frac, food: est?.food, plan }); } else closeModal(null);
     };
   } });
 }
@@ -695,10 +728,11 @@ export const ACTIONS = {
   campaign: async (hud, b) => {
     const g = hud.game, sid = +b.dataset.sid;
     const plan = await campaignPlanner(hud, sid); if (!plan) return;
-    const r = await hud.sim.call('campaign', sid, plan.frac, plan.food);
+    const r = await hud.sim.call('campaign', sid, plan.frac, plan.food, plan.plan);
     if (!r.ok) fail('Cannot attack', r.why, 'military'); else { const s = g.settlements.get(sid); if (s) hud.renderer.flyTo(s.x, s.y, 2.5); }
   },
   commit: (hud, b) => { hud.panelState.commit = +b.dataset.f; },
+  armour: async (hud, b) => { await hud.sim.call('setArmour', b.dataset.k); hud.renderPanel(true); },
   recall: (hud, b) => { hud.sim.call('recall', +b.dataset.id); },
   'army-view': (hud, b) => { const g = hud.game; let sx = 0, sy = 0, n = 0; for (const a of g.agents.values()) if (a.army === +b.dataset.id) { sx += a.x; sy += a.y; n++; } if (n) hud.renderer.flyTo(sx / n, sy / n, 3.5); },
   spec: async (hud, b) => { const r = await hud.sim.call('specialise', +b.dataset.sid, b.dataset.k); if (!r.ok) fail('Cannot change focus', r.why, 'house'); },

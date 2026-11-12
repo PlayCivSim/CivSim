@@ -16,6 +16,7 @@
 // armies, diplomacy, new chronicle entries and pending decisions.
 import { JOB_KEYS } from '../data/buildings.js';
 import { RES_KEYS } from '../data/resources.js';
+import { UNIT_KEYS } from '../data/warfare.js';
 
 export const JOBS = ['idle', ...JOB_KEYS];
 export const STATES = ['think', 'walk', 'pathWait', 'wait', 'work', 'build', 'sleep', 'fight', 'travel'];
@@ -43,6 +44,8 @@ export function packAgents(game) {
     arr[o] = a.id; arr[o + 1] = a.x; arr[o + 2] = a.y; arr[o + 3] = a.tribe; arr[o + 4] = f;
     arr[o + 5] = jobIdx[a.job] ?? 0; arr[o + 6] = stateIdx[a.state] ?? 0; arr[o + 7] = carry ? resIdx[carry] : -1;
     arr[o + 8] = a.age; arr[o + 9] = a.look; arr[o + 10] = a.hp; arr[o + 11] = a.health; arr[o + 12] = a.sid ?? -1; arr[o + 13] = a.army ?? 0;
+    if (a.job === 'soldier' && a.unit) f |= (UNIT_KEYS.indexOf(a.unit) + 1) << 7;
+    arr[o + 4] = f;
     arr[o + 14] = a.hidden ? (a.inB || (a.homeId != null ? a.homeId + 1 : 0)) : 0;
     o += STRIDE;
   }
@@ -64,6 +67,7 @@ export function unpackAgents(mirror, arr) {
     a._x1 = x; a._y1 = y;
     const f = arr[o + 4];
     a.tribe = arr[o + 3]; a.hidden = !!(f & F.HIDDEN); a.moving = !!(f & F.MOVING); a.female = !!(f & F.FEMALE);
+    const ui = (f >> 7) & 7; a.unit = ui ? UNIT_KEYS[ui - 1] : null;
     a.facing = f & F.LEFT ? -1 : 1; a.anim = f & F.ATTACK ? 'attack' : f & F.HAMMER ? 'hammer' : null; a.bubble = f & F.BUBBLE ? 1 : 0;
     a.job = JOBS[arr[o + 5]]; a.state = STATES[arr[o + 6]];
     const c = arr[o + 7]; if (c >= 0) { const k = RES_KEYS[c]; if (!a.carry || !(k in a.carry)) a.carry = { [k]: 1 }; } else a.carry = null;
