@@ -12,3 +12,5 @@
 - All diplomacy travels: use `dip.dispatch(a, b, p)` (envoy mission), never `dip.propose` directly, except in the tutorial.
 - Campaigns: `estimateCampaign` / `routeProfile` in logistics.js are shared by the planner UI, AI, envoys and caravans.
 - Content packs: `src/data/registry.js` (docs/MODDING.md). New UI text goes in `src/i18n.js`.
+- Commit authorship: always commit as `dashcodes <338724043+dashryerson-design@users.noreply.github.com>` (e.g. `git -c user.name=dashcodes -c user.email=338724043+dashryerson-design@users.noreply.github.com commit ...`) and never add Co-Authored-By / Claude-Session lines. The owner does not want Claude listed as a contributor.
+- The repo now lives at github.com/PlayCivSim/CivSim; the site is https://playcivsim.github.io/CivSim/.
