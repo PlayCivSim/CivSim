@@ -701,3 +701,6 @@ body.cb .bar.green i { background: #6ab0ff; } body.cb .bar.red i { background: #
 #tutorial.tut-mini .tut-head > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 body.touch #tutorial.tut-mini .btn.xs { min-height: 30px; min-width: 30px; }
 @media (min-width: 761px) { #tutorial.tut-mini { top: calc(var(--top-h) + 8px); } }
+
+/* the resource row scrolls instead of clipping (all items stay reachable) */
+.tb-res { overflow-x: auto; scrollbar-width: none; } .tb-res::-webkit-scrollbar { display: none; }

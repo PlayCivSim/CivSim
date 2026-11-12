@@ -186,37 +186,38 @@ export class TerrainCache {
     return cv;
   }
 
-  // Territory is cached per chunk as two layers: a solid fill (its strength is
-  // set by zoom when drawn) and a bold border (always drawn at full strength).
-  territory(cx, cy) {
+  // Territory is cached per chunk as two layers: a tiny fill image with one
+  // pixel per tile (scaled up when drawn, its strength set by zoom) and one
+  // border image, rebuilt in thin or thick form as the zoom level calls for.
+  // Keeping this small matters on phones, where large canvases run out of memory.
+  territory(cx, cy, thick = false) {
     const c = this.get(cx, cy);
-    if (!c.terrDirty && c.terr) return c.terr;
+    if (!c.terrDirty && c.terr && c.terr.thick === thick) return c.terr;
     const w = this.world; const size = CH * TILE;
-    if (!c.terr) c.terr = { fill: canvas(size, size), line: canvas(size, size), thick: canvas(size, size) };
+    if (!c.terr) c.terr = { fill: canvas(CH, CH), line: canvas(size, size), thick };
+    c.terr.thick = thick;
     const f = c.terr.fill.getContext('2d');
-    f.clearRect(0, 0, size, size);
+    f.clearRect(0, 0, CH, CH);
     const edges = [];
     for (let ty = 0; ty < CH; ty++) for (let tx = 0; tx < CH; tx++) {
       const x = cx * CH + tx, y = cy * CH + ty; if (x >= w.w || y >= w.h) continue;
       const i = w.idx(x, y); const o = w.owner[i]; if (o < 0) continue;
       const col = TRIBES[o].borderColor || TRIBES[o].color;
-      f.fillStyle = col; f.fillRect(tx * TILE, ty * TILE, TILE, TILE);
+      f.fillStyle = col; f.fillRect(tx, ty, 1, 1);
       const diff = (dx, dy) => { const xx = x + dx, yy = y + dy; return !w.inb(xx, yy) || w.owner[w.idx(xx, yy)] !== o; };
-      const X = tx * TILE, Y = ty * TILE;
-      if (diff(-1, 0)) edges.push([TRIBES[o].borderLine || col, X, Y, 'l']);
-      if (diff(1, 0)) edges.push([TRIBES[o].borderLine || col, X, Y, 'r']);
-      if (diff(0, -1)) edges.push([TRIBES[o].borderLine || col, X, Y, 't']);
-      if (diff(0, 1)) edges.push([TRIBES[o].borderLine || col, X, Y, 'b']);
+      const X = tx * TILE, Y = ty * TILE, lc = TRIBES[o].borderLine || col;
+      if (diff(-1, 0)) edges.push([lc, X, Y, 'l']);
+      if (diff(1, 0)) edges.push([lc, X, Y, 'r']);
+      if (diff(0, -1)) edges.push([lc, X, Y, 't']);
+      if (diff(0, 1)) edges.push([lc, X, Y, 'b']);
     }
-    // two border layers (thin for close views, thick for zoomed-out ones):
     // a dark halo first so the colour reads on any terrain, then the colour
-    for (const [cv, wd] of [[c.terr.line, 1], [c.terr.thick, 7]]) {
-      const l = cv.getContext('2d'); l.clearRect(0, 0, size, size);
-      const box = (x, y, side, p) => { const r = side === 'l' ? [x, y, wd, TILE] : side === 'r' ? [x + TILE - wd, y, wd, TILE] : side === 't' ? [x, y, TILE, wd] : [x, y + TILE - wd, TILE, wd]; return [r[0] - p, r[1] - p, r[2] + p * 2, r[3] + p * 2]; };
-      l.fillStyle = 'rgba(10,8,6,0.55)';
-      for (const [, x, y, sd] of edges) l.fillRect(...box(x, y, sd, 1));
-      for (const [col, x, y, sd] of edges) { l.fillStyle = col; l.fillRect(...box(x, y, sd, 0)); }
-    }
+    const wd = thick ? 7 : 1;
+    const l = c.terr.line.getContext('2d'); l.clearRect(0, 0, size, size);
+    const box = (x, y, side, p) => { const r = side === 'l' ? [x, y, wd, TILE] : side === 'r' ? [x + TILE - wd, y, wd, TILE] : side === 't' ? [x, y, TILE, wd] : [x, y + TILE - wd, TILE, wd]; return [r[0] - p, r[1] - p, r[2] + p * 2, r[3] + p * 2]; };
+    l.fillStyle = 'rgba(10,8,6,0.55)';
+    for (const [, x, y, sd] of edges) l.fillRect(...box(x, y, sd, 1));
+    for (const [col, x, y, sd] of edges) { l.fillStyle = col; l.fillRect(...box(x, y, sd, 0)); }
     c.terrDirty = false;
     return c.terr;
   }

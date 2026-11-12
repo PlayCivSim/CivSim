@@ -127,9 +127,9 @@ export class Renderer {
       // strong tint when zoomed out, fading to a light wash close up
       const tint = Math.max(0.12, Math.min(0.5, 0.12 + (2.6 - z) * 0.2));
       ctx.globalAlpha = tint;
-      for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) ctx.drawImage(this.terrain.territory(cx, cy).fill, cx * cs, cy * cs);
+      for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) ctx.drawImage(this.terrain.territory(cx, cy, z < 1.4).fill, cx * cs, cy * cs, cs, cs);
       ctx.globalAlpha = 1;
-      for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) ctx.drawImage(z < 1.4 ? this.terrain.territory(cx, cy).thick : this.terrain.territory(cx, cy).line, cx * cs, cy * cs);
+      for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) ctx.drawImage(this.terrain.territory(cx, cy, z < 1.4).line, cx * cs, cy * cs);
     }
     this.drawCloudShadows(ctx, dt);
     this.drawObjects(ctx, vx0, vy0, vx1, vy1, z, detailed, dt);

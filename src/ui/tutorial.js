@@ -171,9 +171,9 @@ export class Tutorial {
     const card = el.querySelector('.tut-card'); if (!card) return;
     const blockers = [target, ...['.place-hint', '.modal', '#panel-host .side-panel .sp-body', '.inspector'].map(q => document.querySelector(q)?.getBoundingClientRect()).filter(b => b && b.width)];
     const hits = pos => { el.className = pos; const c = card.getBoundingClientRect(); return blockers.some(b => b && !(b.right < c.left || b.left > c.right || b.bottom < c.top || b.top > c.bottom)) ; };
-    const free = this.pos && !hits(this.pos) ? this.pos : ['', 'tut-right', 'tut-top', 'tut-top tut-right'].find(p => !hits(p));
+    const free = this.pos !== undefined && !hits(this.pos) ? this.pos : ['', 'tut-right', 'tut-top', 'tut-top tut-right'].find(p => !hits(p));
     // nowhere free (e.g. a full-screen panel on a phone): shrink to the title bar, unless the player opened it
-    const auto = !free && !this.userOpen;
+    const auto = free === undefined && !this.userOpen;
     const want = free ?? 'tut-top';
     if (auto !== this.autoMini) { this.autoMini = auto; this.render(); }
     el.className = want + (this.mini || auto ? ' tut-mini' : ''); this.pos = want;
@@ -208,7 +208,15 @@ export class Tutorial {
     const s = this.steps?.[this.i]; if (!s || !this.app.game || this.app.mode !== 'game') return;
     // spotlight the first visible target
     let r = null;
-    for (const sel of s.to || []) { const el = document.querySelector(sel); if (el && el.offsetParent !== null) { const b = el.getBoundingClientRect(); if (b.width && b.height) { r = b; break; } } }
+    for (const sel of s.to || []) {
+      const el = document.querySelector(sel); if (!el) continue;
+      // a target the player has unpinned from the top bar is shown again while it is needed
+      if (el.classList.contains('unpinned')) el.classList.remove('unpinned');
+      if (el.offsetParent === null) continue;
+      // scroll it into view inside scrolling rows and panels (top bar, rail, panel bodies)
+      if (this.scrolled !== el) { this.scrolled = el; el.scrollIntoView({ block: 'nearest', inline: 'center' }); }
+      const b = el.getBoundingClientRect(); if (b.width && b.height) { r = b; break; }
+    }
     const ring = this.ring;
     this.dodge(r);
     if (r && s.to?.[0] !== '#world') { ring.style.cssText = `display:block;left:${r.left - 5}px;top:${r.top - 5}px;width:${r.width + 10}px;height:${r.height + 10}px`; } else ring.style.display = 'none';

@@ -313,7 +313,7 @@ export class Game {
     updateSupply(this);
     dailyOutposts(this);
     for (const t of this.tribes) if (t.alive) { checkEra(this, t, TECH); if (!t.isPlayer && this.day % 5 === 0) { aiSpecialise(this, t); aiOutpost(this, t); } }
-    rollEvents(this);
+    if (!this.tutorial) rollEvents(this); // no random events interrupting the scripted tutorial
     if (this.weather && this.tick > this.weather.until) this.weather = null;
     if (!this.weather && this.rng.chance(0.18)) this.weather = { kind: this.season === 3 ? 'snow' : 'rain', until: this.tick + this.rng.int(80, 220) };
     if (this.day % DAYS_PER_YEAR === 0) this.bus.emit('newYear', { year: this.year });
