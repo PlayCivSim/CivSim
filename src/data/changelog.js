@@ -1,7 +1,7 @@
 // "What's new" shown on the main menu: newest first. Add to the top when
 // something notable ships; the menu shows the first three.
 // Bump GAME_VERSION with every update that ships, so players can tell they are on the latest build.
-export const GAME_VERSION = '1.9.1';
+export const GAME_VERSION = '1.9.2';
 export const GAME_BUILD_DATE = '2026-11-12';
 
 export const CHANGELOG = [

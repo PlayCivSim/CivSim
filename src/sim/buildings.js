@@ -264,7 +264,13 @@ export function territoryRadius(game, s) {
 // further along roads, rivers, fertile valleys and resource deposits, stretches
 // out over open plains and shallow coast, and is held back by mountains and deep
 // sea. Each town also has its own preferred directions, so shapes differ.
-function claimOrganic(game, s, r) {
+// Land a people already holds cannot be taken by another people's growth.
+// Only war changes borders (captured towns bring their land with them).
+function heldByOther(game, prev, i, tid) {
+  const po = prev ? prev[i] : -1;
+  return po >= 0 && po !== tid && game.tribes[po]?.alive && !game.dip.atWar(po, tid);
+}
+function claimOrganic(game, s, r, prev) {
   const w = game.world, target = Math.round(Math.PI * r * r), maxD = r * 2.6;
   const seen = new Map(); const heap = [];
   const push = (c, i) => { heap.push([c, i]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
@@ -278,7 +284,7 @@ function claimOrganic(game, s, r) {
   let claimed = 0;
   while (heap.length && claimed < target2) {
     const [c, i] = pop(); if (c > seen.get(i)) continue;
-    if (w.owner[i] === -1) w.owner[i] = s.tribe;
+    if (w.owner[i] === -1 && !heldByOther(game, prev, i, s.tribe)) w.owner[i] = s.tribe;
     if (w.owner[i] === s.tribe) claimed++; else continue;   // another people's land blocks the way
     const x = i % w.w, y = (i / w.w) | 0;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -306,13 +312,13 @@ export function recomputeTerritory(game) {
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
       if (dx * dx + dy * dy > r2) continue;
       const x = Math.round(cx + dx), y = Math.round(cy + dy); if (!w.inb(x, y)) continue;
-      const i = w.idx(x, y); if (w.owner[i] === -1) w.owner[i] = tid;
+      const i = w.idx(x, y); if (w.owner[i] === -1 && !heldByOther(game, prev, i, tid)) w.owner[i] = tid;
     }
   };
   // footprints first so no building ends up in foreign land
   for (const b of game.buildings.values()) for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) w.owner[w.idx(b.x + dx, b.y + dy)] = b.tribe;
   const setts = [...game.settlements.values()].sort((a, b) => a.id - b.id);
-  for (const s of setts) claimOrganic(game, s, territoryRadius(game, s));
+  for (const s of setts) claimOrganic(game, s, territoryRadius(game, s), prev);
   for (const b of game.buildings.values()) {
     if (!b.built || b.type === 'centre') continue;
     const r = BUILDINGS[b.type].influence || 2;
