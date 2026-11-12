@@ -6,9 +6,9 @@
 
 <br>
 
-<a href="https://dashryerson-design.github.io/CivSim/"><img src="https://img.shields.io/badge/%F0%9F%8C%8D%20%20WEBSITE-c4983e?style=for-the-badge&labelColor=1a1210" height="56" alt="WEBSITE"></a>
+<a href="https://playcivsim.github.io/CivSim/"><img src="https://img.shields.io/badge/%F0%9F%8C%8D%20%20WEBSITE-c4983e?style=for-the-badge&labelColor=1a1210" height="56" alt="WEBSITE"></a>
 &nbsp;&nbsp;&nbsp;
-<a href="https://dashryerson-design.github.io/CivSim/game.html"><img src="https://img.shields.io/badge/%E2%96%B6%20%20QUICK%20PLAY-2f8a3e?style=for-the-badge&labelColor=1a1210" height="56" alt="QUICK PLAY"></a>
+<a href="https://playcivsim.github.io/CivSim/game.html"><img src="https://img.shields.io/badge/%E2%96%B6%20%20QUICK%20PLAY-2f8a3e?style=for-the-badge&labelColor=1a1210" height="56" alt="QUICK PLAY"></a>
 
 <sub>No install, no sign-up — it runs straight in your browser, on desktop or phone.</sub>
 
@@ -67,7 +67,7 @@ A full chronicle, a timeline of great moments, statistics graphs, five rotating 
 | ![Night](docs/shots/night.jpg) | ![World](docs/shots/world.jpg) |
 | ![Diplomacy](docs/shots/diplomacy.jpg) | ![Technology](docs/shots/techtree.jpg) |
 
-### [🌍 Visit the website](https://dashryerson-design.github.io/CivSim/) &nbsp;·&nbsp; [▶ Play now](https://dashryerson-design.github.io/CivSim/game.html)
+### [🌍 Visit the website](https://playcivsim.github.io/CivSim/) &nbsp;·&nbsp; [▶ Play now](https://playcivsim.github.io/CivSim/game.html)
 
 </div>
 
