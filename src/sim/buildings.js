@@ -196,6 +196,41 @@ export function territoryRadius(game, s) {
   return 8 + Math.min(9, Math.floor(pop / 8)) + (s.capital ? 1 : 0);
 }
 
+// A settlement's land grows outward along the cheapest ground rather than in a
+// circle: it claims the same area a circle of radius r would cover, but reaches
+// further along roads, rivers, fertile valleys and resource deposits, stretches
+// out over open plains and shallow coast, and is held back by mountains and deep
+// sea. Each town also has its own preferred directions, so shapes differ.
+function claimOrganic(game, s, r) {
+  const w = game.world, target = Math.round(Math.PI * r * r), maxD = r * 2.6;
+  const seen = new Map(); const heap = [];
+  const push = (c, i) => { heap.push([c, i]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
+  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, rr = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (rr < heap.length && heap[rr][0] < heap[m][0]) m = rr; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
+  // per-town directional leanings (8 sectors, deterministic)
+  const lean = []; for (let k = 0; k < 8; k++) { let h = (s.id * 2654435761 + k * 40503) >>> 0; h ^= h >>> 13; h = Math.imul(h, 1274126177) >>> 0; lean.push(0.7 + (h / 4294967296) * 0.6); }
+  const sx = Math.round(s.x), sy = Math.round(s.y), start = w.idx(sx, sy);
+  push(0, start); seen.set(start, 0);
+  let claimed = 0;
+  while (heap.length && claimed < target) {
+    const [c, i] = pop(); if (c > seen.get(i)) continue;
+    if (w.owner[i] === -1) w.owner[i] = s.tribe;
+    if (w.owner[i] === s.tribe) claimed++; else continue;   // another people's land blocks the way
+    const x = i % w.w, y = (i / w.w) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy; if (!w.inb(nx, ny)) continue;
+      if (Math.hypot(nx - sx, ny - sy) > maxD) continue;
+      const j = w.idx(nx, ny), b = BIOMES[w.biome[j]];
+      let step = w.road[j] ? 0.5 : b.water ? (b.key === 'shallow' || b.key === 'river' || b.key === 'lake' ? 1.6 : 4) : b.key === 'mountain' || b.key === 'peak' ? 3.2 : (b.walk || 1) * 0.85;
+      if (b.fert > 0.9) step *= 0.75;
+      if (w.deposit[j]) step *= 0.6;
+      if (b.key === 'river') step *= 0.7;
+      step *= lean[((Math.atan2(ny - sy, nx - sx) + Math.PI) / (Math.PI * 2) * 8 | 0) & 7];
+      const nc = c + step;
+      if (nc < (seen.get(j) ?? Infinity)) { seen.set(j, nc); push(nc, j); }
+    }
+  }
+}
+
 export function recomputeTerritory(game) {
   const w = game.world;
   const prev = w.owner.slice();
@@ -211,7 +246,7 @@ export function recomputeTerritory(game) {
   // footprints first so no building ends up in foreign land
   for (const b of game.buildings.values()) for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) w.owner[w.idx(b.x + dx, b.y + dy)] = b.tribe;
   const setts = [...game.settlements.values()].sort((a, b) => a.id - b.id);
-  for (const s of setts) claim(s.tribe, s.x, s.y, territoryRadius(game, s));
+  for (const s of setts) claimOrganic(game, s, territoryRadius(game, s));
   for (const b of game.buildings.values()) {
     if (!b.built || b.type === 'centre') continue;
     const r = BUILDINGS[b.type].influence || 2;
