@@ -3,6 +3,10 @@
 import { DAY_TICKS } from '../core/constants.js';
 import { maxHp } from './military.js';
 import { aiOf } from './aimind.js';
+import { BUILDINGS } from '../data/buildings.js';
+import { DEPOSITS } from '../data/resources.js';
+import { destroyBuilding, placementCheck, placeBuilding, isUnlocked, outpostLimit } from './buildings.js';
+import { scarcity, canAfford, buildingCost } from './economy.js';
 import { eatFood, foodTotal } from './economy.js';
 import { BIOMES } from '../world/biomes.js';
 import { RESOURCES } from '../data/resources.js';
@@ -185,4 +189,57 @@ export function estimateCampaign(g, tribe, targetSid, frac = 0.75, intelFn = nul
     food, foodRate: +foodRate.toFixed(2), foodHave, upkeep, friendlyFrac, supply: sup, crossing, hostileCross,
     natural: [Math.round(natural * 0.6), Math.round(natural * 1.6)], losses: [Math.max(0, lossLo), Math.min(n, lossHi)], ambush, odds, known, verdict,
   };
+}
+
+// ------------------------------------------------------------------ resource outposts
+// Work camps beyond the borders: each day they eat (food is carted out from
+// home), they may be raided by enemies at war nearby or by bandits when no
+// soldier is close, and peoples whose land they press against resent them.
+export function dailyOutposts(game) {
+  const d = game.dip;
+  for (const b of [...game.buildings.values()]) {
+    if (!b.built || !BUILDINGS[b.type]?.outpost) continue;
+    const t = game.tribes[b.tribe], cx = b.x + 1, cy = b.y + 1;
+    let workers = 0; for (const a of game.agents.values()) if (a.workId === b.id) workers++;
+    if (workers) eatFood(t, workers * 0.4);
+    // raids
+    let hostile = false, guard = false;
+    for (const s of game.settlements.values()) if (s.tribe !== t.id && d.atWar(t.id, s.tribe) && Math.hypot(s.x - cx, s.y - cy) < 30) hostile = true;
+    for (const a of game.agents.values()) { if (a.job !== 'soldier' || Math.abs(a.x - cx) + Math.abs(a.y - cy) > 14) continue; if (a.tribe === t.id) guard = true; else if (d.atWar(t.id, a.tribe)) hostile = true; }
+    const p = hostile ? 0.12 : guard ? 0 : 0.006;
+    if (game.rng.chance(p)) {
+      const loss = Math.round(BUILDINGS[b.type].hp * 0.5);
+      b.hp = (b.hp ?? BUILDINGS[b.type].hp) - loss;
+      const r = ['stone', 'iron', 'wood'].find(k => (t.stock[k] || 0) > 10); if (r) t.stock[r] = Math.max(0, t.stock[r] - 10);
+      game.log(t, 'war', `${hostile ? 'Enemy raiders' : 'Bandits'} struck your outpost${b.hp <= 0 ? ' and burned it down' : ''}.${guard ? '' : ' A few soldiers stationed nearby would deter them.'}`, 2, { alert: t.isPlayer || undefined, at: { x: cx, y: cy }, cat: 'war' });
+      if (b.hp <= 0) destroyBuilding(game, b, 'raided');
+    }
+    // neighbours resent camps on their doorstep
+    for (const o of game.tribes) {
+      if (o === t || !o.alive) continue;
+      let close = false;
+      for (let dy = -6; dy <= 6 && !close; dy += 2) for (let dx = -6; dx <= 6; dx += 2) { const x = cx + dx, y = cy + dy; if (game.world.inb(x, y) && game.world.owner[game.world.idx(x, y)] === o.id) { close = true; break; } }
+      if (close) d.addMod(o.id, t.id, 'outposts', -0.4, { label: 'Outposts pressing on our borders', decay: 0.05, min: -12 });
+    }
+  }
+}
+// AI rulers set up an outpost when a mineral they lack lies just beyond their land.
+export function aiOutpost(game, t) {
+  if (t.isPlayer || !isUnlocked(t, 'outpost')) return;
+  const have = [...game.buildings.values()].filter(b => b.tribe === t.id && BUILDINGS[b.type].outpost).length;
+  if (have >= outpostLimit(t)) return;
+  const want = ['stone', 'iron', 'clay', 'copper', 'salt'].filter(r => scarcity(t, r) > 1.6);
+  if (!want.length || !canAfford(t, buildingCost(t, 'outpost'))) return;
+  const cap = game.settlements.get(t.capital); if (!cap) return;
+  const w = game.world; let best = null, bd = 1e9;
+  for (let k = 0; k < 400; k++) {
+    const x = Math.round(cap.x + game.rng.range(-40, 40)), y = Math.round(cap.y + game.rng.range(-40, 40)); if (!w.inb(x, y)) continue;
+    const i = w.idx(x, y), dep = w.deposit[i]; if (!dep || w.owner[i] !== -1 || !want.includes(DEPOSITS[dep]?.res)) continue;
+    const dd = Math.hypot(x - cap.x, y - cap.y); if (dd < bd) { bd = dd; best = { x, y }; }
+  }
+  if (!best) return;
+  for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0], [-2, -1], [1, 0], [-1, 1], [0, 1]]) {
+    const x = best.x + dx, y = best.y + dy;
+    if (placementCheck(game, t, 'outpost', x, y).ok) { placeBuilding(game, t, 'outpost', x, y); t.lastDecision = 'Setting up a resource outpost'; return; }
+  }
 }

@@ -30,7 +30,7 @@ export const TECHS = [
 
   // Extraction
   T('stoneworking', 'Stoneworking', 'extraction', 0, [], 'Shape stone and dig clay. Quarries and wells.', { unlocks: ['quarry', 'well'], deposits: ['stone', 'clay', 'salt'] }),
-  T('toolmaking', 'Toolmaking', 'extraction', 1, ['stoneworking'], 'Hafted axes and picks.', { unlocks: ['workshop'], mods: { wood: 0.1 } }),
+  T('toolmaking', 'Toolmaking', 'extraction', 1, ['stoneworking'], 'Hafted axes and picks.', { unlocks: ['workshop', 'outpost'], mods: { wood: 0.1 } }),
   T('mining', 'Mining', 'extraction', 2, ['toolmaking'], 'Shafts into the hills for iron and copper.', { unlocks: ['mine'], deposits: ['iron', 'copper'] }),
   T('metalworking', 'Metalworking', 'extraction', 3, ['mining'], 'Bloomeries and forges refine ore into steel.', { unlocks: ['smelter'] }),
   T('prospecting', 'Prospecting', 'extraction', 3, ['mining'], 'Find and work silver and gold lodes.', { deposits: ['silver', 'gold'], mods: { mine: 0.1 } }),

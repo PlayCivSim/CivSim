@@ -6,7 +6,7 @@
 //   every 50 ticks  – job + housing assignment, needs/happiness, stage checks
 //   every day       – economy ledger, demographics, regrowth, diplomacy, events, AI strategy
 import '../data/registry.js'; // content packs (see docs/MODDING.md)
-import { updateSupply, checkEra, aiSpecialise } from './logistics.js';
+import { updateSupply, checkEra, aiSpecialise, dailyOutposts, aiOutpost } from './logistics.js';
 import { TECH } from '../data/techs.js';
 import { rollPersonality } from './aimind.js';
 import { updateMissions, dailyIntel } from './intel.js';
@@ -311,7 +311,8 @@ export class Game {
     this.dip.daily();
     dailyIntel(this);
     updateSupply(this);
-    for (const t of this.tribes) if (t.alive) { checkEra(this, t, TECH); if (!t.isPlayer && this.day % 5 === 0) aiSpecialise(this, t); }
+    dailyOutposts(this);
+    for (const t of this.tribes) if (t.alive) { checkEra(this, t, TECH); if (!t.isPlayer && this.day % 5 === 0) { aiSpecialise(this, t); aiOutpost(this, t); } }
     rollEvents(this);
     if (this.weather && this.tick > this.weather.until) this.weather = null;
     if (!this.weather && this.rng.chance(0.18)) this.weather = { kind: this.season === 3 ? 'snow' : 'rain', until: this.tick + this.rng.int(80, 220) };

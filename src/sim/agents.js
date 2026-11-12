@@ -36,7 +36,9 @@ export function isNight(game) { const f = (game.tick % DAY_TICKS) / DAY_TICKS; r
 
 export function goTo(game, a, tile, kind, extra) {
   const from = tileOf(game, a);
-  const p = game.pf.find(from, tile, { maxNodes: extra?.maxNodes, force: extra?.force });
+  // long trips (outposts, distant sites) get a bigger search so they are not mistaken for unreachable
+  const far = Math.abs((tile % game.world.w) - (from % game.world.w)) + Math.abs(((tile / game.world.w) | 0) - ((from / game.world.w) | 0)) > 30;
+  const p = game.pf.find(from, tile, { maxNodes: extra?.maxNodes ?? (far ? 16000 : undefined), force: extra?.force });
   if (p === undefined) { a.state = 'pathWait'; a.pending = { tile, kind, extra }; return 'wait'; }
   if (p === null) { a.fails++; return 'fail'; }
   a.path = p; a.pi = 0; a.dest = tile; a.task = { ...(extra || {}), act: kind }; a.state = 'walk'; a.hidden = false; a.fails = 0;

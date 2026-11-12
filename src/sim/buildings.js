@@ -1,4 +1,5 @@
 // Building placement, construction, territory and roads.
+import { exploredBy } from './vision.js';
 import { BUILDINGS } from '../data/buildings.js';
 import { BIOMES, B, isWater } from '../world/biomes.js';
 import { DEPOSITS, DEP } from '../data/resources.js';
@@ -63,6 +64,7 @@ export function placementCheck(game, tribe, type, x, y, opts = {}) {
     if (w.occ[i]) return { ok: false, why: 'Space is occupied' };
     if (w.road[i] && !opts.allowRoad) return { ok: false, why: 'Blocked by a road' };
     if (type === 'centre') { if (w.owner[i] !== -1 && w.owner[i] !== tribe.id) return { ok: false, why: 'Claimed by another tribe' }; }
+    else if (def.outpost) { if (w.owner[i] !== -1 && w.owner[i] !== tribe.id) return { ok: false, why: 'Claimed by another people' }; }
     else if (w.owner[i] !== tribe.id) return { ok: false, why: 'Outside your territory' };
     fert += BIOMES[w.biome[i]].fert || 0;
   }
@@ -92,10 +94,36 @@ export function placementCheck(game, tribe, type, x, y, opts = {}) {
       if (depositsNear(game, tribe, x + s / 2, y + s / 2, r, acc).n === 0) return { ok: false, why: 'No workable deposit nearby' };
     }
   }
+  if (def.outpost) {
+    const cx = x + s / 2, cy = y + s / 2;
+    if (!exploredBy(game, tribe.id, cx, cy)) return { ok: false, why: 'You have not explored this land' };
+    let near = 1e9; for (const sid of tribe.settlements) { const st = game.settlements.get(sid); if (st) near = Math.min(near, Math.hypot(st.x - cx, st.y - cy)); }
+    if (near > OUTPOST_REACH) return { ok: false, why: `Too far from your towns (max ${OUTPOST_REACH} tiles)` };
+    const lm = landmass(game), home = [...tribe.settlements].map(sid => game.settlements.get(sid)).filter(Boolean);
+    if (!home.some(st => lm[w.idx(Math.round(st.x), Math.round(st.y))] === lm[w.idx(Math.round(cx), Math.round(cy))])) return { ok: false, why: 'Your people cannot walk there (across water)' };
+    const have = [...game.buildings.values()].filter(b => b.tribe === tribe.id && BUILDINGS[b.type].outpost).length;
+    if (have >= outpostLimit(tribe)) return { ok: false, why: `Your stage supports ${outpostLimit(tribe)} outpost(s)` };
+  }
   if (def.unique && hasUnique(game, tribe, type)) return { ok: false, why: 'Only one may be built' };
   if (!opts.free) { const cost = buildingCost(tribe, type); if (!canAfford(tribe, cost)) return { ok: false, why: 'Not enough resources', cost }; }
   return { ok: true, fert: fert / (s * s) };
 }
+
+export const OUTPOST_REACH = 45;
+// Connected walkable land (rivers are fordable), computed once per world.
+export function landmass(game) {
+  const w = game.world; if (w._land) return w._land;
+  const lab = new Int32Array(w.n).fill(-1); let id = 0; const q = new Int32Array(w.n);
+  for (let s = 0; s < w.n; s++) {
+    if (lab[s] >= 0 || !w.walkCost(s)) continue;
+    let h = 0, t = 0; q[t++] = s; lab[s] = id;
+    while (h < t) { const i = q[h++], x = i % w.w, y = (i / w.w) | 0;
+      for (const j of [x > 0 ? i - 1 : -1, x < w.w - 1 ? i + 1 : -1, y > 0 ? i - w.w : -1, y < w.h - 1 ? i + w.w : -1]) if (j >= 0 && lab[j] < 0 && w.walkCost(j)) { lab[j] = id; q[t++] = j; } }
+    id++;
+  }
+  return (w._land = lab);
+}
+export const outpostLimit = t => 1 + Math.floor(t.stage / 2);
 
 export function nearestSettlement(game, tribe, x, y) {
   let best = null, bd = 1e9;

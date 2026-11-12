@@ -191,6 +191,18 @@ export function createHost(post) {
         if (game.vis !== 'open') { const s = game.settlements.get(rival.capital); revealFor(game, pid, s.x, s.y, 8); }
         return { to: rival.id, sid: rival.capital };
       }
+      if (kind === 'outpost') {   // stoneworking + toolmaking, materials, and a rich unclaimed deposit nearby
+        for (const k of prereqPath(T, 'toolmaking')) completeTech(game, T, k);
+        addRes(game, T, 'wood', 60); addRes(game, T, 'tools', 10);
+        const w = game.world; let best = null, bd = 1e9;
+        for (let y = 2; y < w.h - 3; y++) for (let x = 2; x < w.w - 3; x++) {
+          const i = w.idx(x, y); if (!w.deposit[i] || w.owner[i] !== -1) continue;
+          const d = Math.hypot(x - cap.x, y - cap.y); if (d > 40 || d >= bd) continue;
+          for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) if (placementCheck(game, T, 'outpost', x + dx, y + dy, { free: true }).ok) { bd = d; best = { x: x + dx, y: y + dy }; break; }
+        }
+        if (best) revealFor(game, pid, best.x + 1, best.y + 1, 8);
+        return best;
+      }
       if (kind === 'expand') { T.tutTown = 1; addRes(game, T, 'wood', 120); addRes(game, T, 'stone', 60); addRes(game, T, 'grain', 60); return true; }
       if (kind === 'leave') { game.observers = (game.observers || []).filter(o => o.t !== pid); return true; }
       if (kind === 'age') { const rec = game.dip.intel?.[pid]; if (rec) for (const row of rec) for (const c of Object.values(row || {})) if (c) c.day -= 30; return true; }
