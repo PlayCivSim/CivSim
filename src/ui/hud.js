@@ -82,7 +82,7 @@ export class Hud {
     this.root.onclick = e => this.onHudClick(e);
     this.root.addEventListener('mouseover', e => { if (e.target.closest('.btn')) sfx('hover'); });
     const mm = $('#mm', this.root);
-    const mmNav = e => { const r = mm.getBoundingClientRect(); const w = game.world; this.renderer.flyTo((e.clientX - r.left) / r.width * w.w, (e.clientY - r.top) / r.height * w.h); };
+    const mmNav = e => { const r = mm.getBoundingClientRect(); const w = game.world; if (!r.width || !r.height) return; this.renderer.flyTo((e.clientX - r.left) / r.width * w.w, (e.clientY - r.top) / r.height * w.h); };
     mm.onpointerdown = e => { mmNav(e); mm.setPointerCapture(e.pointerId); mm.onpointermove = mmNav; };
     mm.onpointerup = () => { mm.onpointermove = null; };
     this.listen(game);

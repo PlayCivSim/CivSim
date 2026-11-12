@@ -64,10 +64,13 @@ export class Renderer {
     const wy = (sy * this.dpr - this.cv.height / 2) / s + this.cam.y;
     return { x: wx / TILE, y: wy / TILE };
   }
-  centerOn(tx, ty, zoom) { this.cam.x = tx * TILE; this.cam.y = ty * TILE; if (zoom) { this.cam.zoom = this.cam.tz = zoom; } }
-  flyTo(tx, ty, zoom) { this.cam.tx = tx * TILE; this.cam.ty = ty * TILE; if (zoom) this.cam.tz = zoom; }
+  centerOn(tx, ty, zoom) { if (!Number.isFinite(tx) || !Number.isFinite(ty)) return; this.cam.x = tx * TILE; this.cam.y = ty * TILE; if (zoom) { this.cam.zoom = this.cam.tz = zoom; } }
+  // invalid targets (e.g. an event about a place the mirror has no coordinates for) are ignored:
+  // one NaN here used to wipe the camera and leave only the ocean-blue background
+  flyTo(tx, ty, zoom) { if (!Number.isFinite(tx) || !Number.isFinite(ty)) { console.warn('flyTo ignored invalid target', tx, ty); return; } this.cam.tx = tx * TILE; this.cam.ty = ty * TILE; if (Number.isFinite(zoom) && zoom > 0) this.cam.tz = zoom; }
   minZoom() { const w = this.game.world; return Math.max(0.35, Math.min(this.cv.width / (w.w * TILE), this.cv.height / (w.h * TILE)) / this.dpr * 0.95); }
   zoomAt(sx, sy, factor) {
+    if (!Number.isFinite(factor) || factor <= 0 || !Number.isFinite(sx) || !Number.isFinite(sy)) return;
     const before = this.screenToWorld(sx, sy);
     this.cam.tz = Math.max(this.minZoom(), Math.min(9, this.cam.tz * factor));
     this.cam.zoom = this.cam.tz;
@@ -77,6 +80,14 @@ export class Renderer {
 
   updateCamera(dt) {
     const c = this.cam;
+    // self-heal: if anything ever put a non-number into the camera, go back to the last good view
+    if (!Number.isFinite(c.x) || !Number.isFinite(c.y) || !Number.isFinite(c.zoom) || !Number.isFinite(c.tz) || !(c.zoom > 0)) {
+      console.warn('camera reset from invalid state', { ...c });
+      const g = this._goodCam || { x: this.game.world.w * TILE / 2, y: this.game.world.h * TILE / 2, zoom: 2 };
+      c.x = g.x; c.y = g.y; c.zoom = c.tz = g.zoom; c.vx = c.vy = 0; c.tx = c.ty = null;
+    }
+    if (c.tx != null && (!Number.isFinite(c.tx) || !Number.isFinite(c.ty))) c.tx = c.ty = null;
+    if (!Number.isFinite(c.vx)) c.vx = 0; if (!Number.isFinite(c.vy)) c.vy = 0;
     if (c.tx != null) {
       const k = 1 - Math.pow(0.002, dt);
       c.x += (c.tx - c.x) * k; c.y += (c.ty - c.y) * k;
@@ -89,6 +100,7 @@ export class Renderer {
     const W = w.w * TILE, H = w.h * TILE;
     c.x = vw >= W ? W / 2 : Math.max(vw / 2 - 40, Math.min(W - vw / 2 + 40, c.x));
     c.y = vh >= H ? H / 2 : Math.max(vh / 2 - 40, Math.min(H - vh / 2 + 40, c.y));
+    if (Number.isFinite(c.x) && Number.isFinite(c.y) && c.zoom > 0) this._goodCam = { x: c.x, y: c.y, zoom: c.zoom };
   }
 
   // ---------------------------------------------------------------- frame
