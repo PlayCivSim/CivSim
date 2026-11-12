@@ -203,10 +203,10 @@ export class TerrainCache {
       f.fillStyle = col; f.fillRect(tx * TILE, ty * TILE, TILE, TILE);
       const diff = (dx, dy) => { const xx = x + dx, yy = y + dy; return !w.inb(xx, yy) || w.owner[w.idx(xx, yy)] !== o; };
       const X = tx * TILE, Y = ty * TILE;
-      if (diff(-1, 0)) edges.push([col, X, Y, 'l']);
-      if (diff(1, 0)) edges.push([col, X, Y, 'r']);
-      if (diff(0, -1)) edges.push([col, X, Y, 't']);
-      if (diff(0, 1)) edges.push([col, X, Y, 'b']);
+      if (diff(-1, 0)) edges.push([TRIBES[o].borderLine || col, X, Y, 'l']);
+      if (diff(1, 0)) edges.push([TRIBES[o].borderLine || col, X, Y, 'r']);
+      if (diff(0, -1)) edges.push([TRIBES[o].borderLine || col, X, Y, 't']);
+      if (diff(0, 1)) edges.push([TRIBES[o].borderLine || col, X, Y, 'b']);
     }
     // two border layers (thin for close views, thick for zoomed-out ones):
     // a dark halo first so the colour reads on any terrain, then the colour

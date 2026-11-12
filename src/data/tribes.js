@@ -14,6 +14,7 @@ export const TRIBES = [
     key: 'oruvai', name: 'Oruvai', adjective: 'Oruvan', title: 'The Tidebound Concord',
     motto: 'Many currents, one sea.',
     color: '#2f6fd6',
+    borderLine: '#9fe0ff', // pale border line so it reads against the ocean
     pal: { primary: '#2f6fd6', dark: '#173a7a', light: '#7fb2ff', accent: '#d7e3f2', trim: '#b9c6d8', skin: ['#f1c9a5', '#d9a77f', '#b97f58'], hair: ['#2a1d15', '#4a3426', '#1b1b2a'] },
     style: 'oruvai',
     blurb: 'A coastal people who settle disputes in council and bind rivals with treaties. Their towns rise in ordered rings around a central forum, roofed in blue domes.',
