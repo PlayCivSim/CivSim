@@ -2,7 +2,7 @@
 // crickets, settlement murmur), generative music and synthesised effects.
 // Separate buses for music, effects and ambience; nothing loops audibly.
 
-let ctx = null, master, musicBus, sfxBus, ambBus, uiBus, reverb, limiter;
+let ctx = null, trackBus, master, musicBus, sfxBus, ambBus, uiBus, reverb, limiter;
 const vol = { master: 0.8, music: 0.5, sfx: 0.7, ambience: 0.6, ui: 0.6 };
 // minimum gap (ms) between repeats of the same cue; unlisted cues use 60ms
 const COOLDOWN = { hover: 70, click: 50, open: 120, close: 120, place: 150, built: 700, tech: 1500, stage: 3000, diplomacy: 900, war: 3500, event: 900, bad: 1500, coin: 300, save: 1000, error: 250, chop: 140, hammer: 160, clash: 110 };
@@ -19,7 +19,8 @@ export function setVolumes(v) {
   if (!ctx) return;
   const t = ctx.currentTime;
   master.gain.setTargetAtTime(vol.master, t, 0.1);
-  musicBus.gain.setTargetAtTime(vol.music * 0.5, t, 0.1);
+  musicBus.gain.setTargetAtTime(vol.music * 0.5 * genMul(), t, 0.1);
+  trackBus.gain.setTargetAtTime(vol.music * trackLevel(), t, 0.8);
   sfxBus.gain.setTargetAtTime(vol.sfx * 0.7, t, 0.1);
   ambBus.gain.setTargetAtTime(vol.ambience * 0.6, t, 0.1);
   uiBus.gain.setTargetAtTime(vol.ui * 0.7, t, 0.1);
@@ -36,14 +37,16 @@ export function initAudio() {
   limiter.threshold.value = -10; limiter.knee.value = 6; limiter.ratio.value = 12; limiter.attack.value = 0.003; limiter.release.value = 0.25;
   master = ctx.createGain(); master.connect(limiter); limiter.connect(ctx.destination);
   musicBus = ctx.createGain(); sfxBus = ctx.createGain(); ambBus = ctx.createGain(); uiBus = ctx.createGain(); uiBus.connect(master);
-  document.addEventListener('visibilitychange', () => { if (!ctx) return; if (document.hidden) ctx.suspend(); else ctx.resume(); });
+  document.addEventListener('visibilitychange', () => { if (!ctx) return; if (document.hidden) { ctx.suspend(); cur?.el.pause(); } else { ctx.resume(); cur?.el.play().catch(() => {}); } });
   reverb = ctx.createConvolver(); reverb.buffer = impulse(2.6);
   const revGain = ctx.createGain(); revGain.gain.value = 0.35; reverb.connect(revGain); revGain.connect(master);
   for (const b of [musicBus, sfxBus, ambBus]) b.connect(master);
+  trackBus = ctx.createGain(); trackBus.gain.value = 0; trackBus.connect(master);
   musicBus.connect(reverb);
   setVolumes({});
   startAmbience();
   scheduleMusic();
+  startTracks();
 }
 
 export function resumeAudio() { if (ctx?.state === 'suspended') ctx.resume(); }
@@ -116,7 +119,46 @@ function cricket() {
 const SCALES = {
   menu: [0, 3, 5, 7, 10], oruvai: [0, 2, 4, 7, 9], kharvak: [0, 1, 5, 7, 8], thalori: [0, 2, 5, 7, 9], vaelith: [0, 2, 3, 7, 10], war: [0, 1, 3, 6, 7],
 };
-export function setMusicMood(m) { musicMood = m; }
+export function setMusicMood(m) { musicMood = m; setVolumes({}); }
+
+// ---------------------------------------------------------------- soundtrack
+// Recorded tracks, loudness-matched in advance (all -18 LUFS), played in a
+// shuffled cycle with long crossfades. Louder on the main menu, quiet under
+// play. The generative score steps aside while they play (war drums remain).
+const TRACKS = ['endless-blocklands.mp3', 'endless-blocklands-2.mp3', 'peaceful-nostalgic.mp3'].map(f => new URL(`../../music/${f}`, import.meta.url).href);
+const FADE = 8; // seconds of crossfade
+let tracksOk = false, trackOrder = [], lastTrack = -1, cur = null;
+const trackLevel = () => (musicMood === 'menu' ? 0.85 : musicMood === 'war' ? 0.32 : 0.4);
+const genMul = () => (!tracksOk ? 1 : musicMood === 'war' ? 0.5 : 0);
+function nextTrack() {
+  if (!trackOrder.length) { trackOrder = TRACKS.map((_, i) => i).sort(() => Math.random() - 0.5); if (trackOrder[0] === lastTrack && trackOrder.length > 1) trackOrder.push(trackOrder.shift()); }
+  return lastTrack = trackOrder.shift();
+}
+function playTrack() {
+  if (!ctx) return;
+  const el = new Audio(TRACKS[nextTrack()]); el.preload = 'auto';
+  const src = ctx.createMediaElementSource(el), g = ctx.createGain();
+  g.gain.value = 0; src.connect(g); g.connect(trackBus);
+  const me = { el, g, fading: false };
+  const old = cur; cur = me;
+  el.addEventListener('playing', () => {
+    if (!tracksOk) { tracksOk = true; setVolumes({}); }
+    const t = ctx.currentTime;
+    g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(1, t + (old ? FADE : 3));
+    if (old) fadeOut(old);
+  }, { once: true });
+  // start the next track before this one ends so they overlap
+  el.addEventListener('timeupdate', () => { if (!me.fading && cur === me && el.duration && el.duration - el.currentTime < FADE) { me.fading = true; playTrack(); } });
+  el.addEventListener('ended', () => { if (cur === me) playTrack(); });
+  el.addEventListener('error', () => { if (cur === me) { cur = old; if (!tracksOk) setVolumes({}); else setTimeout(playTrack, 5000); } }, { once: true });
+  el.play().catch(() => { const go = () => { el.play().catch(() => {}); }; addEventListener('pointerdown', go, { once: true }); addEventListener('keydown', go, { once: true }); });
+}
+function fadeOut(tr) {
+  const t = ctx.currentTime; tr.fading = true;
+  tr.g.gain.cancelScheduledValues(t); tr.g.gain.setValueAtTime(tr.g.gain.value, t); tr.g.gain.linearRampToValueAtTime(0, t + FADE);
+  setTimeout(() => { tr.el.pause(); tr.el.src = ''; try { tr.g.disconnect(); } catch {} }, FADE * 1000 + 300);
+}
+function startTracks() { try { playTrack(); } catch (e) { console.warn('soundtrack unavailable', e); } }
 
 function scheduleMusic() {
   let step = 0; let root = 50; let chordT = 0;
