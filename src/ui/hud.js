@@ -275,6 +275,8 @@ export class Hud {
   openPanel(key) {
     if (this.panel === key) { this.closePanel(); return; }
     this.cancelPlacing();
+    // on wide screens an open info box would sit over the panel's buttons: close it
+    if (this.selected && !this.app.touch && innerWidth > 760) this.select(null);
     this.panel = key; this.panelState = this.panelState || {};
     sfx('open');
     $$('.rail .rb', this.root).forEach(b => b.classList.toggle('on', b.dataset.panel === key));

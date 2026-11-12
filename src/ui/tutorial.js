@@ -112,8 +112,9 @@ export const STEPS = [
   { title: 'Open the borders', text: 'Propose Border Access to a friendly neighbour. Open roads make envoys and scouts faster and safer, and your armies stay supplied on their land.', to: ['[data-act="dip"][data-type="access"]', rail('diplomacy')],
     done: ({ g }) => g.tribes.some(o => o.id !== g.playerId && g.dip.has('access', g.playerId, o.id)) },
   { title: 'Scene: invasion!', text: 'A rival has declared war and a warband is marching on your capital! Open Military and raise soldiers with the + button (switch the workforce steward off if needed), then watch your soldiers meet them. Check the top bar: manpower shows how many adults are under arms.', to: [rail('military'), '[data-res="manpower"]'],
-    enter: ({ sim, mem }) => { sim.setSpeed(1); sim.call('tut', 'invasion').then(r => { mem.from = r?.from; mem.ok = r?.ok; }); },
-    done: ({ g, mem }) => mem.ok !== undefined && (g.player.jobCounts?.soldier || 0) >= Math.min(3, g.player.slots?.soldier || 2) && !g.armies.some(a => a.tribe === mem.from && a.state !== 'return'),
+    enter: ({ sim, mem, g }) => { sim.setSpeed(1); mem.t = g.tick; sim.call('tut', 'invasion').then(r => { mem.from = r?.from; mem.ok = r?.ok; }); },
+    // done once you have raised soldiers and the warband is beaten (or has given up after two days)
+    done: ({ g, mem }) => mem.ok !== undefined && (g.player.jobCounts?.soldier || 0) >= Math.min(3, g.player.slots?.soldier || 2) && (!g.armies.some(a => a.tribe === mem.from && a.state !== 'return') || g.tick - mem.t > 360 * 2),
     link: 'Soldiers come out of your workforce and cost upkeep. Their strength also deters rivals in diplomacy.' },
   { title: 'Scene: the counter-campaign', text: 'They are beaten back. Now take the war to them. In Military, under their settlements, press Plan attack. Read the estimate: distance, days on the road, terrain, food to carry, upkeep, supply, losses and ambush risk. Then March.', to: ['[data-act="campaign"]', rail('military')],
     enter: ({ sim, hud, mem }) => { sim.call('tut', 'counter').then(r => { mem.to = r?.to; }); if (hud.panel !== 'military') hud.openPanel('military'); },
