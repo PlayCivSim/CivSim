@@ -1,6 +1,6 @@
 // Main menu, new-run setup (world + tribe selection), load-run browser,
 // settings and credits.
-import { CHANGELOG } from '../data/changelog.js';
+import { CHANGELOG, GAME_VERSION, GAME_BUILD_DATE } from '../data/changelog.js';
 import { VIS_MODES } from '../sim/vision.js';
 import { h, $, $$, esc, toast, modal, closeModal, confirmDialog, promptDialog, toggleHTML } from './dom.js';
 import { ico, emblemURL, spriteURL } from './icons.js';
@@ -13,7 +13,7 @@ import { BIOMES, isWater } from '../world/biomes.js';
 import { hashString } from '../core/rng.js';
 import { sfx } from '../audio/audio.js';
 
-const VERSION = 'v1.0 · Chronicle Edition';
+const VERSION = 'Chronicle Edition';
 const FLAVOR_SEEDS = ['Ashen Vale', 'Tidewhisper', 'Emberhold', 'Mistral Reach', 'Saltmarch', 'Thornwood', 'Glassmere', 'Kestrel Isles', 'Moonfall', 'Ironcrown', 'Willowmere', 'Duskhaven', 'Amberlight', 'Stormbreak'];
 
 export class MainMenu {
@@ -42,6 +42,7 @@ export class MainMenu {
       </div>
       <div class="ticker"></div>
       <div class="version">${VERSION}</div>
+      <div class="menu-ver" data-tip="Build of ${GAME_BUILD_DATE}">v${GAME_VERSION}</div>
     </div>`);
     this.root.appendChild(el);
     this.el = el;

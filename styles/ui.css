@@ -712,3 +712,4 @@ body.touch #tutorial.tut-mini .btn.xs { min-height: 30px; min-width: 30px; }
 @media (min-width: 761px) { #tutorial.tut-mini.tut-mini-bottom { bottom: 14px; } }
 /* notifications never block the controls of an open panel or dialog */
 #hud:has(.side-panel) ~ #toasts .toast, #hud:has(.fullscreen-panel) ~ #toasts .toast, body:has(#modal-root.show) #toasts .toast { pointer-events: none; opacity: 0.88; }
+.menu-ver { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: 16px; padding: 3px 9px; font-family: var(--font-caps); font-size: 0.7em; letter-spacing: 0.15em; color: var(--gold-hi); background: rgba(7,8,12,0.6); border: 1px solid var(--gold-deep); text-shadow: 0 1px 2px #000; z-index: 2; }
