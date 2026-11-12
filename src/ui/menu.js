@@ -1,5 +1,6 @@
 // Main menu, new-run setup (world + tribe selection), load-run browser,
 // settings and credits.
+import { CHANGELOG } from '../data/changelog.js';
 import { VIS_MODES } from '../sim/vision.js';
 import { h, $, $$, esc, toast, modal, closeModal, confirmDialog, promptDialog, toggleHTML } from './dom.js';
 import { ico, emblemURL, spriteURL } from './icons.js';
@@ -56,12 +57,10 @@ export class MainMenu {
       else if (a === 'settings') openSettings(this.app, () => {});
       else if (a === 'credits') this.credits();
     };
-    // the background world writes its own chronicle onto the menu
-    this.ticks = [];
-    this.unsub?.();
-    this.unsub = this.app.game.bus.on('log', e => { if (e.imp >= 1 && e.type !== 'law') this.tick(e); });
-    const recent = this.app.game.history.filter(e => e.imp >= 1).slice(-3);
-    recent.forEach(e => this.tick(e));
+    // what's new in the game (the background world is only scenery)
+    this.unsub?.(); this.unsub = null;
+    const tk = this.el?.querySelector('.ticker');
+    if (tk) tk.innerHTML = `<div class="tk-head">What's new</div>` + CHANGELOG.slice(0, 3).map(c => `<div><div class="tk-date">${esc(c.title)}</div><div class="tk">${esc(c.text)}</div></div>`).join('');
   }
 
   // first-timers are strongly encouraged (never forced) to play the tutorial before a real run
@@ -83,14 +82,6 @@ export class MainMenu {
       <div class="col" style="margin-top:8px">${Object.values(VIS_MODES).map(m => `<button class="btn choice" data-v="${m.key}"><span>${m.name}</span><small>${esc(m.desc)}</small></button>`).join('')}</div>
       <div class="modal-actions"><button class="btn" data-v="">Cancel</button></div>`,
     { onMount: m => m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { sfx('click'); closeModal(b.dataset.v || null); }) });
-  }
-
-  tick(e) {
-    const t = this.el?.querySelector('.ticker'); if (!t) return;
-    const g = this.app.game;
-    const node = h(`<div><div class="tk-date">Year ${Math.floor(e.day / 4) + 1} · ${SEASONS[e.day % 4]}</div><div class="tk">${esc(e.text)}</div></div>`);
-    t.appendChild(node);
-    while (t.children.length > 4) t.firstElementChild.remove();
   }
 
   update() {}
