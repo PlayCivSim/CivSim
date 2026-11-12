@@ -157,10 +157,26 @@ export class Tutorial {
     this.ring = document.createElement('div'); this.ring.id = 'tut-ring'; document.body.appendChild(this.ring);
     this.el.addEventListener('click', e => {
       const a = e.target.closest('[data-t]')?.dataset.t; if (!a) return;
+      if (a === 'mini') { if (this.autoMini) { this.userOpen = true; this.autoMini = false; } else { this.mini = !this.mini; this.userOpen = !this.mini; } this.render(); this.dodge(null); return; }
       if (a === 'next') this.go(this.i + 1); else if (a === 'back') this.go(this.i - 1); else if (a === 'exit') this.finish(false);
     });
     this.timer = setInterval(() => this.poll(), 250);
     this.go(0);
+  }
+  // Keep the card off whatever the player needs to click: the highlighted
+  // target, the placement bar and open panels. It moves to the top (or the
+  // other bottom corner) when it would cover them, and can be minimised.
+  dodge(target) {
+    const el = this.el; if (!el) return;
+    const card = el.querySelector('.tut-card'); if (!card) return;
+    const blockers = [target, ...['.place-hint', '.modal', '#panel-host .side-panel .sp-body', '.inspector'].map(q => document.querySelector(q)?.getBoundingClientRect()).filter(b => b && b.width)];
+    const hits = pos => { el.className = pos; const c = card.getBoundingClientRect(); return blockers.some(b => b && !(b.right < c.left || b.left > c.right || b.bottom < c.top || b.top > c.bottom)) ; };
+    const free = this.pos && !hits(this.pos) ? this.pos : ['', 'tut-right', 'tut-top', 'tut-top tut-right'].find(p => !hits(p));
+    // nowhere free (e.g. a full-screen panel on a phone): shrink to the title bar, unless the player opened it
+    const auto = !free && !this.userOpen;
+    const want = free ?? 'tut-top';
+    if (auto !== this.autoMini) { this.autoMini = auto; this.render(); }
+    el.className = want + (this.mini || auto ? ' tut-mini' : ''); this.pos = want;
   }
   stop() { clearInterval(this.timer); this.el?.remove(); this.ring?.remove(); this.el = this.ring = null; }
 
@@ -172,7 +188,7 @@ export class Tutorial {
   go(i) {
     if (i < 0) return;
     if (i >= this.steps.length) { this.finish(true); return; }
-    this.i = i; this.mem = {}; this.doneAt = 0;
+    this.i = i; this.mem = {}; this.doneAt = 0; this.mini = false; this.userOpen = false; this.autoMini = false;
     try { this.steps[i].enter?.(this.ctx); } catch (e) { console.error(e); }
     this.render();
   }
@@ -181,7 +197,7 @@ export class Tutorial {
     const s = this.steps[this.i]; if (!this.el) return;
     const manual = !!s.next;
     this.el.innerHTML = `<div class="tut-card frame thin">
-      <div class="tut-head"><span class="caps">Tutorial ${this.i + 1} / ${this.steps.length}</span><button class="btn xs" data-t="exit">${ico('close', 'sm')} Exit</button></div>
+      <div class="tut-head"><span class="caps">Tutorial ${this.i + 1} / ${this.steps.length}${this.mini || this.autoMini ? ' · ' + esc(s.title) : ''}</span><span><button class="btn xs" data-t="mini" data-tip="${this.mini || this.autoMini ? 'Show the tutorial' : 'Minimise the tutorial'}">${this.mini || this.autoMini ? '▲' : '▼'}</button> <button class="btn xs" data-t="exit">${ico('close', 'sm')} Exit</button></span></div>
       <div class="tut-title">${esc(s.title)}</div><div class="tut-text">${esc(s.text)}</div>
       ${s.link ? `<div class="tut-link">${ico('scroll', 'sm')} <b>How it connects:</b> ${esc(s.link)}</div>` : ''}
       <div class="tut-foot"><button class="btn xs" data-t="back" ${this.i ? '' : 'disabled'}>Back</button><span class="tut-state">${manual ? '' : 'Do it to continue…'}</span>
@@ -194,6 +210,7 @@ export class Tutorial {
     let r = null;
     for (const sel of s.to || []) { const el = document.querySelector(sel); if (el && el.offsetParent !== null) { const b = el.getBoundingClientRect(); if (b.width && b.height) { r = b; break; } } }
     const ring = this.ring;
+    this.dodge(r);
     if (r && s.to?.[0] !== '#world') { ring.style.cssText = `display:block;left:${r.left - 5}px;top:${r.top - 5}px;width:${r.width + 10}px;height:${r.height + 10}px`; } else ring.style.display = 'none';
     if (s.done && !this.doneAt) {
       let ok = false; try { ok = s.done(this.ctx); } catch (e) { console.error(e); }

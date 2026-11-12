@@ -688,3 +688,16 @@ body.cb .bar.green i { background: #6ab0ff; } body.cb .bar.red i { background: #
 .kvbox.plan .tt-row > span:last-child { text-align: right; }
 @media (max-width: 560px) { .kvbox.plan .tt-row { flex-direction: column; gap: 0; } .kvbox.plan .tt-row > span:last-child { text-align: left; color: var(--text); } }
 .ticker .tk-head { font-family: var(--font-display); font-size: 1.4em; color: var(--gold-hi); text-shadow: 0 1px 2px #000; }
+
+/* tutorial card dodges what the player must click */
+#tutorial.tut-top { bottom: auto; top: calc(var(--top-h) + 12px); }
+#tutorial.tut-right { left: auto; right: 12px; transform: none; }
+#tutorial.tut-mini .tut-title, #tutorial.tut-mini .tut-text, #tutorial.tut-mini .tut-link, #tutorial.tut-mini .tut-foot { display: none; }
+@media (max-width: 760px) { #tutorial.tut-right { right: 6px; } #tutorial.tut-top { top: calc(var(--top-h) + 6px); } }
+/* minimised tutorial: a slim bar over the top-bar resource row, clear of panels */
+#tutorial.tut-mini { top: 50px; bottom: auto; left: auto; right: 8px; transform: none; width: min(420px, calc(100vw - 16px)); }
+#tutorial.tut-mini .tut-card { padding: 0 6px; }
+#tutorial.tut-mini .tut-head { font-size: 0.85em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; gap: 6px; }
+#tutorial.tut-mini .tut-head > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+body.touch #tutorial.tut-mini .btn.xs { min-height: 30px; min-width: 30px; }
+@media (min-width: 761px) { #tutorial.tut-mini { top: calc(var(--top-h) + 8px); } }
