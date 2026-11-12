@@ -138,3 +138,26 @@ function finish(g, e, alive, lost) {
   if (lost) g.log(t, 'world', 'Your scouting party never came back.', 2, { alert: true });
   else g.log(t, 'world', `Your scouts came home${e.lost ? `, ${e.lost} fewer than left` : ''}, having charted ${charted} new tiles over ${Math.round(e.dist)} tiles of travel.`, 2, { at: { x: e.x, y: e.y } });
 }
+
+// Rival peoples explore the same way: now and then a small party heads toward
+// the least-known land around their capital, judged only from their own map.
+export function aiScouting(g) {
+  if (g.vis === 'open') return;
+  for (const t of g.tribes) {
+    if (t.isPlayer || !t.alive || g.tutorial) continue;
+    if ((g.expeditions || []).some(e => e.tribe === t.id)) continue;
+    const unmet = g.tribes.some(o => o !== t && o.alive && !g.dip.contact[t.id][o.id]);
+    if (!g.rng.chance(unmet ? 0.06 : 0.015)) continue;
+    const cap = g.settlements.get(t.capital); if (!cap) continue;
+    const ex = g.explored[t.id], w = g.world;
+    let best = null, bv = -1;
+    for (let k = 0; k < 12; k++) {
+      const a = k / 12 * Math.PI * 2 + g.rng.range(-0.2, 0.2); let v = 0;
+      for (let r = 12; r <= 40; r += 4) { const x = Math.round(cap.x + Math.cos(a) * r), y = Math.round(cap.y + Math.sin(a) * r); if (!w.inb(x, y)) break; const i = w.idx(x, y); if (!ex[i]) v += w.walkCost(i) > 0 ? 1 : 0.3; }
+      if (v > bv) { bv = v; best = a; }
+    }
+    if (best == null || bv < 2) continue;
+    const party = foodTotal(t) > 150 ? 2 : 1, food = Math.min(36, Math.floor(foodTotal(t) * 0.12));
+    if (canScout(g, t, party, food).ok) sendScouts(g, t, party, food, cap.x + Math.cos(best) * 20, cap.y + Math.sin(best) * 20);
+  }
+}

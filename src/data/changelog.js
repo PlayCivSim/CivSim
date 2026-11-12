@@ -1,10 +1,11 @@
 // "What's new" shown on the main menu: newest first. Add to the top when
 // something notable ships; the menu shows the first three.
 // Bump GAME_VERSION with every update that ships, so players can tell they are on the latest build.
-export const GAME_VERSION = '1.11.0';
+export const GAME_VERSION = '1.11.1';
 export const GAME_BUILD_DATE = '2026-11-12';
 
 export const CHANGELOG = [
+  { title: 'No more all-seeing rivals', text: 'On Medium and Hard, peoples only meet once one of them has found the other\'s land. Rivals send their own scouting parties to explore, and you are told when they find you.' },
   { title: 'Scouting parties', text: 'Send up to four scouts with food rations to chart unexplored land in a direction you choose. Bigger parties chart a wider strip; more food takes them further. They can be lost on the way.' },
   { title: 'The art of war', text: 'Spearmen, archers, swordsmen, trebuchets and sappers. Flaming arrows, black powder and explosive shot. Choose your armour, and plan each attack: the mix of troops, the angle of approach, what to strike first and who leads the charge.' },
   { title: 'Expansion & bridges', text: 'Point your people toward new land and build just past your border. Tribes now bridge rivers in their territory.' },

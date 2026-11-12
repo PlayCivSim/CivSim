@@ -162,8 +162,15 @@ export class Diplomacy {
       for (const m of this.mods[a][b]) { if (m.v > 0) m.v = Math.max(0, m.v - m.decay); else m.v = Math.min(0, m.v + m.decay); }
       this.mods[a][b] = this.mods[a][b].filter(m => Math.abs(m.v) > 0.05 || m.persist);
       if (!this.contact[a][b]) {
-        const d = settlementDistance(g, a, b);
-        if (d < 55 || g.day > 10) { this.contact[a][b] = this.contact[b][a] = true; if (a < b) g.log(ta, 'diplomacy', `The ${ta.name} made first contact with the ${tb.name}.`, ta.isPlayer || tb.isPlayer ? 2 : 1, { with: b }); }
+        // peoples meet only once one of them has actually found the other's land
+        // (on Easy the whole map is known, so nearby peoples meet straight away)
+        const aFound = g.vis !== 'open' && discovered(g, a, b), bFound = g.vis !== 'open' && !aFound && discovered(g, b, a);
+        if (g.vis === 'open' ? settlementDistance(g, a, b) < 55 || g.day > 10 : aFound || bFound) {
+          this.contact[a][b] = this.contact[b][a] = true;
+          const [f, o] = bFound ? [tb, ta] : [ta, tb];
+          const text = g.vis === 'open' ? `The ${ta.name} made first contact with the ${tb.name}.` : o.isPlayer ? `The ${f.name} have found your lands. They know you exist now.` : f.isPlayer ? `Your people found the lands of the ${o.name}.` : `The ${f.name} found the lands of the ${o.name}.`;
+          g.log(f, 'diplomacy', text, ta.isPlayer || tb.isPlayer ? 2 : 1, { with: o.id, alert: o.isPlayer });
+        }
         continue;
       }
       // borders
@@ -495,6 +502,7 @@ export class Diplomacy {
   // Returns false if no envoy could be sent.
   dispatch(a, b, p, extra = {}) {
     const g = this.game, other = g.tribes[b];
+    if (!g.tutorial && !this.contact[a]?.[b]) return false; // nobody sends envoys to a people they have never found
     this.lastProposal[a][b] = g.tick;
     if (g.tutorial) {
       if (other.isPlayer) return false; // only scripted envoys reach the player in the tutorial
@@ -608,6 +616,17 @@ function warReason(t, o, border) {
   if (border > 10) return 'over disputed borderlands';
   if (t.def?.warCry) return t.def.warCry;
   return 'citing intolerable provocations';
+}
+
+// Has tribe `a` laid eyes on anything of tribe `b`: a building, or a tile of its land?
+export function discovered(g, a, b) {
+  const ex = g.explored?.[a]; if (!ex) return true;
+  const w = g.world;
+  for (const bl of g.buildings.values()) if (bl.tribe === b && ex[w.idx(bl.x, bl.y)]) return true;
+  // a rotating sample of the map catches borders seen before any building
+  const off = (g.day * 7 + a * 3 + b) % 9;
+  for (let i = off; i < w.n; i += 9) if (w.owner[i] === b && ex[i]) return true;
+  return false;
 }
 
 export function settlementDistance(g, a, b) {

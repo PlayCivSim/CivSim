@@ -326,7 +326,7 @@ function aiIntelligence(g) {
     if (t.isPlayer || !t.alive) continue;
     // scouting: rivals must find a people's homeland before they can plan against it
     if (g.vis !== 'open') for (const o of g.tribes) {
-      if (o === t || !o.alive) continue;
+      if (o === t || !o.alive || !d.contact[t.id][o.id]) continue; // you cannot send scouts to a people you do not know exists
       const cap = g.settlements.get(o.capital); if (!cap || exploredBy(g, t.id, cap.x, cap.y)) continue;
       const busy = d.missions.some(m => m.from === t.id && m.to === o.id && m.kind === 'scout' && m.status !== 'done' && m.status !== 'lost');
       const urgent = d.atWar(t.id, o.id) || (d.warRisk?.[t.id]?.[o.id] || -99) > 0;

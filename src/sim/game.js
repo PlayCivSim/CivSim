@@ -10,7 +10,7 @@ import { updateSupply, checkEra, aiSpecialise, dailyOutposts, aiOutpost, autoBri
 import { TECH } from '../data/techs.js';
 import { rollPersonality } from './aimind.js';
 import { updateMissions, dailyIntel } from './intel.js';
-import { updateExpeditions } from './explore.js';
+import { updateExpeditions, aiScouting } from './explore.js';
 import { initVision, updateVision, exploreOwned, revealFor, serializeVision, restoreVision } from './vision.js';
 import { DAY_TICKS, DAYS_PER_YEAR, TICK_DT, SPEEDS, MAP_SIZES, DIFFICULTIES, STARTS, SEASONS } from '../core/constants.js';
 import { RNG, hashString } from '../core/rng.js';
@@ -314,6 +314,7 @@ export class Game {
     // seedlings: stumps regrow into saplings slowly
     this.dip.daily();
     dailyIntel(this);
+    aiScouting(this);
     updateSupply(this);
     dailyOutposts(this);
     autoBridges(this);

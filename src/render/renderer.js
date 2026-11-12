@@ -450,7 +450,7 @@ export class Renderer {
     }
     // the player's scouting parties: the trail they walked and a little group with a pennant
     for (const e of g.expeditions || []) {
-      if (e.tribe !== g.playerId) continue;
+      if (e.tribe !== g.playerId && !playerSees(g, e.x | 0, e.y | 0)) continue; // rival scouts show only where you can see them
       if (e.trail?.length) { ctx.save(); ctx.strokeStyle = 'rgba(242,200,75,0.45)'; ctx.lineWidth = Math.max(1, 1 / z); ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo((e.hx) * TILE, (e.hy) * TILE); for (const [px, py] of e.trail) ctx.lineTo(px * TILE, py * TILE); ctx.lineTo(e.x * TILE, e.y * TILE); ctx.stroke(); ctx.restore(); }
       const X = e.x * TILE, Y = e.y * TILE, col = TRIBES[e.tribe].color;
       for (let k = 0; k < e.party; k++) { const ox = (k - (e.party - 1) / 2) * 3; ctx.fillStyle = '#2a1e18'; ctx.fillRect(X + ox - 1, Y - 5, 2, 5); ctx.fillStyle = col; ctx.fillRect(X + ox - 1, Y - 4, 2, 2); ctx.fillStyle = '#e8c9a0'; ctx.fillRect(X + ox - 1, Y - 6, 2, 1); }
