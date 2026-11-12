@@ -6,7 +6,7 @@
 //   every 50 ticks  – job + housing assignment, needs/happiness, stage checks
 //   every day       – economy ledger, demographics, regrowth, diplomacy, events, AI strategy
 import '../data/registry.js'; // content packs (see docs/MODDING.md)
-import { updateSupply, checkEra, aiSpecialise, dailyOutposts, aiOutpost } from './logistics.js';
+import { updateSupply, checkEra, aiSpecialise, dailyOutposts, aiOutpost, autoBridges } from './logistics.js';
 import { TECH } from '../data/techs.js';
 import { rollPersonality } from './aimind.js';
 import { updateMissions, dailyIntel } from './intel.js';
@@ -312,6 +312,7 @@ export class Game {
     dailyIntel(this);
     updateSupply(this);
     dailyOutposts(this);
+    autoBridges(this);
     for (const t of this.tribes) if (t.alive) { checkEra(this, t, TECH); if (!t.isPlayer && this.day % 5 === 0) { aiSpecialise(this, t); aiOutpost(this, t); } }
     if (!this.tutorial) rollEvents(this); // no random events interrupting the scripted tutorial
     if (this.weather && this.tick > this.weather.until) this.weather = null;

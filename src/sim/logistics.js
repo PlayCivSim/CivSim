@@ -6,9 +6,9 @@ import { aiOf } from './aimind.js';
 import { BUILDINGS } from '../data/buildings.js';
 import { DEPOSITS } from '../data/resources.js';
 import { destroyBuilding, placementCheck, placeBuilding, isUnlocked, outpostLimit } from './buildings.js';
-import { scarcity, canAfford, buildingCost } from './economy.js';
+import { scarcity, canAfford, buildingCost, takeRes } from './economy.js';
 import { eatFood, foodTotal } from './economy.js';
-import { BIOMES } from '../world/biomes.js';
+import { BIOMES, B, isWater } from '../world/biomes.js';
 import { RESOURCES } from '../data/resources.js';
 const RES_FOOD = new Set(Object.keys(RESOURCES).filter(k => RESOURCES[k].food));
 
@@ -254,5 +254,45 @@ export function aiOutpost(game, t) {
   for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0], [-2, -1], [1, 0], [-1, 1], [0, 1]]) {
     const x = best.x + dx, y = best.y + dy;
     if (placementCheck(game, t, 'outpost', x, y).ok) { placeBuilding(game, t, 'outpost', x, y); t.lastDecision = 'Setting up a resource outpost'; return; }
+  }
+}
+
+// ------------------------------------------------------------------ bridges
+// Peoples with Carpentry span narrow rivers inside their own land, near their
+// towns, so the two banks are joined. One short bridge every few days per
+// people, paid in wood; Roads & Bridges allows wider crossings.
+export function autoBridges(game) {
+  const w = game.world;
+  for (const t of game.tribes) {
+    if (!t.alive || !t.techs.includes('carpentry') || game.day % 3 !== t.id % 3) continue;
+    if ((t.stock.wood || 0) < 30) continue;
+    const maxLen = t.techs.includes('roads') ? 5 : 3;
+    let best = null, bd = 1e9;
+    for (const sid of t.settlements) {
+      const s = game.settlements.get(sid); if (!s) continue;
+      for (let y = Math.max(1, s.y - 16); y < Math.min(w.h - 1, s.y + 16); y++) for (let x = Math.max(1, s.x - 16); x < Math.min(w.w - 1, s.x + 16); x++) {
+        const i = y * w.w + x;
+        if (w.biome[i] !== B.RIVER || w.road[i] || w.owner[i] !== t.id) continue;
+        // a land tile of ours just before the river, then a short run of river, then land of ours
+        for (const [dx, dy] of [[1, 0], [0, 1]]) {
+          const pi = (y - dy) * w.w + (x - dx); if (isWater(w.biome[pi]) || w.owner[pi] !== t.id || w.occ[pi] > 0) continue;
+          let len = 0, xx = x, yy = y;
+          while (len <= maxLen && w.inb(xx, yy) && w.biome[yy * w.w + xx] === B.RIVER) { len++; xx += dx; yy += dy; }
+          if (len < 1 || len > maxLen || !w.inb(xx, yy)) continue;
+          const ei = yy * w.w + xx; if (isWater(w.biome[ei]) || w.owner[ei] !== t.id || w.occ[ei] > 0) continue;
+          // only where the river really separates the banks for walkers nearby (no existing bridge within 6 tiles)
+          let near = false; for (let k = -6; k <= 6 && !near; k++) { const qx = x + (dy ? k : 0), qy = y + (dx ? k : 0); if (w.inb(qx, qy) && w.road[qy * w.w + qx] && w.biome[qy * w.w + qx] === B.RIVER) near = true; }
+          if (near) continue;
+          const d = Math.hypot(x - s.x, y - s.y) + len * 2;
+          if (d < bd) { bd = d; best = { x, y, dx, dy, len }; }
+        }
+      }
+    }
+    if (!best) continue;
+    takeRes(t, 'wood', 10 + best.len * 6);
+    for (let k = -1; k <= best.len; k++) { const x = best.x + best.dx * k, y = best.y + best.dy * k, i = y * w.w + x; if (!w.occ[i]) { w.road[i] = Math.max(w.road[i], t.techs.includes('roads') ? 2 : 1); w.trees[i] = 0; } }
+    game.markTiles(best.x - 1, best.y - 1, best.dx * best.len + 3, best.dy * best.len + 3);
+    game.pathDirty = true;
+    if (t.isPlayer) game.log(t, 'build', `Your people bridged the river (${best.len} span${best.len > 1 ? 's' : ''}).`, 1, { at: { x: best.x, y: best.y }, cat: 'production' });
   }
 }

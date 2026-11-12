@@ -356,7 +356,7 @@ export class Hud {
   }
   confirmPlace() {
     const gh = this.renderer.ghost; if (!gh) return;
-    const s = gh.type === '__settle' ? 1 : BUILDINGS[gh.type].size;
+    const s = gh.type === '__settle' || gh.type === '__expand' ? 1 : BUILDINGS[gh.type].size;
     this.onClick({ x: gh.x + s / 2, y: gh.y + s / 2 }, { confirmed: true, shiftKey: !!this.repeatPlace });
   }
   cancelPlacing() {
@@ -371,7 +371,9 @@ export class Hud {
       ? `<div class="row" style="gap:4px"><button class="btn sm primary ${gh?.ok ? '' : 'disabled'}" data-act="confirm-place" ${gh?.ok ? '' : 'disabled'}>${ico('check', 'sm')} Place</button>${this.placing !== '__settle' ? `<button class="btn sm ${this.repeatPlace ? 'on' : ''}" data-act="repeat-place" data-tip="Keep placing more of this building">Repeat</button>` : ''}<button class="btn sm" data-act="cancel-place">${ico('close', 'sm')}</button></div>`
       : `<button class="btn sm" data-act="cancel-place">Cancel (Esc)</button>`;
     let html;
-    if (this.placing === '__settle') {
+    if (this.placing === '__expand') {
+      html = `<div class="place-hint frame thin">${ico('flag')}<div class="ph-text"><div class="caps" style="color:var(--gold)">Expand toward…</div><div class="${gh?.ok === false ? 'bad' : ''}" style="font-size:0.88em">${gh?.ok === false ? esc(gh.why || '') : (touch ? 'Tap where your people should spread, then press Place.' : 'Click where your people should spread.')}</div></div>${buttons}</div>`;
+    } else if (this.placing === '__settle') {
       const c = canFound(g, t);
       html = `<div class="place-hint frame thin">${ico('settle')}<div class="ph-text"><div class="caps" style="color:var(--gold)">Found a settlement</div><div class="${c.ok ? '' : 'bad'}" style="font-size:0.88em">${c.ok ? (touch ? 'Tap the map to choose a site' : 'Costs 80 wood, 40 stone, 40 grain · 8 settlers move') : esc(c.why)}${gh?.why && c.ok ? ` · <span class="bad">${esc(gh.why)}</span>` : ''}</div></div>${buttons}</div>`;
     } else {
@@ -397,7 +399,11 @@ export class Hud {
   onHover(w, e) {
     const gh = this.renderer.ghost; if (!gh) return;
     const g = this.game, t = g.player;
-    if (gh.type === '__settle') {
+    if (gh.type === '__expand') {
+      gh.x = Math.floor(w.x); gh.y = Math.floor(w.y);
+      const wd = g.world, i = wd.inb(gh.x, gh.y) ? wd.idx(gh.x, gh.y) : -1;
+      gh.ok = i >= 0 && (!g.fog || !!wd.explored?.[i]); gh.why = i < 0 ? 'Off the map' : gh.ok ? '' : 'You have not explored this land';
+    } else if (gh.type === '__settle') {
       gh.x = Math.floor(w.x); gh.y = Math.floor(w.y);
       const c = siteCheck(g, t, gh.x, gh.y); gh.ok = c.ok; gh.why = c.why;
     } else {
@@ -416,6 +422,13 @@ export class Hud {
       this.onHover(w, e);
       // touch: a tap only positions the building; the Place button commits it
       if ((this.app.touch || e.pointerType === 'touch') && !e.confirmed) { this.updatePlaceHint(); return; }
+      if (this.placing === '__expand') {
+        if (!gh.ok) { sfx('error'); toast('Cannot expand there', gh.why || '', { kind: 'bad', icon: 'warning', ms: 2500 }); return; }
+        this.cancelPlacing();
+        this.sim.call('expandTo', gh.x, gh.y).then(r => { if (r.ok) { sfx('place'); toast('Expansion direction set', 'Your land will grow that way, your people will work toward it, and you may build a few tiles past your border on that side.', { icon: 'flag', kind: 'good', ms: 6000 }); } });
+        if (this.panel === 'overview') this.renderPanel(true);
+        return;
+      }
       if (this.placing === '__settle') {
         if (!gh.ok) { sfx('error'); toast('Cannot found here', gh.why || '', { kind: 'bad', icon: 'warning', ms: 2500 }); return; }
         this.cancelPlacing();

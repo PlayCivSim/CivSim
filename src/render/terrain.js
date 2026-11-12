@@ -126,6 +126,15 @@ export class TerrainCache {
           // foam where water meets land
           const edgeL = px === 0 && !isWater(nL), edgeR = px === TILE - 1 && !isWater(nR), edgeU = py === 0 && !isWater(nU), edgeD = py === TILE - 1 && !isWater(nD);
           if (edgeL || edgeR || edgeU || edgeD) { [r, g, bl] = n > 0.3 ? FOAM : FOAM2; }
+          // bridge deck over a river: planks run across the direction of travel, with dark rails
+          if (road) {
+            const horiz = (rL || rR || !isWater(nL) || !isWater(nR)) && !(rU || rD);
+            const a = horiz ? py : px, along = horiz ? px : py;
+            if (a >= 1 && a <= 6) {
+              const rail = a === 1 || a === 6;
+              [r, g, bl] = rail ? [74, 48, 28] : along % 3 === 0 ? [104, 70, 40] : (n > 0.7 ? [150, 108, 64] : [136, 96, 56]);
+            } else if (a === 0 || a === 7) { r *= 0.75; g *= 0.75; bl *= 0.8; } // shadow on the water
+          }
           else if ((px === 1 && !isWater(nL)) || (px === TILE - 2 && !isWater(nR)) || (py === 1 && !isWater(nU)) || (py === TILE - 2 && !isWater(nD))) { if (n > 0.55) [r, g, bl] = FOAM; }
         } else if (mountainish) {
           const hh = w.height[i] + (hash2(gx >> 1, gy >> 1, seed + 9) - 0.5) * 0.06 - py * 0.004 + px * 0.002;

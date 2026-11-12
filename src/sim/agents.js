@@ -277,7 +277,9 @@ function gatherTask(game, tribe, a, s, job, wb) {
   const def = wb ? BUILDINGS[wb.type] : null;
   const prod = def?.prod || JOB_TARGETS[job] || JOB_TARGETS.gatherer;
   const kind = prod.gather || (def?.field ? 'field' : JOB_TARGETS[job]?.kind);
-  const origin = wb ? centreOf(wb) : { x: s.x, y: s.y };
+  let origin = wb ? centreOf(wb) : { x: s.x, y: s.y };
+  // the people lean their foraging, felling and hunting toward the chosen expansion direction
+  if (tribe.expandTarget && (job === 'gatherer' || job === 'woodcutter' || job === 'hunter')) { const tx = tribe.expandTarget.x - origin.x, ty = tribe.expandTarget.y - origin.y, td = Math.hypot(tx, ty) || 1; const k = Math.min(5, td); origin = { x: origin.x + tx / td * k, y: origin.y + ty / td * k }; }
   const w = game.world, r = game.rng;
   let tile = -1;
   if (kind === 'field') {

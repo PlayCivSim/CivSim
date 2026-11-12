@@ -382,6 +382,10 @@ export class Renderer {
     if (this.ghost) {
       const gh = this.ghost; const def = BUILDINGS[gh.type];
       const x = gh.x * TILE, y = gh.y * TILE, sz = (def?.size || 3) * TILE;
+      if (gh.type === '__expand') {
+        ctx.fillStyle = gh.ok ? 'rgba(242,200,75,0.35)' : 'rgba(255,90,90,0.35)'; ctx.fillRect(gh.x * TILE, gh.y * TILE, TILE, TILE);
+        return;
+      }
       if (gh.type === '__settle') {
         ctx.strokeStyle = gh.ok ? 'rgba(140,255,140,0.9)' : 'rgba(255,90,90,0.9)'; ctx.lineWidth = 1 / this.cam.zoom * 2;
         ctx.beginPath(); ctx.arc((gh.x + 0.5) * TILE, (gh.y + 0.5) * TILE, 9 * TILE, 0, Math.PI * 2); ctx.stroke();
@@ -393,6 +397,15 @@ export class Renderer {
       ctx.fillStyle = gh.ok ? 'rgba(120,255,140,0.28)' : 'rgba(255,80,80,0.35)'; ctx.fillRect(x, y, sz, sz);
       ctx.strokeStyle = gh.ok ? 'rgba(160,255,170,0.9)' : 'rgba(255,120,120,0.9)'; ctx.lineWidth = 1 / this.cam.zoom; ctx.strokeRect(x, y, sz, sz);
       const r = def.prod?.radius; if (r) { ctx.strokeStyle = 'rgba(255,240,180,0.45)'; ctx.beginPath(); ctx.arc(x + sz / 2, y + sz / 2, r * TILE, 0, Math.PI * 2); ctx.stroke(); }
+    }
+    // the player's expansion direction: a dashed line from the capital and a pennant
+    const et = g.player?.expandTarget, cap = g.player && g.settlements.get(g.player.capital);
+    if (et && cap) {
+      const X0 = (cap.x + 0.5) * TILE, Y0 = (cap.y + 0.5) * TILE, X1 = (et.x + 0.5) * TILE, Y1 = (et.y + 0.5) * TILE;
+      ctx.save(); ctx.strokeStyle = 'rgba(242,200,75,0.7)'; ctx.lineWidth = Math.max(1, 2 / z); ctx.setLineDash([6 / z + 3, 5 / z + 3]);
+      ctx.beginPath(); ctx.moveTo(X0, Y0); ctx.lineTo(X1, Y1); ctx.stroke(); ctx.restore();
+      ctx.fillStyle = '#2a1e18'; ctx.fillRect(X1, Y1 - 14, 1, 14);
+      ctx.fillStyle = '#f2c84b'; ctx.fillRect(X1 + 1, Y1 - 14, 7, 5); ctx.fillStyle = g.player.color; ctx.fillRect(X1 + 1, Y1 - 12, 7, 1);
     }
     // army banners at low zoom
     if (z < 2.5) for (const ar of g.armies) {

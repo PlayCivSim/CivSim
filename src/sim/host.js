@@ -245,6 +245,16 @@ export function createHost(post) {
     tariff(rate) { return setTariff(game, game.playerId, rate); },
     endContract(id) { const c = game.dip.treaties.find(x => x.type === 'contract' && x.id === id && (x.a === game.playerId || x.b === game.playerId)); if (!c) return false; endContract(game, c, game.playerId, 'cancelled'); return true; },
     specialise(sid, spec) { return setSpec(game, P(), sid, spec); },
+    expandTo(x, y) {
+      const t = P();
+      if (x == null) { t.expandTarget = null; game.territoryDirty = true; return { ok: true }; }
+      const w = game.world; x = Math.round(x); y = Math.round(y);
+      if (!w.inb(x, y)) return { ok: false, why: 'Off the map' };
+      t.expandTarget = { x, y, day: game.day };
+      game.territoryDirty = true;
+      game.log(t, 'settlement', 'You set a direction for your people to expand.', 1, { at: { x, y } });
+      return { ok: true };
+    },
     mission(to, kind) { return sendMission(game, game.playerId, to, kind); },
     counterIntel(n) { return setCounter(game, game.playerId, n); },
     cancelTreaty(to, treaty) { game.dip.cancel(treaty, game.playerId, to, game.playerId, false); const t = P(); t.envoyBlock = t.envoyBlock || {}; t.envoyBlock[to + ':' + treaty] = game.tick + 360 * 12; return true; },

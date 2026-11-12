@@ -64,6 +64,7 @@ const overview = {
       </div>
       ${settlementsHTML(g, t)}
       <div class="section-title">Expansion</div>
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px"><button class="btn" data-act="expand-pick" data-tip="Pick a place on the map. Your land grows toward it, your gatherers, woodcutters and hunters work that way, and you can build up to 6 tiles past your border on that side.">${ico('flag')} ${t.expandTarget ? 'Change expansion direction' : 'Expand toward…'}</button>${t.expandTarget ? `<button class="btn sm" data-act="expand-clear">Clear</button>` : ''}</div>
       ${(() => { const c = canFound(g, t); return `<button class="btn ${c.ok ? 'primary' : 'disabled'}" data-act="found" ${c.ok ? '' : `data-tip="${esc(c.why)}"`}>${ico('settle')} Found a new settlement</button> <span class="faint" style="font-size:0.8em">${c.ok ? '' : esc(c.why)}</span>`; })()}
     `;
   },
@@ -636,6 +637,8 @@ const confirmAsync = async (...a) => (await import('./dom.js')).confirmDialog(..
 export const ACTIONS = {
   steward: (hud, b) => { const t = hud.game.player; const v = !t.steward[b.dataset.k]; t.steward[b.dataset.k] = v; hud.sim.call('steward', b.dataset.k, v); },
   envoy: (hud, b) => { const t = hud.game.player; const cfg = { ...(t.envoy || ENVOY_DEFAULTS) }; const k = b.dataset.k; cfg[k] = b.dataset.v != null ? b.dataset.v : !cfg[k]; t.envoy = cfg; hud.sim.call('envoy', cfg); },
+  'expand-pick': hud => { hud.closePanel(); hud.startPlacing('__expand'); },
+  'expand-clear': hud => { hud.sim.call('expandTo', null); toast('Expansion direction cleared', '', { icon: 'flag', ms: 2500 }); },
   found: hud => { const c = canFound(hud.game, hud.game.player); if (!c.ok) { toast('Cannot found a settlement', c.why, { kind: 'bad', icon: 'warning' }); return; } hud.closePanel(); hud.startPlacing('__settle'); },
   bcat: (hud, b) => { hud.panelState.bcat = b.dataset.cat; },
   build: (hud, b) => { hud.startPlacing(b.dataset.type); },

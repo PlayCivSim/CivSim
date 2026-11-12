@@ -58,12 +58,14 @@ export function placementCheck(game, tribe, type, x, y, opts = {}) {
   if (!opts.ignoreUnlock && !isUnlocked(tribe, type) && type !== 'centre') return { ok: false, why: 'Not yet discovered' };
   if (x < 1 || y < 1 || x + s >= w.w - 1 || y + s >= w.h - 1) return { ok: false, why: 'Out of bounds' };
   let fert = 0, waterAdj = false;
+  const frontier = type !== 'centre' && !def.outpost && frontierOk(game, tribe, x + s / 2, y + s / 2);
   for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) {
     const i = w.idx(x + dx, y + dy);
     if (!BIOMES[w.biome[i]].build) return { ok: false, why: 'Unsuitable terrain' };
     if (w.occ[i]) return { ok: false, why: 'Space is occupied' };
     if (w.road[i] && !opts.allowRoad) return { ok: false, why: 'Blocked by a road' };
     if (type === 'centre') { if (w.owner[i] !== -1 && w.owner[i] !== tribe.id) return { ok: false, why: 'Claimed by another tribe' }; }
+    else if (frontier && w.owner[i] === -1) { /* frontier site toward the chosen expansion direction */ }
     else if (def.outpost) { if (w.owner[i] !== -1 && w.owner[i] !== tribe.id) return { ok: false, why: 'Claimed by another people' }; }
     else if (w.owner[i] !== tribe.id) return { ok: false, why: 'Outside your territory' };
     fert += BIOMES[w.biome[i]].fert || 0;
@@ -115,6 +117,34 @@ export function placementCheck(game, tribe, type, x, y, opts = {}) {
 }
 
 export const OUTPOST_REACH = 45;
+export const FRONTIER_REACH = 6; // how far past the border you may build toward your expansion direction
+// Expansion direction: a point the player chose. Land grows toward it, people
+// work toward it, and buildings may be raised a few tiles past the border on
+// that side (never further, so claims stay connected to your land).
+export function expandDir(game, tribe) {
+  const tg = tribe.expandTarget; if (!tg) return null;
+  const c = game.settlements.get(tribe.capital); if (!c) return null;
+  const dx = tg.x - c.x, dy = tg.y - c.y, d = Math.hypot(dx, dy) || 1;
+  return { x: dx / d, y: dy / d, cx: c.x, cy: c.y, tx: tg.x, ty: tg.y };
+}
+export function frontierOk(game, tribe, cx, cy) {
+  const dir = expandDir(game, tribe); if (!dir) return false;
+  const w = game.world;
+  // facing the target (within about 60 degrees, measured from the nearest of our towns)
+  let home = null, hd = 1e9;
+  for (const sid of tribe.settlements) { const s = game.settlements.get(sid); if (!s) continue; const d = Math.hypot(s.x - cx, s.y - cy); if (d < hd) { hd = d; home = s; } }
+  if (!home) return false;
+  const vx = cx - home.x, vy = cy - home.y, vd = Math.hypot(vx, vy) || 1;
+  const tx = dir.tx - home.x, ty = dir.ty - home.y, td = Math.hypot(tx, ty) || 1;
+  if ((vx * tx + vy * ty) / (vd * td) < 0.5) return false;
+  // close to our border
+  const r = FRONTIER_REACH;
+  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+    const x = Math.round(cx + dx), y = Math.round(cy + dy);
+    if (dx * dx + dy * dy <= r * r && w.inb(x, y) && w.owner[w.idx(x, y)] === tribe.id) return exploredBy(game, tribe.id, cx, cy);
+  }
+  return false;
+}
 // Connected walkable land (rivers are fordable), computed once per world.
 export function landmass(game) {
   const w = game.world; if (w._land) return w._land;
@@ -240,11 +270,13 @@ function claimOrganic(game, s, r) {
   const push = (c, i) => { heap.push([c, i]); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (heap[p][0] <= heap[k][0]) break; [heap[p], heap[k]] = [heap[k], heap[p]]; k = p; } };
   const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let k = 0; for (;;) { const l = 2 * k + 1, rr = l + 1; let m = k; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (rr < heap.length && heap[rr][0] < heap[m][0]) m = rr; if (m === k) break; [heap[m], heap[k]] = [heap[k], heap[m]]; k = m; } } return top; };
   // per-town directional leanings (8 sectors, deterministic)
+  const dirT = expandDir(game, game.tribes[s.tribe]);
+  const target2 = dirT ? Math.round(target * 1.2) : target;
   const lean = []; for (let k = 0; k < 8; k++) { let h = (s.id * 2654435761 + k * 40503) >>> 0; h ^= h >>> 13; h = Math.imul(h, 1274126177) >>> 0; lean.push(0.7 + (h / 4294967296) * 0.6); }
   const sx = Math.round(s.x), sy = Math.round(s.y), start = w.idx(sx, sy);
   push(0, start); seen.set(start, 0);
   let claimed = 0;
-  while (heap.length && claimed < target) {
+  while (heap.length && claimed < target2) {
     const [c, i] = pop(); if (c > seen.get(i)) continue;
     if (w.owner[i] === -1) w.owner[i] = s.tribe;
     if (w.owner[i] === s.tribe) claimed++; else continue;   // another people's land blocks the way
@@ -258,6 +290,7 @@ function claimOrganic(game, s, r) {
       if (w.deposit[j]) step *= 0.6;
       if (b.key === 'river') step *= 0.7;
       step *= lean[((Math.atan2(ny - sy, nx - sx) + Math.PI) / (Math.PI * 2) * 8 | 0) & 7];
+      if (dirT) { const ex = nx - sx, ey = ny - sy, ed = Math.hypot(ex, ey) || 1, c = (ex * (dirT.tx - sx) + ey * (dirT.ty - sy)) / (ed * (Math.hypot(dirT.tx - sx, dirT.ty - sy) || 1)); step *= c > 0.7 ? 0.6 : c > 0.2 ? 0.8 : c < -0.5 ? 1.3 : 1; }
       const nc = c + step;
       if (nc < (seen.get(j) ?? Infinity)) { seen.set(j, nc); push(nc, j); }
     }
