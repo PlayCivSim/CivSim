@@ -138,7 +138,7 @@ export const STEPS = [
   { title: 'History and statistics', text: 'Open the Chronicle and switch to Timeline to see this world’s major moments; tap one with a target to fly there. Statistics charts your population, food and army over time.', to: [rail('chronicle')],
     done: ({ hud }) => hud.panel === 'chronicle' && hud.panelState?.cv === 'timeline' },
   { title: 'The encyclopedia', text: 'Open the Encyclopedia (book on the rail, or the / key). Every mechanic and formula is explained there; try searching for supply.', to: [rail('help')], done: panel('help') },
-  { title: 'Shape your top bar', text: 'Press the pin button in the top bar (or Customise top bar in the Esc menu on phones) and hide or show something.', to: ['[data-act="hud-pins"]'],
+  { title: 'Shape your top bar', text: 'Press the pin button in the top bar and hide or show something. On phones, open the menu (top right) and choose Customise top bar.', to: ['[data-act="hud-pins"]', '[data-act="esc"]'],
     enter: ({ app, mem }) => { mem.h = JSON.stringify(app.settings.hudHidden || []); },
     done: ({ app, mem }) => !!document.querySelector('.hc-list') || JSON.stringify(app.settings.hudHidden || []) !== mem.h },
   { title: 'Save your chronicle', text: 'Press Esc (or the menu button) and save to a named slot, or press F5 to quicksave. Autosaves rotate through five slots, and a recovery save protects you if the page closes.', to: ['[data-act="esc"]'],
@@ -176,7 +176,8 @@ export class Tutorial {
     const auto = free === undefined && !this.userOpen;
     const want = free ?? 'tut-top';
     if (auto !== this.autoMini) { this.autoMini = auto; this.render(); }
-    el.className = want + (this.mini || auto ? ' tut-mini' : ''); this.pos = want;
+    const topTarget = target && target.top < 130;
+    el.className = want + (this.mini || auto ? ' tut-mini' + (topTarget ? ' tut-mini-bottom' : '') : ''); this.pos = want;
   }
   stop() { clearInterval(this.timer); this.el?.remove(); this.ring?.remove(); this.el = this.ring = null; }
 

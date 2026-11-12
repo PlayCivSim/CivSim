@@ -497,6 +497,7 @@ export class Diplomacy {
     const g = this.game, other = g.tribes[b];
     this.lastProposal[a][b] = g.tick;
     if (g.tutorial) {
+      if (other.isPlayer) return false; // only scripted envoys reach the player in the tutorial
       if (other.isPlayer && p.type !== 'gift') { g.pendingProposals.push({ from: a, to: b, p, tick: g.tick, ...extra }); g.bus.emit('proposal', { from: a, to: b, p }); return true; }
       const r = this.propose(a, b, p);
       if (other.isPlayer && p.type === 'gift' && r.accept) g.bus.emit('proposal', { from: a, to: b, p });

@@ -704,3 +704,11 @@ body.touch #tutorial.tut-mini .btn.xs { min-height: 30px; min-width: 30px; }
 
 /* the resource row scrolls instead of clipping (all items stay reachable) */
 .tb-res { overflow-x: auto; scrollbar-width: none; } .tb-res::-webkit-scrollbar { display: none; }
+
+/* minimised tutorial keeps its buttons, and moves below when the target is in the top bar */
+#tutorial.tut-mini .tut-foot { display: flex; padding-bottom: 2px; }
+#tutorial.tut-mini .tut-foot .tut-state { display: none; }
+#tutorial.tut-mini.tut-mini-bottom { top: auto; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 761px) { #tutorial.tut-mini.tut-mini-bottom { bottom: 14px; } }
+/* notifications never block the controls of an open panel or dialog */
+#hud:has(.side-panel) ~ #toasts .toast, #hud:has(.fullscreen-panel) ~ #toasts .toast, body:has(#modal-root.show) #toasts .toast { pointer-events: none; opacity: 0.88; }
