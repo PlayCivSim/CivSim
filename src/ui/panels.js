@@ -13,6 +13,7 @@ import { canAfford, foodTotal, dailyFoodNeed, scarcity, buildingCost } from '../
 import { jobCap, normaliseAlloc, assignJobs, traitName } from '../sim/population.js';
 import { lawSlots, enactedCount, canEnact, enactLaw, canAdoptGov, adoptGov, policyInteractions, LEADER_TRAITS } from '../sim/government.js';
 import { launchCampaign, equipTier, recallArmy } from '../sim/military.js';
+import { SCOUT_MAX, RATION, FOOD_MIN, FOOD_MAX, scoutEstimate, canScout, maxParties } from '../sim/explore.js';
 import { UNITS, ARMOURS, ARMOUR_KEYS, APPROACHES, FOCUS, LEADS, LINE_UNITS, unitOk, armourOk, armourOf, autoPlan } from '../data/warfare.js';
 import { canFound, ENVOY_DEFAULTS, WORK_PRIORITIES } from '../sim/ai.js';
 import { planProgress } from '../sim/planner.js';
@@ -66,6 +67,8 @@ const overview = {
       ${settlementsHTML(g, t)}
       <div class="section-title">Expansion</div>
       <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px"><button class="btn" data-act="expand-pick" data-tip="Pick a place on the map. Your land grows toward it, your gatherers, woodcutters and hunters work that way, and you can build up to 6 tiles past your border on that side.">${ico('flag')} ${t.expandTarget ? 'Change expansion direction' : 'Expand toward…'}</button>${t.expandTarget ? `<button class="btn sm" data-act="expand-clear">Clear</button>` : ''}</div>
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px">${g.vis === 'open' ? '' : `<button class="btn" data-act="scout-plan" data-tip="Send up to ${SCOUT_MAX} people with food to chart unexplored land in one direction. More people chart a wider strip; more food takes them further.">${ico('eye')} Send scouting party</button>`}</div>
+      ${(g.expeditions || []).filter(e => e.tribe === t.id).map(e => `<div class="row between" style="padding:2px 0"><span>${ico('eye', 'sm')} ${e.party} ${e.party === 1 ? 'scout' : 'scouts'} · ${e.state === 'out' ? 'heading out' : 'coming home'} · ${Math.round(e.food)} food left${e.lost ? ` · ${e.lost} lost` : ''}</span><span class="row"><button class="btn xs" data-act="scout-view" data-x="${e.x}" data-y="${e.y}">${ico('eye', 'sm')}</button>${e.state === 'out' ? `<button class="btn xs" data-act="scout-recall" data-id="${e.id}">Recall</button>` : ''}</span></div>`).join('')}
       ${(() => { const c = canFound(g, t); return `<button class="btn ${c.ok ? 'primary' : 'disabled'}" data-act="found" ${c.ok ? '' : `data-tip="${esc(c.why)}"`}>${ico('settle')} Found a new settlement</button> <span class="faint" style="font-size:0.8em">${c.ok ? '' : esc(c.why)}</span>`; })()}
     `;
   },
@@ -670,6 +673,36 @@ const confirmAsync = async (...a) => (await import('./dom.js')).confirmDialog(..
 export const ACTIONS = {
   steward: (hud, b) => { const t = hud.game.player; const v = !t.steward[b.dataset.k]; t.steward[b.dataset.k] = v; hud.sim.call('steward', b.dataset.k, v); },
   envoy: (hud, b) => { const t = hud.game.player; const cfg = { ...(t.envoy || ENVOY_DEFAULTS) }; const k = b.dataset.k; cfg[k] = b.dataset.v != null ? b.dataset.v : !cfg[k]; t.envoy = cfg; hud.sim.call('envoy', cfg); },
+  'scout-plan': async hud => {
+    const g = hud.game, t = g.player;
+    let party = hud.panelState.scoutParty || 2, food = hud.panelState.scoutFood || 24;
+    const body = () => {
+      const e = scoutEstimate(party, food), c = canScout(g, t, party, food);
+      return `<div class="caps dim">Party size</div><div class="seg" style="margin:4px 0 8px">${[1, 2, 3, 4].map(n => `<button class="btn sm ${party === n ? 'on' : ''}" data-sp="${n}">${n}</button>`).join('')}</div>
+        <div class="caps dim">Food rations</div><div class="row" style="gap:6px;margin:4px 0 8px"><button class="btn xs" data-sf="-10">−10</button><button class="btn xs" data-sf="-2">−2</button><span class="num" style="min-width:60px;text-align:center">${ico('food', 'sm')} ${food}</span><button class="btn xs" data-sf="2">+2</button><button class="btn xs" data-sf="10">+10</button><span class="faint" style="font-size:0.8em">of ${Math.round(foodTotal(t))} in store</span></div>
+        <div class="kvbox plan">
+          <div class="tt-row"><span>Strip charted</span><span>about ${e.width} tiles wide</span></div>
+          <div class="tt-row"><span>How far</span><span>about ${e.reach} tiles out, then back the same way</span></div>
+          <div class="tt-row"><span>Time away</span><span>about ${Math.round(e.days)} days (${party * RATION} food a day)</span></div>
+          <div class="tt-row"><span>Danger</span><span class="${e.risk > 0.3 ? 'bad' : e.risk > 0.15 ? 'warn' : ''}">about ${Math.round(e.risk * 100)}% that someone does not return; more in deserts, snow, mountains, winter and enemy lands</span></div>
+        </div>
+        <div class="faint" style="font-size:0.82em;margin-top:6px">Scouts stop working while they are away. ${maxParties(t) > 1 ? 'Two parties' : 'One party'} may be out at a time. Unused food comes back with them.</div>
+        ${c.ok ? '' : `<div class="bad" style="margin-top:6px">${esc(c.why)}</div>`}`;
+    };
+    const plan = await modal(`<div class="modal-head">${ico('eye', 'xl')}<div><div class="caps" style="color:var(--gold)">Expedition</div><div class="panel-title">Scouting party</div></div></div><div class="scout-body">${body()}</div>
+      <div class="modal-actions"><button class="btn" data-x="0">Cancel</button><button class="btn primary" data-x="1">${ico('flag', 'sm')} Choose direction</button></div>`,
+    { onMount: m => { m.onclick = e => {
+      const sp = e.target.closest('[data-sp]'); if (sp) { party = +sp.dataset.sp; }
+      const sf = e.target.closest('[data-sf]'); if (sf) food = Math.max(FOOD_MIN, Math.min(FOOD_MAX, food + +sf.dataset.sf));
+      if (sp || sf) { hud.panelState.scoutParty = party; hud.panelState.scoutFood = food; m.querySelector('.scout-body').innerHTML = body(); return; }
+      const x = e.target.closest('[data-x]'); if (!x) return;
+      if (x.dataset.x === '1') { const c = canScout(g, t, party, food); if (!c.ok) { sfx('error'); toast('Cannot send scouts', c.why, { kind: 'bad', icon: 'warning' }); return; } closeModal({ party, food }); } else closeModal(null);
+    }; } });
+    if (!plan) return;
+    hud.scoutPlan = plan; hud.closePanel(); hud.startPlacing('__scout');
+  },
+  'scout-recall': (hud, b) => { hud.sim.call('recallScouts', +b.dataset.id); toast('Scouts recalled', 'They will turn for home.', { icon: 'eye', ms: 2500 }); },
+  'scout-view': (hud, b) => hud.renderer.flyTo(+b.dataset.x, +b.dataset.y, 2.5),
   'expand-pick': hud => { hud.closePanel(); hud.startPlacing('__expand'); },
   'expand-clear': hud => { hud.sim.call('expandTo', null); toast('Expansion direction cleared', '', { icon: 'flag', ms: 2500 }); },
   found: hud => { const c = canFound(hud.game, hud.game.player); if (!c.ok) { toast('Cannot found a settlement', c.why, { kind: 'bad', icon: 'warning' }); return; } hud.closePanel(); hud.startPlacing('__settle'); },

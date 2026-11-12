@@ -107,6 +107,7 @@ export class SimClient {
     }
     g.settlements = new Map(s.settlements.map(x => [x.id, x]));
     g.armies = s.armies;
+    g.expeditions = s.expeditions || [];
     Object.assign(g.dip, s.dip);
     g.pendingEvents = s.pendingEvents; g.pendingProposals = s.pendingProposals;
     g.nextId = s.nextId;

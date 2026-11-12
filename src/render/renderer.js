@@ -13,6 +13,7 @@ import { ageYears } from '../sim/agents.js';
 import { Lighting } from './lighting.js';
 import { WORK_AGE } from '../core/constants.js';
 import { unitOf, armourOf } from '../data/warfare.js';
+import { scoutEstimate, sweepRadius } from '../sim/explore.js';
 
 export class Camera {
   constructor() { this.x = 0; this.y = 0; this.zoom = 3; this.tz = 3; this.tx = null; this.ty = null; this.vx = 0; this.vy = 0; }
@@ -409,6 +410,19 @@ export class Renderer {
     if (this.ghost) {
       const gh = this.ghost; const def = BUILDINGS[gh.type];
       const x = gh.x * TILE, y = gh.y * TILE, sz = (def?.size || 3) * TILE;
+      if (gh.type === '__scout') {
+        const cap = this.game.player && this.game.settlements.get(this.game.player.capital);
+        if (cap) {
+          const est = scoutEstimate(gh.party, gh.food), ang = Math.atan2(gh.y - cap.y, gh.x - cap.x);
+          const X0 = (cap.x + 0.5) * TILE, Y0 = (cap.y + 0.5) * TILE, X1 = X0 + Math.cos(ang) * est.reach * TILE, Y1 = Y0 + Math.sin(ang) * est.reach * TILE;
+          ctx.save(); ctx.lineCap = 'round';
+          ctx.strokeStyle = gh.ok ? 'rgba(242,200,75,0.18)' : 'rgba(255,90,90,0.2)'; ctx.lineWidth = sweepRadius(gh.party) * 2 * TILE;
+          ctx.beginPath(); ctx.moveTo(X0, Y0); ctx.lineTo(X1, Y1); ctx.stroke();
+          ctx.strokeStyle = gh.ok ? 'rgba(242,200,75,0.8)' : 'rgba(255,90,90,0.8)'; ctx.lineWidth = Math.max(1, 1.5 / this.cam.zoom); ctx.setLineDash([5, 4]);
+          ctx.beginPath(); ctx.moveTo(X0, Y0); ctx.lineTo(X1, Y1); ctx.stroke(); ctx.restore();
+        }
+        return;
+      }
       if (gh.type === '__expand') {
         ctx.fillStyle = gh.ok ? 'rgba(242,200,75,0.35)' : 'rgba(255,90,90,0.35)'; ctx.fillRect(gh.x * TILE, gh.y * TILE, TILE, TILE);
         return;
@@ -433,6 +447,14 @@ export class Renderer {
       ctx.beginPath(); ctx.moveTo(X0, Y0); ctx.lineTo(X1, Y1); ctx.stroke(); ctx.restore();
       ctx.fillStyle = '#2a1e18'; ctx.fillRect(X1, Y1 - 14, 1, 14);
       ctx.fillStyle = '#f2c84b'; ctx.fillRect(X1 + 1, Y1 - 14, 7, 5); ctx.fillStyle = g.player.color; ctx.fillRect(X1 + 1, Y1 - 12, 7, 1);
+    }
+    // the player's scouting parties: the trail they walked and a little group with a pennant
+    for (const e of g.expeditions || []) {
+      if (e.tribe !== g.playerId) continue;
+      if (e.trail?.length) { ctx.save(); ctx.strokeStyle = 'rgba(242,200,75,0.45)'; ctx.lineWidth = Math.max(1, 1 / z); ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo((e.hx) * TILE, (e.hy) * TILE); for (const [px, py] of e.trail) ctx.lineTo(px * TILE, py * TILE); ctx.lineTo(e.x * TILE, e.y * TILE); ctx.stroke(); ctx.restore(); }
+      const X = e.x * TILE, Y = e.y * TILE, col = TRIBES[e.tribe].color;
+      for (let k = 0; k < e.party; k++) { const ox = (k - (e.party - 1) / 2) * 3; ctx.fillStyle = '#2a1e18'; ctx.fillRect(X + ox - 1, Y - 5, 2, 5); ctx.fillStyle = col; ctx.fillRect(X + ox - 1, Y - 4, 2, 2); ctx.fillStyle = '#e8c9a0'; ctx.fillRect(X + ox - 1, Y - 6, 2, 1); }
+      ctx.fillStyle = '#2a1e18'; ctx.fillRect(X + e.party * 1.5 + 1, Y - 11, 1, 11); ctx.fillStyle = '#f2c84b'; ctx.fillRect(X + e.party * 1.5 + 2, Y - 11, 5, 3);
     }
     // army banners at low zoom
     if (z < 2.5) for (const ar of g.armies) {

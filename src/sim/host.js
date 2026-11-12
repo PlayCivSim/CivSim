@@ -19,6 +19,7 @@ import { normaliseAlloc, assignJobs } from './population.js';
 import { enactLaw, adoptGov } from './government.js';
 import { launchCampaign, recallArmy } from './military.js';
 import { armourOk } from '../data/warfare.js';
+import { sendScouts, recallScouts } from './explore.js';
 import { addRes } from './economy.js';
 import { LAWS } from '../data/laws.js';
 import { DAY_TICKS } from '../core/constants.js';
@@ -90,7 +91,7 @@ export function createHost(post) {
       const day = g.day; const full = day !== lastDay; lastDay = day;
       slow = {
         tribes: g.tribes.map(t => tribeSnapshot(t, full)),
-        buildings: buildingDelta(now), settlements: [...g.settlements.values()], armies: g.armies,
+        buildings: buildingDelta(now), settlements: [...g.settlements.values()], armies: g.armies, expeditions: (g.expeditions || []).map(e => ({ ...e, trail: e.tribe === g.playerId ? e.trail.filter((_, k) => k % 3 === 0) : [] })),
         dip: g.dip.toJSON(), pendingEvents: g.pendingEvents, pendingProposals: g.pendingProposals,
         history: g.history.filter(e => e.seq > histSent), nextId: g.nextId, fog: g.fogNew.length ? g.fogNew.splice(0) : null, sight: g.vis === 'los' && g.visDirty ? (g.visDirty = false, playerSightBits(g)) : null,
       };
@@ -263,6 +264,8 @@ export function createHost(post) {
     enactLaw(law, opt) { return enactLaw(game, P(), law, opt); },
     adoptGov(k) { return adoptGov(game, P(), k); },
     campaign(sid, frac, food, plan) { const r = launchCampaign(game, P(), sid, frac, food, plan); return { ok: r.ok, why: r.why }; },
+    scout(party, food, x, y) { return sendScouts(game, P(), party, food, x, y); },
+    recallScouts(id) { return recallScouts(game, P(), id); },
     setArmour(k) { const t = P(); if (k != null && !armourOk(t, k)) return { ok: false, why: 'Not researched' }; t.armour = k || null; return { ok: true }; },
     recall(id) { const a = game.armies.find(x => x.id === id && x.tribe === game.playerId); if (a) recallArmy(game, a); return !!a; },
     bFocus(id, k) { const b = game.buildings.get(id); if (b && b.tribe === game.playerId) { b.focus = k || null; b._rock = null; } return true; },

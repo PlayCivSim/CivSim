@@ -10,6 +10,7 @@ import { updateSupply, checkEra, aiSpecialise, dailyOutposts, aiOutpost, autoBri
 import { TECH } from '../data/techs.js';
 import { rollPersonality } from './aimind.js';
 import { updateMissions, dailyIntel } from './intel.js';
+import { updateExpeditions } from './explore.js';
 import { initVision, updateVision, exploreOwned, revealFor, serializeVision, restoreVision } from './vision.js';
 import { DAY_TICKS, DAYS_PER_YEAR, TICK_DT, SPEEDS, MAP_SIZES, DIFFICULTIES, STARTS, SEASONS } from '../core/constants.js';
 import { RNG, hashString } from '../core/rng.js';
@@ -57,6 +58,7 @@ export class Game {
     this.buildings = new Map();
     this.settlements = new Map();
     this.armies = [];
+    this.expeditions = [];
     this.history = [];
     this.fx = [];
     this.reserved = new Set();
@@ -243,6 +245,7 @@ export class Game {
     if (tk % 3 === 0) { this.rebuildGrid(); updateDefences(this); }
     updateAgents(this);
     if (tk % 10 === 5) updateMissions(this);
+    updateExpeditions(this);
     if (tk % 20 === 7) updateVision(this);
     if (tk % 10 === 0) {
       census(this);
@@ -336,7 +339,7 @@ export class Game {
       world: { trees: enc(w.trees), treeMax: enc(w.treeMax), deposit: enc(w.deposit), depAmt: enc(w.depAmt), fauna: enc(w.fauna), road: enc(w.road), biome: enc(w.biome) },
       logSeq: this.logSeq || 0, seenSeq: this.seenSeq || 0, territoryVersion: this.territoryVersion,
       tribes, agents, buildings: [...this.buildings.values()], settlements: [...this.settlements.values()],
-      armies: this.armies, history: this.history, dip: this.dip.toJSON(), pendingEvents: this.pendingEvents, weather: this.weather,
+      armies: this.armies, expeditions: this.expeditions, history: this.history, dip: this.dip.toJSON(), pendingEvents: this.pendingEvents, weather: this.weather,
     };
   }
 
@@ -362,8 +365,9 @@ export class Game {
       for (let dy = 0; dy < b.size; dy++) for (let dx = 0; dx < b.size; dx++) { const i = w.idx(b.x + dx, b.y + dy); w.occ[i] = b.id + 1; if (BUILDING_FIELD(b.type)) w.field[i] = 1; }
     }
     for (const s of d.settlements) g.settlements.set(s.id, s);
-    for (const a of d.agents) { if (a.state === 'pathWait' || a.state === 'travel') { a.state = 'think'; a.hidden = false; } g.agents.set(a.id, a); }
+    for (const a of d.agents) { if ((a.state === 'pathWait' || a.state === 'travel') && !a.expedition) { a.state = 'think'; a.hidden = false; } g.agents.set(a.id, a); }
     g.armies = d.armies || [];
+    g.expeditions = d.expeditions || [];
     g.history = d.history || [];
     g.seenSeq = d.seenSeq || 0;
     g.logSeq = d.logSeq || g.history.reduce((m, e) => Math.max(m, e.seq || 0), 0);

@@ -356,7 +356,7 @@ export class Hud {
   }
   confirmPlace() {
     const gh = this.renderer.ghost; if (!gh) return;
-    const s = gh.type === '__settle' || gh.type === '__expand' ? 1 : BUILDINGS[gh.type].size;
+    const s = gh.type === '__settle' || gh.type === '__expand' || gh.type === '__scout' ? 1 : BUILDINGS[gh.type].size;
     this.onClick({ x: gh.x + s / 2, y: gh.y + s / 2 }, { confirmed: true, shiftKey: !!this.repeatPlace });
   }
   cancelPlacing() {
@@ -371,7 +371,10 @@ export class Hud {
       ? `<div class="row" style="gap:4px"><button class="btn sm primary ${gh?.ok ? '' : 'disabled'}" data-act="confirm-place" ${gh?.ok ? '' : 'disabled'}>${ico('check', 'sm')} Place</button>${this.placing !== '__settle' ? `<button class="btn sm ${this.repeatPlace ? 'on' : ''}" data-act="repeat-place" data-tip="Keep placing more of this building">Repeat</button>` : ''}<button class="btn sm" data-act="cancel-place">${ico('close', 'sm')}</button></div>`
       : `<button class="btn sm" data-act="cancel-place">Cancel (Esc)</button>`;
     let html;
-    if (this.placing === '__expand') {
+    if (this.placing === '__scout') {
+      const sp = this.scoutPlan || {};
+      html = `<div class="place-hint frame thin">${ico('eye')}<div class="ph-text"><div class="caps" style="color:var(--gold)">Scouting party · ${sp.party} ${sp.party === 1 ? 'scout' : 'scouts'}, ${sp.food} food</div><div class="${gh?.ok === false ? 'bad' : ''}" style="font-size:0.88em">${gh?.ok === false ? esc(gh.why || '') : (touch ? 'Tap the direction they should head, then press Place.' : 'Click the direction they should head.')}</div></div>${buttons}</div>`;
+    } else if (this.placing === '__expand') {
       html = `<div class="place-hint frame thin">${ico('flag')}<div class="ph-text"><div class="caps" style="color:var(--gold)">Expand toward…</div><div class="${gh?.ok === false ? 'bad' : ''}" style="font-size:0.88em">${gh?.ok === false ? esc(gh.why || '') : (touch ? 'Tap where your people should spread, then press Place.' : 'Click where your people should spread.')}</div></div>${buttons}</div>`;
     } else if (this.placing === '__settle') {
       const c = canFound(g, t);
@@ -399,7 +402,12 @@ export class Hud {
   onHover(w, e) {
     const gh = this.renderer.ghost; if (!gh) return;
     const g = this.game, t = g.player;
-    if (gh.type === '__expand') {
+    if (gh.type === '__scout') {
+      gh.x = Math.floor(w.x); gh.y = Math.floor(w.y);
+      const cap = g.settlements.get(t.capital), wd = g.world;
+      gh.ok = wd.inb(gh.x, gh.y) && !!cap && Math.hypot(gh.x - cap.x, gh.y - cap.y) >= 3; gh.why = gh.ok ? '' : 'Pick a direction away from your capital';
+      gh.party = this.scoutPlan?.party || 1; gh.food = this.scoutPlan?.food || 20;
+    } else if (gh.type === '__expand') {
       gh.x = Math.floor(w.x); gh.y = Math.floor(w.y);
       const wd = g.world, i = wd.inb(gh.x, gh.y) ? wd.idx(gh.x, gh.y) : -1;
       gh.ok = i >= 0 && (!g.fog || !!wd.explored?.[i]); gh.why = i < 0 ? 'Off the map' : gh.ok ? '' : 'You have not explored this land';
@@ -422,6 +430,12 @@ export class Hud {
       this.onHover(w, e);
       // touch: a tap only positions the building; the Place button commits it
       if ((this.app.touch || e.pointerType === 'touch') && !e.confirmed) { this.updatePlaceHint(); return; }
+      if (this.placing === '__scout') {
+        if (!gh.ok) { sfx('error'); toast('Pick another direction', gh.why || '', { kind: 'bad', icon: 'warning', ms: 2500 }); return; }
+        const sp = this.scoutPlan || {}; this.cancelPlacing();
+        this.sim.call('scout', sp.party, sp.food, gh.x, gh.y).then(r => { if (r.ok) { sfx('place'); toast('Scouts set out', 'They chart the land on either side as they go and turn back when half their food is gone.', { icon: 'eye', kind: 'good', ms: 6000 }); } else { sfx('error'); toast('Cannot send scouts', r.why, { kind: 'bad', icon: 'warning' }); } });
+        return;
+      }
       if (this.placing === '__expand') {
         if (!gh.ok) { sfx('error'); toast('Cannot expand there', gh.why || '', { kind: 'bad', icon: 'warning', ms: 2500 }); return; }
         this.cancelPlacing();
