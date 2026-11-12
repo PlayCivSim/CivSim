@@ -1,12 +1,77 @@
-# CivSim
+<div align="center">
 
-![A Vaelith town at midsummer](docs/shots/settlement.jpg)
+# ⚔️ C I V S I M ⚔️
 
-**[Play in your browser](https://dashryerson-design.github.io/CivSim/game.html)** · [Website](https://dashryerson-design.github.io/CivSim/)
+### *A living-world civilisation chronicle in your browser*
 
-A living-world civilisation builder in the browser. Four distinct tribes — the diplomatic **Oruvai**, the martial **Kharvak**, the agrarian **Thalori** and the inventive **Vaelith** — grow from a single hearth on a procedurally generated continent. You lead one; the other three are run by a personality-driven AI.
+<br>
 
-Every sprite, tile, icon, emblem and UI ornament is generated as pixel art in code, and all music, ambience and sound effects are synthesised live. There are no external assets and no dependencies.
+<a href="https://dashryerson-design.github.io/CivSim/"><img src="https://img.shields.io/badge/%F0%9F%8C%8D%20%20WEBSITE-c4983e?style=for-the-badge&labelColor=1a1210" height="56" alt="WEBSITE"></a>
+&nbsp;&nbsp;&nbsp;
+<a href="https://dashryerson-design.github.io/CivSim/game.html"><img src="https://img.shields.io/badge/%E2%96%B6%20%20QUICK%20PLAY-2f8a3e?style=for-the-badge&labelColor=1a1210" height="56" alt="QUICK PLAY"></a>
+
+<sub>No install, no sign-up — it runs straight in your browser, on desktop or phone.</sub>
+
+<br><br>
+
+<img src="docs/shots/settlement.jpg" alt="A Vaelith town at midsummer" width="92%">
+
+<br>
+
+![Pure JS](https://img.shields.io/badge/pure-JavaScript-f2c84b?style=flat-square&labelColor=1a1210)
+![No dependencies](https://img.shields.io/badge/dependencies-0-8fd47a?style=flat-square&labelColor=1a1210)
+![Procedural](https://img.shields.io/badge/art%20%26%20audio-100%25%20procedural-a873e8?style=flat-square&labelColor=1a1210)
+![Platforms](https://img.shields.io/badge/plays%20on-desktop%20%7C%20touch-5f8fe0?style=flat-square&labelColor=1a1210)
+
+</div>
+
+---
+
+Four peoples — the diplomatic **Oruvai**, the martial **Kharvak**, the agrarian **Thalori** and the inventive **Vaelith** — rise from a single hearth on a procedurally generated continent. You lead one. The other three are rulers with their own temperaments, memories and plans.
+
+Every person is simulated. Every sprite, icon and banner is drawn in code, and all music and sound is synthesised live. No assets, no dependencies.
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 🏰 Build a civilisation
+Grow from a tribe to an advanced civilisation through six stages and seven technology eras. Assign workers, raise towns, give each settlement a focus, pass laws and reform your government.
+
+### 🕵️ Know your enemy
+On Hard, you only see what your people see. Reports are **rumoured, reported or verified** — and they go stale. Send scouts, envoys and agents; catch the spies sent against you.
+
+### 🤝 Negotiate everything
+Envoys really travel — and can be delayed or lost. Trade deals, supply contracts, counteroffers, border access, exclusivity, embargoes and tariffs. Rivals remember every gift and betrayal.
+
+</td>
+<td width="50%" valign="top">
+
+### ⚔️ Plan your wars
+Before you march, see the distance, terrain, food to carry, supply lines, sickness and ambush risk. Armies eat on the road and wither far from home.
+
+### ⛏️ Reach beyond your borders
+Send miners and woodcutters to outposts on rich deposits and forests — if bandits and jealous neighbours let you keep them.
+
+### 📜 Live your history
+A full chronicle, a timeline of great moments, statistics graphs, five rotating autosaves and an encyclopedia of every mechanic. A hands-on tutorial throws you into famine, invasion and war.
+
+</td>
+</tr>
+</table>
+
+<div align="center">
+
+| | |
+|---|---|
+| ![Night](docs/shots/night.jpg) | ![World](docs/shots/world.jpg) |
+| ![Diplomacy](docs/shots/diplomacy.jpg) | ![Technology](docs/shots/techtree.jpg) |
+
+### [🌍 Visit the website](https://dashryerson-design.github.io/CivSim/) &nbsp;·&nbsp; [▶ Play now](https://dashryerson-design.github.io/CivSim/game.html)
+
+</div>
+
+---
 
 ## Running
 
@@ -92,13 +157,6 @@ node tools/aggression.mjs 120 seed1      # passive player vs AI, with/without En
 ```
 
 Saves store the world seed plus all mutable state (forests, deposits, fauna, roads, buildings, every inhabitant, AI state, diplomacy, history). Each save is serialised and verified before being written, and the previous version of the slot is kept as a backup in the same transaction.
-
-## Gallery
-
-| | |
-|---|---|
-| ![Night](docs/shots/night.jpg) | ![World](docs/shots/world.jpg) |
-| ![Tribes](docs/shots/tribes.jpg) | ![Technology](docs/shots/techtree.jpg) |
 
 ## Publishing
 
