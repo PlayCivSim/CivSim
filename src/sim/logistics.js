@@ -223,9 +223,22 @@ export function dailyOutposts(game) {
     }
   }
 }
+// Wood-starved rulers send woodcutters to a thick forest beyond their land.
+function aiLogging(game, t) {
+  const have = [...game.buildings.values()].filter(b => b.tribe === t.id && BUILDINGS[b.type].outpost).length;
+  if (have >= outpostLimit(t) || !canAfford(t, buildingCost(t, 'loggingcamp'))) return false;
+  const cap = game.settlements.get(t.capital); if (!cap) return false;
+  for (let k = 0; k < 120; k++) {
+    const x = Math.round(cap.x + game.rng.range(-35, 35)), y = Math.round(cap.y + game.rng.range(-35, 35));
+    if (!game.world.inb(x, y) || game.world.owner[game.world.idx(x, y)] !== -1 || game.world.trees[game.world.idx(x, y)] < 40) continue;
+    if (placementCheck(game, t, 'loggingcamp', x, y).ok) { placeBuilding(game, t, 'loggingcamp', x, y); t.lastDecision = 'Setting up a logging outpost'; return true; }
+  }
+  return false;
+}
 // AI rulers set up an outpost when a mineral they lack lies just beyond their land.
 export function aiOutpost(game, t) {
   if (t.isPlayer || !isUnlocked(t, 'outpost')) return;
+  if (scarcity(t, 'wood') > 1.8 && aiLogging(game, t)) return;
   const have = [...game.buildings.values()].filter(b => b.tribe === t.id && BUILDINGS[b.type].outpost).length;
   if (have >= outpostLimit(t)) return;
   const want = ['stone', 'iron', 'clay', 'copper', 'salt'].filter(r => scarcity(t, r) > 1.6);

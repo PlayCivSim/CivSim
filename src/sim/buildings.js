@@ -75,6 +75,11 @@ export function placementCheck(game, tribe, type, x, y, opts = {}) {
       if (w.occ[w.idx(xx, yy)]) return { ok: false, why: 'Too cramped' };
     }
   }
+  if (def.site === 'forest') {
+    let n = 0; const r = def.prod?.radius || 7;
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const xx = Math.round(x + s / 2 + dx), yy = Math.round(y + s / 2 + dy); if (w.inb(xx, yy) && w.trees[w.idx(xx, yy)] > 20) n++; }
+    if (n < 25) return { ok: false, why: 'Needs a thick forest nearby' };
+  }
   if (def.site === 'rock') {
     const r = def.prod?.radius || 6;
     const dep = depositsNear(game, tribe, x + s / 2, y + s / 2, r, accessibleDeposits(tribe, def.prod.deps)).n;
