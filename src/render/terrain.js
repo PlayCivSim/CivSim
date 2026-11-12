@@ -199,7 +199,7 @@ export class TerrainCache {
     for (let ty = 0; ty < CH; ty++) for (let tx = 0; tx < CH; tx++) {
       const x = cx * CH + tx, y = cy * CH + ty; if (x >= w.w || y >= w.h) continue;
       const i = w.idx(x, y); const o = w.owner[i]; if (o < 0) continue;
-      const col = TRIBES[o].color;
+      const col = TRIBES[o].borderColor || TRIBES[o].color;
       f.fillStyle = col; f.fillRect(tx * TILE, ty * TILE, TILE, TILE);
       const diff = (dx, dy) => { const xx = x + dx, yy = y + dy; return !w.inb(xx, yy) || w.owner[w.idx(xx, yy)] !== o; };
       const X = tx * TILE, Y = ty * TILE;
@@ -210,7 +210,7 @@ export class TerrainCache {
     }
     // two border layers (thin for close views, thick for zoomed-out ones):
     // a dark halo first so the colour reads on any terrain, then the colour
-    for (const [cv, wd] of [[c.terr.line, 2], [c.terr.thick, 7]]) {
+    for (const [cv, wd] of [[c.terr.line, 1], [c.terr.thick, 7]]) {
       const l = cv.getContext('2d'); l.clearRect(0, 0, size, size);
       const box = (x, y, side, p) => { const r = side === 'l' ? [x, y, wd, TILE] : side === 'r' ? [x + TILE - wd, y, wd, TILE] : side === 't' ? [x, y, TILE, wd] : [x, y + TILE - wd, TILE, wd]; return [r[0] - p, r[1] - p, r[2] + p * 2, r[3] + p * 2]; };
       l.fillStyle = 'rgba(10,8,6,0.55)';

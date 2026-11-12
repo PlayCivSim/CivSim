@@ -53,6 +53,7 @@ export const TRIBES = [
     key: 'thalori', name: 'Thalori', adjective: 'Thalorin', title: 'The Greenweave Kin',
     motto: 'Take from the land, and return.',
     color: '#2f8a3e',
+    borderColor: '#0d4219', // territory tint and border: darker so it reads against grassland
     pal: { primary: '#2f8a3e', dark: '#164a20', light: '#76c45a', accent: '#c9a24a', trim: '#7a5532', skin: ['#e9c29b', '#c79a6e', '#8f6440'], hair: ['#3d2a1a', '#6b4626', '#a8743a'] },
     style: 'thalori',
     blurb: 'Patient forest-dwellers who weave their homes into living groves. They farm with uncanny skill and harvest only what the land can give back.',
