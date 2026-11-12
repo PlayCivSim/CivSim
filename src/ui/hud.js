@@ -15,7 +15,7 @@ import { buildingCost, foodTotal, dailyFoodNeed } from '../sim/economy.js';
 import { siteCheck, canFound } from '../sim/ai.js';
 import { EVENTS } from '../sim/events.js';
 import { ageYears } from '../sim/agents.js';
-import { sfx, setMusicMood } from '../audio/audio.js';
+import { sfx, setMusicMood, getMusicMood } from '../audio/audio.js';
 import { openSettings } from './menu.js';
 import { SLOT_NAMES, MANUAL_SLOTS, getRun, slotLabel } from '../save/saves.js';
 import { techCost } from '../sim/progress.js';
@@ -145,6 +145,9 @@ export class Hud {
 
   // ---------------------------------------------------------------- update
   update(dt) {
+    // war music follows whether the player is actually at war (covers wars ending by conquest too)
+    this._musT = (this._musT || 0) + dt;
+    if (this._musT > 1.5 && this.game?.player && !this.game.tutorialMenu) { this._musT = 0; const p = this.game.player, m = getMusicMood(); if (m !== 'menu') { if (p.atWar && m !== 'war') setMusicMood('war'); else if (!p.atWar && m === 'war') setMusicMood(p.key); } }
     const g = this.game; if (!g) return;
     this.uiTimer -= dt;
     this.drawClock();

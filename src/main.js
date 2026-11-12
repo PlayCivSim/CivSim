@@ -115,7 +115,7 @@ class App {
     this.renderer.centerOn(s.x + 0.5, s.y + 1.5, 4);
     this.renderer.cam.zoom = 2.2; this.renderer.cam.tz = 4;
     this.hud.attach(game);
-    setMusicMood(game.player.key);
+    setMusicMood(game.player.atWar ? 'war' : game.player.key);
     this.autosaveAt = performance.now() + this.settings.autosaveMin * 60000;
     if (fresh) await this.save('auto', true);
   }

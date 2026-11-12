@@ -119,7 +119,8 @@ function cricket() {
 const SCALES = {
   menu: [0, 3, 5, 7, 10], oruvai: [0, 2, 4, 7, 9], kharvak: [0, 1, 5, 7, 8], thalori: [0, 2, 5, 7, 9], vaelith: [0, 2, 3, 7, 10], war: [0, 1, 3, 6, 7],
 };
-export function setMusicMood(m) { musicMood = m; setVolumes({}); }
+export const getMusicMood = () => musicMood;
+export function setMusicMood(m) { musicMood = m; setVolumes({}); if (ctx) updateWarMusic(); }
 
 // ---------------------------------------------------------------- soundtrack
 // Recorded tracks, loudness-matched in advance (all -18 LUFS), played in a
@@ -128,14 +129,14 @@ export function setMusicMood(m) { musicMood = m; setVolumes({}); }
 const TRACKS = ['endless-blocklands.mp3', 'endless-blocklands-2.mp3', 'peaceful-nostalgic.mp3'].map(f => new URL(`../../music/${f}`, import.meta.url).href);
 const FADE = 8; // seconds of crossfade
 let tracksOk = false, trackOrder = [], lastTrack = -1, cur = null;
-const trackLevel = () => (musicMood === 'menu' ? 0.85 : musicMood === 'war' ? 0.32 : 0.4);
-const genMul = () => (!tracksOk ? 1 : musicMood === 'war' ? 0.5 : 0);
+const trackLevel = () => (musicMood === 'menu' ? 0.85 : musicMood === 'war' ? 0.5 : 0.4);
+const genMul = () => (!tracksOk ? 1 : 0);
 function nextTrack() {
   if (!trackOrder.length) { trackOrder = TRACKS.map((_, i) => i).sort(() => Math.random() - 0.5); if (trackOrder[0] === lastTrack && trackOrder.length > 1) trackOrder.push(trackOrder.shift()); }
   return lastTrack = trackOrder.shift();
 }
 function playTrack() {
-  if (!ctx) return;
+  if (!ctx || warOn) return;
   const el = new Audio(TRACKS[nextTrack()]); el.preload = 'auto';
   const src = ctx.createMediaElementSource(el), g = ctx.createGain();
   g.gain.value = 0; src.connect(g); g.connect(trackBus);
@@ -153,12 +154,38 @@ function playTrack() {
   el.addEventListener('error', () => { if (cur === me) { cur = old; if (!tracksOk) setVolumes({}); else setTimeout(playTrack, 5000); } }, { once: true });
   el.play().catch(() => { const go = () => { el.play().catch(() => {}); }; addEventListener('pointerdown', go, { once: true }); addEventListener('keydown', go, { once: true }); });
 }
-function fadeOut(tr) {
+function fadeOut(tr, sec = FADE) {
   const t = ctx.currentTime; tr.fading = true;
-  tr.g.gain.cancelScheduledValues(t); tr.g.gain.setValueAtTime(tr.g.gain.value, t); tr.g.gain.linearRampToValueAtTime(0, t + FADE);
-  setTimeout(() => { tr.el.pause(); tr.el.src = ''; try { tr.g.disconnect(); } catch {} }, FADE * 1000 + 300);
+  tr.g.gain.cancelScheduledValues(t); tr.g.gain.setValueAtTime(tr.g.gain.value, t); tr.g.gain.linearRampToValueAtTime(0, t + sec);
+  setTimeout(() => { tr.el.pause(); tr.el.src = ''; try { tr.g.disconnect(); } catch {} }, sec * 1000 + 300);
 }
-function startTracks() { try { playTrack(); } catch (e) { console.warn('soundtrack unavailable', e); } }
+// War: a single battle theme replaces the playlist while the player is at war.
+// It fades in over whatever was playing; when it ends it fades out and comes
+// back from the start; at peace it fades out and the calm music returns.
+const WAR_TRACK = new URL('../../music/obsidian-warfield.mp3', import.meta.url).href;
+const WAR_FADE = 4;
+let warOn = false;
+function updateWarMusic() {
+  const want = musicMood === 'war';
+  if (want === warOn) return;
+  warOn = want;
+  if (cur) fadeOut(cur, want ? WAR_FADE : FADE);
+  cur = null;
+  if (want) playWar(); else setTimeout(() => { if (!warOn && !cur) playTrack(true); }, 1500);
+}
+function playWar() {
+  if (!ctx || !warOn) return;
+  const el = new Audio(WAR_TRACK); el.preload = 'auto';
+  const src = ctx.createMediaElementSource(el), g = ctx.createGain();
+  g.gain.value = 0; src.connect(g); g.connect(trackBus);
+  const me = { el, g, fading: false }; cur = me;
+  el.addEventListener('playing', () => { const t = ctx.currentTime; g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(1, t + WAR_FADE); }, { once: true });
+  // near the end: fade out, then (still at war) start again from the top
+  el.addEventListener('timeupdate', () => { if (!me.fading && cur === me && el.duration && el.duration - el.currentTime < WAR_FADE) { fadeOut(me, WAR_FADE); setTimeout(() => { if (warOn && cur === me) playWar(); }, WAR_FADE * 1000 + 200); } });
+  el.addEventListener('ended', () => { if (warOn && cur === me && !me.fading) playWar(); });
+  el.play().catch(() => {});
+}
+function startTracks() { try { if (musicMood === 'war') updateWarMusic(); else playTrack(); } catch (e) { console.warn('soundtrack unavailable', e); } }
 
 function scheduleMusic() {
   let step = 0; let root = 50; let chordT = 0;
