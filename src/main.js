@@ -90,7 +90,7 @@ class App {
     this.mode = 'menu';
     this.hud.hide();
     // a living background world, run entirely by AI
-    await this.sim.call('create', { seed: 'menu-' + (Math.random() * 1e6 | 0), size: 'small', observer: true, playerTribe: 0, start: 'bountiful' }, 360 * 6);
+    await this.sim.call('create', { seed: 'menu-' + (Math.random() * 1e6 | 0), size: 'small', observer: true, playerTribe: 0, start: 'bountiful', vis: 'open' }, 360 * 6);
     const bg = this.sim.mirror;
     this.game = bg; this.sim.setSpeed(2); this.sim.setHold(false);
     this.renderer.setGame(bg);

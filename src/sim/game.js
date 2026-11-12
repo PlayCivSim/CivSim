@@ -94,7 +94,7 @@ export class Game {
     g.observer = !!opts.observer;
     g.tutorial = !!opts.tutorial; // scripted tutorial world: rivals never attack the player
     // map visibility by difficulty: open (Easy) / explore (Medium) / los (Hard)
-    g.vis = opts.vis || (opts.intel === 'open' ? 'open' : opts.intel === 'hard' ? 'los' : g.tutorial ? 'open' : 'explore');
+    g.vis = opts.vis || (opts.intel === 'open' ? 'open' : opts.intel === 'hard' ? 'los' : (g.tutorial || opts.observer) ? 'open' : 'explore');
     g.fog = g.vis !== 'open';
     g._personalitySeed = typeof g.seed === 'number' ? g.seed : [...String(g.seed)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7); // Hard Mode: fog of war, uncertain intelligence, travelling envoys
     g.rng = new RNG(g.seed ^ 0xbeef);
