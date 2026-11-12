@@ -119,7 +119,8 @@ export class SimClient {
   frame(view) {
     const g = this.mirror; if (!g) return;
     const alpha = Math.min(1, (performance.now() - this.batchAt) / Math.max(16, this.batchGap));
-    for (const a of g.agents.values()) { a.x = a._x0 + (a._x1 - a._x0) * alpha; a.y = a._y0 + (a._y1 - a._y0) * alpha; }
+    // only interpolate agents that have received a position update (a frame can run before the first batch)
+    for (const a of g.agents.values()) { if (a._x1 === undefined) continue; a.x = a._x0 + (a._x1 - a._x0) * alpha; a.y = a._y0 + (a._y1 - a._y0) * alpha; }
     if (view && performance.now() - this.viewAt > 250) {
       const v = { x0: Math.round(view.x0), y0: Math.round(view.y0), x1: Math.round(view.x1), y1: Math.round(view.y1) };
       const l = this.lastView;

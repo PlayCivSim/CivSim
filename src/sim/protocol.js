@@ -58,7 +58,8 @@ export function unpackAgents(mirror, arr) {
     let a = mirror.agents.get(id);
     const x = arr[o + 1], y = arr[o + 2];
     if (!a) { a = { id, skill: {}, x, y, _x0: x, _y0: y, _x1: x, _y1: y }; mirror.agents.set(id, a); }
-    else if (Math.abs(a._x1 - x) + Math.abs(a._y1 - y) > 3) { a._x0 = a.x = x; a._y0 = a.y = y; }
+    // first update, a jump, or a bad previous position: snap instead of interpolating
+    else if (!(Math.abs(a._x1 - x) + Math.abs(a._y1 - y) <= 3) || !Number.isFinite(a.x) || !Number.isFinite(a.y)) { a._x0 = a.x = x; a._y0 = a.y = y; }
     else { a._x0 = a.x; a._y0 = a.y; }
     a._x1 = x; a._y1 = y;
     const f = arr[o + 4];
