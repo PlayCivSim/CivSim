@@ -500,7 +500,7 @@ export class Hud {
         ${dep ? `<span>Deposit</span><span>${ico(dep.res, 'sm')} ${dep.name} · ${w.depAmt[i]} left${dep.tech && !g.player.techs.includes(dep.tech) ? ` <span class="warn">(needs ${TECH[dep.tech].name})</span>` : ''}</span>` : ''}
         ${w.fauna[i] ? `<span>${isWater(b) ? 'Fish' : 'Wildlife'}</span><span>${bar(w.fauna[i] / 255, 'blue')}</span>` : ''}
         ${bd.defense ? `<span>Defence</span><span>+${Math.round(bd.defense * 100)}% for defenders</span>` : ''}
-        <span>Travel</span><span>${bd.walk ? (bd.walk <= 1 ? 'Easy' : bd.walk < 2 ? 'Rough' : 'Difficult') : 'Impassable'}</span></div></div>`;
+        <span>Travel</span><span>${bd.walk ? (bd.walk <= 1 ? 'Easy' : bd.walk < 2 ? 'Rough' : 'Difficult') : 'Impassable'}</span></div>${!isWater(b) && (o === -1 || o === g.playerId) && !g.observer ? `<button class="btn sm" data-act="insp-expand" style="margin-top:6px" data-tip="Set your expansion direction toward this spot: your land grows this way, your people work toward it, and you may build a few tiles past your border on this side.">${ico('flag', 'sm')} Expand here</button>` : ''}</div>`;
     }
     if (force || this.lastInspHTML !== html) {
       const first = !host.firstElementChild;
@@ -514,6 +514,11 @@ export class Hud {
     const g = this.game; sfx('click');
     const act = b.dataset.act;
     if (act === 'insp-close') this.select(null);
+    else if (act === 'insp-expand' && this.selected?.kind === 'tile') {
+      const w = g.world, i = this.selected.i;
+      this.sim.call('expandTo', i % w.w, (i / w.w) | 0).then(r => { if (r.ok) { sfx('place'); toast('Expanding this way', 'Your land will grow toward this spot, your people will work toward it, and you may build a few tiles past your border on this side.', { icon: 'flag', kind: 'good', ms: 5000 }); } else toast('Cannot expand there', r.why || '', { kind: 'bad', icon: 'warning' }); });
+      this.select(null);
+    }
     else if (act === 'insp-follow') { this.following = this.following === this.selected.id ? null : this.selected.id; this.renderInspector(true); }
     else if (act === 'cancel-place') this.cancelPlacing();
     else if (act === 'confirm-place') this.confirmPlace();
