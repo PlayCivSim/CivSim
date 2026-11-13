@@ -146,6 +146,14 @@ export class Lighting {
         if (++n > 40) break;
       }
     }
+    // explosions, fires and burning arrows light up the night and throw shadows
+    for (const f of game.fx || []) {
+      if (f.t < 0) continue;
+      const p = f.t / f.life;
+      if (f.kind === 'blast' && p < 0.8) { const [x, y] = toS(f.x * TILE, f.y * TILE - 3); lights.push({ x, y, r: (f.big ? 110 : 75) * s * (1 - p * 0.7), col: p < 0.25 ? [255, 236, 200] : [255, 150, 70], k: 1.6 * (1 - p), cast: true, id: -3 }); }
+      else if (f.kind === 'fire') { const [x, y] = toS(f.x * TILE, f.y * TILE); lights.push({ x, y, r: 26 * s * (0.85 + Math.sin(time * 17 + f.x * 7) * 0.15), col: [255, 140, 60], k: 0.8, cast: false, id: -4 }); }
+      else if ((f.kind === 'arrow' && f.fire) || (f.kind === 'stone' && f.blast)) { const ax = f.x + (f.tx - f.x) * p, ay = f.y + (f.ty - f.y) * p; const [x, y] = toS(ax * TILE, ay * TILE - Math.sin(p * Math.PI) * (f.kind === 'stone' ? 26 : 6)); lights.push({ x, y, r: 12 * s, col: [255, 170, 80], k: 0.7, cast: false, id: -5 }); }
+    }
     // only the largest lights trace shadows when there are very many
     if (lights.length > 48) { lights.sort((p, q) => q.r - p.r); for (let i = 36; i < lights.length; i++) lights[i].cast = false; }
     return { lights, occ };

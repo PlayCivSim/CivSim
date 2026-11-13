@@ -19,6 +19,24 @@ export class Camera {
   constructor() { this.x = 0; this.y = 0; this.zoom = 3; this.tz = 3; this.tx = null; this.ty = null; this.vx = 0; this.vy = 0; }
 }
 
+// ---- pixel-art effect helpers (world space: one unit = one art pixel)
+function pxDisc(ctx, cx, cy, r, col, dither) {
+  ctx.fillStyle = col; const R = Math.max(1, Math.round(r));
+  for (let y = -R; y <= R; y++) { const hw = Math.round(Math.sqrt(Math.max(0, R * R - y * y))); if (!hw) continue; if (dither) { for (let x = -hw; x <= hw; x++) if (((x + y) & 1) === 0) ctx.fillRect(cx + x, cy + y, 1, 1); } else ctx.fillRect(cx - hw, cy + y, hw * 2 + 1, 1); }
+}
+function pxRing(ctx, cx, cy, r, col) {
+  ctx.fillStyle = col; const R = Math.round(r), n = Math.max(12, R * 5);
+  let lx = null, ly = null;
+  for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2, x = Math.round(cx + Math.cos(a) * R), y = Math.round(cy + Math.sin(a) * R * 0.55); if (x === lx && y === ly) continue; lx = x; ly = y; ctx.fillRect(x, y, 1, 1); }
+}
+function glowAt(ctx, x, y, r, rgb, a) {
+  if (a <= 0.01 || r < 1) return;
+  const spr = glowSprite(rgb, 32), prev = ctx.globalCompositeOperation, pa = ctx.globalAlpha;
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, a); ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(spr, x - r, y - r, r * 2, r * 2);
+  ctx.imageSmoothingEnabled = false; ctx.globalCompositeOperation = prev; ctx.globalAlpha = pa;
+}
+
 export class Renderer {
   constructor(cv) {
     this.cv = cv; this.ctx = cv.getContext('2d', { alpha: false });
@@ -370,6 +388,8 @@ export class Renderer {
     const g = this.game, t = this.time;
     const gdt = dt * Math.max(1, [0, 1, 3, 8][g.speed] || 1) * (g.speed === 0 ? 0 : 1);
     for (const f of g.fx) f.t += gdt || 0;
+    // bloom: soft additive glow under pixel effects on higher settings
+    const bloom = this.settings.lighting && this.settings.quality !== 'low' && !this.settings.saver;
     g.fx = g.fx.filter(f => f.t < f.life);
     for (const f of g.fx) {
       if (f.t < 0) continue;
@@ -383,16 +403,30 @@ export class Renderer {
         case 'glyph': ctx.globalAlpha = 1 - p; ctx.fillStyle = TRIBES[f.tribe]?.pal.light || '#fff'; ctx.fillRect(X, Y - 4 - p * 10, 1, 3); ctx.fillRect(X - 1, Y - 3 - p * 10, 3, 1); ctx.globalAlpha = 1; break;
         case 'hit': ctx.fillStyle = p < 0.5 ? '#fff' : '#e04040'; ctx.fillRect(X - 1, Y - 6, 2, 2); break;
         case 'fallen': ctx.globalAlpha = 1 - p * p; ctx.fillStyle = '#8a7a6a'; ctx.fillRect(X - 0.5, Y - 4, 1, 4); ctx.fillRect(X - 1.5, Y - 3, 3, 1); ctx.globalAlpha = 1; break;
-        case 'arrow': { const ax = X + (f.tx * TILE - X) * p, ay = Y + (f.ty * TILE - Y) * p - Math.sin(p * Math.PI) * 6; ctx.fillStyle = f.fire ? '#ff9a30' : '#3a2a1a'; ctx.fillRect(ax - 1, ay, 2, 1); if (f.fire) { ctx.fillStyle = '#ffe070'; ctx.fillRect(ax + (f.tx * TILE > X ? 1 : -2), ay, 1, 1); } break; }
-        case 'stone': { const sx = X + (f.tx * TILE - X) * p, sy = Y + (f.ty * TILE - Y) * p - Math.sin(p * Math.PI) * 26; ctx.fillStyle = f.blast ? '#3a2a1a' : '#7d7a80'; ctx.fillRect(sx - 1.5, sy - 1.5, 3, 3); if (f.blast) { ctx.fillStyle = '#ffd060'; ctx.fillRect(sx, sy - 2.5, 1, 1); } break; }
-        case 'debris': { // chunks of timber and stone thrown out by a blast
-          const n = f.big ? 14 : 9;
-          for (let k = 0; k < n; k++) { const a = (k * 2.39 + (f.seed || 0)) % 6.283, v = (f.big ? 26 : 18) * (0.5 + ((k * 37 + (f.seed || 0)) % 10) / 20); const dx = Math.cos(a) * v * p, dy = -Math.abs(Math.sin(a)) * v * 1.4 * p + 60 * p * p; ctx.globalAlpha = 1 - p * 0.6; ctx.fillStyle = k % 3 === 0 ? '#5a4030' : k % 3 === 1 ? '#8a857a' : '#ff9a30'; ctx.fillRect(X + dx, Y - 4 + dy, k % 2 ? 2 : 1, k % 2 ? 1 : 2); }
+        case 'arrow': { const ax = Math.round(X + (f.tx * TILE - X) * p), ay = Math.round(Y + (f.ty * TILE - Y) * p - Math.sin(p * Math.PI) * 6), dir = f.tx * TILE > X ? 1 : -1; ctx.fillStyle = '#3a2a1a'; ctx.fillRect(ax - (dir > 0 ? 2 : 0), ay, 2, 1); if (f.fire) { ctx.fillStyle = '#ff9a30'; ctx.fillRect(ax + (dir > 0 ? 0 : -1), ay, 1, 1); ctx.fillStyle = (t * 20 | 0) % 2 ? '#ffe070' : '#ff6a20'; ctx.fillRect(ax + (dir > 0 ? 0 : -1), ay - 1, 1, 1); if (bloom) glowAt(ctx, ax, ay, 5, '255,160,60', 0.5); } break; }
+        case 'stone': { const sx = Math.round(X + (f.tx * TILE - X) * p), sy = Math.round(Y + (f.ty * TILE - Y) * p - Math.sin(p * Math.PI) * 26); ctx.fillStyle = f.blast ? '#3a2a1a' : '#7d7a80'; ctx.fillRect(sx - 1, sy - 1, 3, 3); ctx.fillStyle = f.blast ? '#5a4030' : '#a8a4a0'; ctx.fillRect(sx - 1, sy - 1, 1, 1); if (f.blast) { ctx.fillStyle = (t * 16 | 0) % 2 ? '#ffd060' : '#ff7a20'; ctx.fillRect(sx, sy - 2, 1, 1); if (bloom) glowAt(ctx, sx, sy - 2, 4, '255,180,80', 0.45); } break; }
+        case 'debris': { // pixel chunks of timber, stone and embers thrown out by a blast
+          const n = f.big ? 16 : 10;
+          for (let k = 0; k < n; k++) { const a = (k * 2.39 + (f.seed || 0)) % 6.283, v = (f.big ? 26 : 18) * (0.5 + ((k * 37 + (f.seed || 0)) % 10) / 20); const dx = Math.cos(a) * v * p, dy = -Math.abs(Math.sin(a)) * v * 1.4 * p + 60 * p * p; const ember = k % 3 === 2; ctx.fillStyle = ember ? (p < 0.5 ? '#ffd060' : '#ff6a20') : k % 3 === 0 ? '#5a4030' : '#8a857a'; const bx = Math.round(X + dx), by = Math.round(Y - 4 + dy); ctx.fillRect(bx, by, k % 2 ? 2 : 1, 1); if (ember && bloom && p < 0.7) glowAt(ctx, bx, by, 3, '255,150,60', 0.35 * (1 - p)); }
           if (this.settings.particles && Math.random() < 0.5) this.particles.push({ k: 'smoke', x: X + (Math.random() - 0.5) * 8, y: Y - 6, vx: (Math.random() - 0.5) * 3, vy: -10, t: 0, life: 2.4, dark: true });
+          break;
+        }
+        case 'scorch': { // a dithered pixel crater that fades
+          const r = f.big ? 9 : 6, a = 1 - p; ctx.fillStyle = '#1a1410';
+          for (let yy = -Math.ceil(r / 2); yy <= Math.ceil(r / 2); yy++) for (let xx = -r; xx <= r; xx++) { const e = (xx * xx) / (r * r) + (yy * yy) / ((r / 2) * (r / 2)); if (e > 1) continue; const dither = ((xx + yy) & 1) === 0; if (e > 0.55 && !dither) continue; if (a < 0.5 && !dither) continue; ctx.globalAlpha = (e < 0.4 ? 0.55 : 0.4) * Math.min(1, a * 1.6); ctx.fillRect(Math.round(X) + xx, Math.round(Y) + yy, 1, 1); }
           ctx.globalAlpha = 1; break;
         }
-        case 'scorch': { const r = f.big ? 9 : 6; ctx.globalAlpha = 0.45 * (1 - p); ctx.fillStyle = '#1a1410'; ctx.beginPath(); ctx.ellipse(X, Y, r, r * 0.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; break; }
-        case 'blast': { const r = (f.big ? 18 : 11) * Math.sqrt(p); if (p < 0.15) { ctx.globalAlpha = 0.6 * (1 - p / 0.15); ctx.fillStyle = '#fffbe0'; ctx.beginPath(); ctx.arc(X, Y - 2, r * 2.2, 0, Math.PI * 2); ctx.fill(); } ctx.strokeStyle = `rgba(255,230,180,${0.7 * (1 - p)})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(X, Y - 1, r * 1.6, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1 - p; ctx.fillStyle = p < 0.3 ? '#fff4c0' : '#ff8a30'; ctx.beginPath(); ctx.arc(X, Y - 2, r, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#5a4a40'; for (let k = 0; k < 8; k++) ctx.fillRect(X + Math.cos(k * 0.8) * r * 1.2, Y - 2 + Math.sin(k * 0.8) * r * 0.8 - p * 8, 2, 2); ctx.globalAlpha = 1; break; }
+        case 'blast': { // pixel fireball: white core → yellow → orange → red, a pixel shockwave ring, then smoke
+          const R = (f.big ? 13 : 8) * Math.min(1, Math.sqrt(p * 1.6)), cx = Math.round(X), cy = Math.round(Y - 3);
+          const ramp = p < 0.12 ? ['#ffffff', '#fff6c0', '#ffd060'] : p < 0.35 ? ['#fff6c0', '#ffc040', '#ff7a20'] : p < 0.6 ? ['#ffc040', '#ff7a20', '#c83a18'] : ['#ff7a20', '#8a3a20', '#3a302c'];
+          if (bloom) glowAt(ctx, cx, cy, R * 3.2 * (1.2 - p), p < 0.3 ? '255,240,200' : '255,150,60', (f.big ? 0.9 : 0.7) * (1 - p));
+          pxDisc(ctx, cx, cy, R, ramp[2], p > 0.6);
+          pxDisc(ctx, cx, cy - 1, R * 0.7, ramp[1], false);
+          pxDisc(ctx, cx, cy - 1, R * 0.38, ramp[0], false);
+          if (p < 0.5) pxRing(ctx, cx, cy + 1, R * 1.7 + p * 10, `rgba(255,236,190,${(0.8 * (1 - p * 2)).toFixed(2)})`);
+          if (p < 0.08) { ctx.fillStyle = 'rgba(255,255,240,0.55)'; pxDisc(ctx, cx, cy, R * 2.4, 'rgba(255,255,240,0.45)', true); }
+          break;
+        }
         case 'fire': if (Math.random() < 0.6 && this.settings.particles) this.particles.push({ k: 'flame', x: X + (Math.random() - 0.5) * 6, y: Y - 1, vx: 0, vy: -8, t: 0, life: 0.6 }); break;
         case 'ping': { ctx.strokeStyle = `rgba(255,236,160,${1 - p})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(X, Y, 4 + p * 30, 0, Math.PI * 2); ctx.stroke(); break; }
         case 'caravan': { const cxp = X + (f.tx * TILE - X) * p, cyp = Y + (f.ty * TILE - Y) * p; if (z < 2.5) { ctx.fillStyle = TRIBES[f.tribe].color; ctx.fillRect(cxp - 1.5, cyp - 1.5, 3, 3); ctx.fillStyle = '#e8d0a0'; ctx.fillRect(cxp - 0.5, cyp - 2.5, 1, 1); } break; }
