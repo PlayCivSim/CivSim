@@ -14,9 +14,9 @@ export const SPEEDS = [0, 1, 3, 8];
 export const SPEED_NAMES = ['Paused', 'Normal', 'Fast', 'Very Fast'];
 
 export const MAP_SIZES = {
-  small:  { w: 160, h: 128, label: 'Small',  desc: 'Close quarters. Rivals are never far.' },
-  medium: { w: 224, h: 176, label: 'Medium', desc: 'A balanced continent with room to grow.' },
-  large:  { w: 288, h: 224, label: 'Large',  desc: 'A sprawling world of distant frontiers.' },
+  small:  { w: 256, h: 200, label: 'Small',  desc: 'Close quarters. Rivals are never far.' },
+  medium: { w: 384, h: 300, label: 'Medium', desc: 'A balanced continent with room to grow.' },
+  large:  { w: 576, h: 448, label: 'Large',  desc: 'A vast world of distant frontiers. Rivals may be weeks of travel away.' },
 };
 
 export const DIFFICULTIES = {
