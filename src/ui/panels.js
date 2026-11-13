@@ -8,7 +8,7 @@ import { RESOURCES, RES_CATEGORIES, RES_KEYS, FOOD_KEYS, DEPOSITS, DEP } from '.
 import { TECHS, TECH, BRANCHES, TIER_STAGE } from '../data/techs.js';
 import { LAWS, LAW, GOVERNMENTS } from '../data/laws.js';
 import { STAGES, stageProgress, techState, techCost, setResearch, MAX_SETTLEMENTS } from '../sim/progress.js';
-import { isUnlocked, placementCheck, upgradeTarget, upgradeBuilding, destroyBuilding, accessibleDeposits, depositsNear, hasUnique } from '../sim/buildings.js';
+import { boostAt, isUnlocked, placementCheck, upgradeTarget, upgradeBuilding, destroyBuilding, accessibleDeposits, depositsNear, hasUnique } from '../sim/buildings.js';
 import { canAfford, foodTotal, dailyFoodNeed, scarcity, buildingCost } from '../sim/economy.js';
 import { jobCap, normaliseAlloc, assignJobs, traitName } from '../sim/population.js';
 import { lawSlots, enactedCount, canEnact, enactLaw, canAdoptGov, adoptGov, policyInteractions, LEADER_TRAITS } from '../sim/government.js';
@@ -103,7 +103,7 @@ const build = {
       const lockText = !unlocked ? `Requires ${TECH[d.tech]?.name || '—'}` : uniq ? 'Already built' : '';
       return `<button class="bcard ${!unlocked || uniq ? 'locked' : !afford ? 'cant' : ''} ${hud.placing === k ? 'sel' : ''}" data-act="${unlocked && !uniq ? 'build' : ''}" data-type="${k}">
         <div class="bimg"><img src="${img}" style="width:${d.size * 8 * 2}px"></div>
-        <div style="min-width:0"><div class="bname">${d.name}</div><div class="bdesc">${lockText ? `<span class="warn">${esc(lockText)}</span>` : esc(d.desc)}</div>${costHTML(t, cost)}
+        <div style="min-width:0"><div class="bname">${d.name}</div><div class="bdesc">${lockText ? `<span class="warn">${esc(lockText)}</span>` : esc(d.desc)}</div>${producesLines(k).map(l => `<div class="bmakes">${l}</div>`).join('')}${costHTML(t, cost)}
         <div class="faint" style="font-size:0.72em">${d.housing ? `${ico('house', 'sm')}${d.housing} homes ` : ''}${d.job && d.slots ? `${ico(d.job, 'sm')}${d.slots} ${JOBS[d.job].plural.toLowerCase()} ` : ''}${d.size}×${d.size}</div></div></button>`;
     }).join('');
     return `<div class="bcat">${BUILDING_CATS.map(c => `<button class="btn xs ${st.bcat === c.key ? 'on' : ''}" data-act="bcat" data-cat="${c.key}">${c.name}</button>`).join('')}</div>
@@ -471,6 +471,20 @@ function trendsHTML(g) {
 export const PANELS = { overview, build, population, economy, technology, diplomacy, government, military, chronicle };
 
 // ================================================================= building inspector
+// What a building makes (or boosts), spelled out with icons, for build cards and tooltips.
+const RN = k => RESOURCES[k]?.name || k;
+const JOB_PLACES = { farmer: 'farms', woodcutter: 'lumber camps', miner: 'quarries and mines', hunter: 'hunting lodges', fisher: 'fishing huts', craftsman: 'workshops', trader: 'markets', researcher: 'schools and libraries', gatherer: 'forager camps' };
+export function producesLines(type) {
+  const d = BUILDINGS[type], P = d.prod, out = [];
+  if (P?.recipes) for (const r of P.recipes) out.push(Object.keys(r.in).length ? `${Object.entries(r.in).map(([k, v]) => `${v} ${ico(k, 'sm')}${RN(k)}`).join(' + ')} › <b>${r.amt} ${ico(r.out, 'sm')}${RN(r.out)}</b>` : `Makes <b>${r.amt} ${ico(r.out, 'sm')}${RN(r.out)}</b> from nothing but labour`);
+  else if (P?.deps) out.push(`Mines ${P.deps.map(k => `${ico(DEPOSITS[DEP[k]].res, 'sm')}${RN(DEPOSITS[DEP[k]].res)}`).join(', ')} from deposits within ${P.radius} tiles`);
+  else if (P?.out) out.push(`Makes <b>${ico(P.out, 'sm')}${RN(P.out)}</b>${P.alt ? ` and ${ico(P.alt, 'sm')}${RN(P.alt)}` : ''}${P.byproduct ? `, plus some ${ico(P.byproduct, 'sm')}${RN(P.byproduct)}` : ''}${P.livestock ? `, plus ${ico('fibre', 'sm')}fibre` : ''}`);
+  else if (P?.research) out.push(`Makes <b>${ico('research', 'sm')}research</b>`);
+  else if (P?.trade) out.push(`Sends caravans that earn <b>${ico('coins', 'sm')}coins</b> (or trade goods before Currency)`);
+  if (d.boost) { const B = d.boost; const what = B.types ? B.types.map(k => BUILDINGS[k].name.toLowerCase() + 's').join(', ') : B.cats ? B.cats.map(c => c === 'production' ? 'all production buildings' : c === 'research' ? 'research buildings' : c).join(' and ') : B.jobs.map(j => JOB_PLACES[j] || j).join(' and '); out.push(`<b class="good">+${Math.round(B.pct * 100)}%</b> work speed for ${what} within ${B.radius} tiles`); }
+  if (d.tribeMods) out.push(`Whole tribe: ${Object.entries(d.tribeMods).map(([k, v]) => `<b class="good">${sign(v * 100, 0)}%</b> ${modName(k).toLowerCase()}`).join(', ')}`);
+  return out;
+}
 export function buildingTip(hud, b, inspector) {
   const g = hud.game, d = BUILDINGS[b.type], tribe = g.tribes[b.tribe], mine = b.tribe === g.playerId;
   const s = g.settlements.get(b.sid);
@@ -499,6 +513,9 @@ export function buildingTip(hud, b, inspector) {
     if (b.flags & 2) info += `<span>Status</span><span class="warn">Missing input materials</span>`;
     if (b.hp < b.maxHp) info += `<span>Condition</span><span>${bar(b.hp / b.maxHp, 'red')}</span>`;
   }
+  const lines = producesLines(b.type);
+  if (lines.length) info += `<span>${d.boost || d.tribeMods ? 'Boosts' : 'Makes'}</span><span>${lines.join('<br>')}</span>`;
+  if (b.built && d.job && boostAt(g, b) > 0) info += `<span>Boosted</span><span class="good">+${Math.round(b._boost * 100)}% by ${(b._boostBy || []).map(k => BUILDINGS[k].name).join(', ')}</span>`;
   const effect = d.effect ? Object.entries(d.effect).map(([k, v]) => `${modName(k)} ${sign(Math.abs(v) < 2 ? v * 100 : v, 0)}${Math.abs(v) < 2 ? '%' : ''}`).join(', ') : '';
   let ctl = '';
   if (mine && b.built && inspector !== null) {

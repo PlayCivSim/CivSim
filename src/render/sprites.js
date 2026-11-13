@@ -335,7 +335,15 @@ export function buildingSprite(type, tribeKey, opts = {}) {
     const base = H - 1; const cx = W / 2;
     const T = tier >= 5 ? 3 : tier >= 3 ? 2 : 1;
     const gnd = (col) => { p.rect(1, base - W + 2, W - 2, W - 2, col); };
-    switch (type) {
+    // newer buildings borrow the look of a close relative, with a few touches of their own below
+    const ALIAS = { kiln: 'smelter', brickworks: 'workshop', jeweller: 'mint', saltpans: 'well', herbalist: 'gatherer', refinery: 'factory', granary: 'storehouse', smokehouse: 'hunter', sawmill: 'lumber', stampmill: 'mine', guildhall: 'artisan', caravanserai: 'market', scriptorium: 'library', healer: 'shrine', blastfurnace: 'smelter', steamhouse: 'factory', powerstation: 'factory' };
+    if (type === 'windmill' || type === 'waterwheel') {
+      house(p, S, k, cx, base - 2, 10, 7, 5);
+      if (type === 'windmill') { const hx = cx, hy = base - 13; for (const [dx, dy] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) for (let r = 1; r <= 6; r++) p.px(hx + dx * r, hy + dy * r, r > 2 ? '#e8dcc0' : S.wood); p.px(hx, hy, '#3a2a1a'); }
+      else { p.ellipse(W - 4, base - 5, 3, 3, S.wood); p.ellipse(W - 4, base - 5, 1, 1, '#3a2a1a'); p.hline(W - 7, base - 1, 6, '#4a8ad8'); }
+      return c;
+    }
+    switch (ALIAS[type] || type) {
       case 'centre': {
         gnd('rgba(120,100,70,0.35)');
         // plaza stones

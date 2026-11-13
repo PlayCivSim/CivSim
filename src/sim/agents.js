@@ -7,7 +7,7 @@ import { BUILDINGS } from '../data/buildings.js';
 import { BIOMES, B, isWater } from '../world/biomes.js';
 import { DEPOSITS, DEP } from '../data/resources.js';
 import { addRes, takeRes, mod, scarcity } from './economy.js';
-import { doorTile, addProgress, accessibleDeposits, centreOf, rockNear } from './buildings.js';
+import { doorTile, addProgress, accessibleDeposits, centreOf, rockNear, boostAt } from './buildings.js';
 import { updateSoldier } from './military.js';
 import { tradeTrip } from './diplomacy.js';
 import { tribeName } from '../data/tribes.js';
@@ -366,7 +366,7 @@ function doWork(game, a, dt) {
   if (t.b != null && !wb) { if (t.res != null) game.reserved.delete(t.res); a.state = 'think'; return; }
   const def = wb ? BUILDINGS[wb.type] : null;
   const job = a.job;
-  const p = productivity(game, tribe, a) * skillMul(a, job) * specMul(game, wb, job);
+  const p = productivity(game, tribe, a) * skillMul(a, job) * specMul(game, wb, job) * (wb ? 1 + boostAt(game, wb) : 1);
   let carry = null;
   const add = (r, v) => { if (v > 0) { carry = carry || {}; carry[r] = (carry[r] || 0) + v; } };
 

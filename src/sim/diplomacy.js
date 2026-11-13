@@ -7,7 +7,7 @@ import { intel } from './intel.js';
 import { RESOURCES } from '../data/resources.js';
 import { mod, addRes, takeRes, scarcity } from './economy.js';
 import { militaryStrength } from './military.js';
-import { doorTile, centreOf } from './buildings.js';
+import { doorTile, centreOf, boostAt } from './buildings.js';
 import { DAY_TICKS } from '../core/constants.js';
 
 export const WAR_THRESHOLD = 22;
@@ -679,7 +679,7 @@ export function tradeTrip(game, a, t) {
     const partner = game.tribes[t.partner];
     if (!partner || !partner.alive || !game.dip.has('trade', tribe.id, partner.id)) { a.state = 'think'; return; }
     const wb = a.workId != null ? game.buildings.get(a.workId) : null;
-    const bonus = wb?.type === 'harbor' ? 0.4 : 0;
+    const bonus = (wb?.type === 'harbor' ? 0.4 : 0) + (wb ? boostAt(game, wb) : 0);
     // raiders on the road (risk from geography, war and how well the roads are guarded)
     if (game.rng.chance(caravanRisk(game, tribe.id, partner.id))) {
       tribe.stats.raided = (tribe.stats.raided || 0) + 1; ledger(game, { a: tribe.id, b: partner.id, kind: 'raid' });

@@ -1,6 +1,7 @@
 // Utility-based AI. Every choice is a weighted score built from observable
 // state (shortages, threats, opportunities) times personality, so behaviour is
 // explainable. The same allocation/planning helpers power the player's steward.
+import { boostMatches } from './buildings.js';
 import { aiOf, knowsSettlement, perceivedStrength, inCoalitionAgainst } from './aimind.js';
 import { estimateCampaign } from './logistics.js';
 import { intel } from './intel.js';
@@ -126,6 +127,16 @@ function buildUtilities(game, t) {
   if (avail.has('mint') && !countB(game, t, 'mint') && ((t.stock.gold || 0) + (t.stock.silver || 0) > 5)) add('mint', 4, 'Coinage');
   if (avail.has('factory') && !countB(game, t, 'factory')) add('factory', 6, 'Industry');
   if (avail.has('derrick') && countB(game, t, 'derrick') < 1) add('derrick', 4, 'Oil');
+  if (avail.has('refinery') && countB(game, t, 'derrick') && !countB(game, t, 'refinery')) add('refinery', 5, 'Refine oil');
+  if (avail.has('kiln') && countB(game, t, 'smelter') && (t.stock.coal || 0) < 10 && !countB(game, t, 'kiln')) add('kiln', 4, 'Charcoal for the smelter');
+  if (avail.has('jeweller') && (t.stock.gems || 0) + (t.stock.gold || 0) > 6 && !countB(game, t, 'jeweller')) add('jeweller', 3.5, 'Luxury goods');
+  if (avail.has('healer') && !countB(game, t, 'healer') && (t.stock.herbs || 0) >= 10) add('healer', 3.5, 'Healthier births');
+  // boosters: one of each kind once there are a few workplaces it would help
+  for (const [bt, d] of Object.entries(BUILDINGS)) {
+    if (!d.boost || !avail.has(bt) || countB(game, t, bt)) continue;
+    let n = 0; for (const b of game.buildings.values()) if (b.tribe === t.id && b.built && boostMatches(d, bt, b)) n++;
+    if (n >= 2) add(bt, 2.5 + n * 0.4, 'Boost nearby work');
+  }
   if (avail.has('well') && countB(game, t, 'well') < 1 + t.pop / 40) add('well', 3 + (t.happiness < 50 ? 2 : 0), 'Clean water');
   if (avail.has('shrine') && countB(game, t, 'shrine') < 1 + t.pop / 70) add('shrine', 2.5 + (t.happiness < 50 ? 3 : 0), 'Morale');
   if (avail.has('bathhouse') && countB(game, t, 'bathhouse') < t.pop / 80) add('bathhouse', 3.5, 'Health');

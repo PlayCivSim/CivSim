@@ -434,3 +434,27 @@ export function buildingYieldInfo(game, b) {
   }
   return {};
 }
+
+// Booster buildings speed up nearby workplaces of a matching kind. Each booster
+// type counts once (the strongest in reach); different types stack, capped at +60%.
+// Cached per building and refreshed daily.
+export function boostMatches(def, bt, target) {
+  const bd = BUILDINGS[target.type], B = def.boost; if (!B || !bd) return false;
+  if (B.types && B.types.includes(target.type)) return true;
+  if (B.jobs && bd.job && B.jobs.includes(bd.job)) return true;
+  if (B.cats && B.cats.includes(bd.cat) && bd.job) return true;
+  return false;
+}
+export function boostAt(game, b) {
+  if (b._boostDay === game.day) return b._boost || 0;
+  const best = new Map(); const cx = b.x + b.size / 2, cy = b.y + b.size / 2;
+  for (const o of game.buildings.values()) {
+    const d = BUILDINGS[o.type]; if (!d.boost || o.tribe !== b.tribe || !o.built || o === b) continue;
+    if (Math.hypot(o.x + o.size / 2 - cx, o.y + o.size / 2 - cy) > d.boost.radius) continue;
+    if (!boostMatches(d, o.type, b)) continue;
+    best.set(o.type, Math.max(best.get(o.type) || 0, d.boost.pct));
+  }
+  let sum = 0; for (const v of best.values()) sum += v;
+  b._boost = Math.min(0.6, sum); b._boostDay = game.day; b._boostBy = [...best.keys()];
+  return b._boost;
+}
