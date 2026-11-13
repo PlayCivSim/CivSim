@@ -714,3 +714,8 @@ body.touch #tutorial.tut-mini .btn.xs { min-height: 30px; min-width: 30px; }
 #hud:has(.side-panel) ~ #toasts .toast, #hud:has(.fullscreen-panel) ~ #toasts .toast, body:has(#modal-root.show) #toasts .toast { pointer-events: none; opacity: 0.88; }
 .menu-ver { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: 16px; padding: 3px 9px; font-family: var(--font-caps); font-size: 0.7em; letter-spacing: 0.15em; color: var(--gold-hi); background: rgba(7,8,12,0.6); border: 1px solid var(--gold-deep); text-shadow: 0 1px 2px #000; z-index: 2; }
 .bcard .bmakes { font-size: 0.74em; line-height: 1.3; color: var(--text); margin-top: 2px; } .bcard .bmakes .ico { vertical-align: -2px; }
+/* scouting button by the minimap */
+.mm-tools .scout-btn { padding: 0 6px; gap: 3px; font-size: 0.78em; }
+.vis-open .scout-btn { display: none; }
+.scout-btn.pulse { animation: scoutPulse 1.4s ease-in-out 8; box-shadow: 0 0 0 0 rgba(242,200,75,0.7); }
+@keyframes scoutPulse { 0% { box-shadow: 0 0 0 0 rgba(242,200,75,0.75); } 70% { box-shadow: 0 0 0 9px rgba(242,200,75,0); } 100% { box-shadow: 0 0 0 0 rgba(242,200,75,0); } }

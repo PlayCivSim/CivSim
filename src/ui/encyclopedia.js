@@ -22,7 +22,7 @@ const kv = rows => `<div class="kv enc-kv">${rows.map(([a, b]) => `<span>${a}</s
 const TOPICS = [
   { key: 'basics', name: 'Getting started', icon: 'overview', body: () => P(
     'You guide one of four peoples from a camp of huts to a civilisation. Every person is simulated: they work, eat, sleep, age, marry and die. You decide what to build, what to research, which laws to pass and how to treat your neighbours.',
-    'Assign workers in <b>Population</b>, place buildings with <b>Build</b>, pick research in <b>Technology</b>. Stewards in <b>Overview</b> can automate routine choices. <b>Notices</b> (the bell) collects every dispatch, with how long ago it happened.',
+    'Assign workers in <b>Population</b>, place buildings with <b>Build</b>, pick research in <b>Technology</b>. Explore with <b>scouting parties</b>: the Scout button by the minimap, or tap any dark unexplored land. Stewards in <b>Overview</b> can automate routine choices. <b>Notices</b> (the bell) collects every dispatch, with how long ago it happened.',
     'Progress comes in six stages: ' + STAGES.slice(1).map(s => `<em>${esc(s.name)}</em>`).join(', ') + '. Each stage raises the number of settlements you may hold and unlocks new possibilities.') },
   { key: 'happiness', name: 'Happiness', icon: 'happy', body: () => P(
     'Happiness moves 15% of the way toward its target each update. The target starts at <b>50</b> and adds each factor:') + kv([

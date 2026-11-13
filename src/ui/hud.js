@@ -54,6 +54,7 @@ export class Hud {
     const t = game.player;
     document.documentElement.style.setProperty('--tribe', t.color);
     this.root.classList.remove('hidden');
+    this.root.classList.toggle('vis-open', game.vis === 'open' || !!game.observer);
     this.root.innerHTML = `
       <div class="topbar">
         <div class="tb-tribe" data-panel="overview"><img src="${emblemURL(t.key)}"><div><div class="nm">${t.name}</div><div class="st" id="tb-stage"></div></div></div>
@@ -75,7 +76,7 @@ export class Hud {
       <div class="rail frame thin">${RAIL.map(([k, n, ic, key], i) => `${i === 1 || i === 4 || i === 8 ? '<div class="sep"></div>' : ''}<button class="btn rb" data-panel="${k}" data-tip="${n} (${key})">${ico(ic)}<span class="badge hidden"></span></button>`).join('')}</div>
       <div class="alert-strip hidden" data-panel="overview"></div>
       <div id="panel-host"></div>
-      <div class="minimap frame thin"><div class="mm-tools"><button class="btn icon xs" data-act="zoom-out" data-tip="Zoom out">${ico('minus', 'sm')}</button><button class="btn icon xs" data-act="zoom-in" data-tip="Zoom in">${ico('plus', 'sm')}</button><button class="btn icon xs" data-act="territory" data-tip="Toggle territory overlay">${ico('flag', 'sm')}</button><button class="btn icon xs" data-act="home" data-tip="Return to capital (H)">${ico('house', 'sm')}</button></div><canvas id="mm"></canvas></div>
+      <div class="minimap frame thin"><div class="mm-tools"><button class="btn icon xs" data-act="zoom-out" data-tip="Zoom out">${ico('minus', 'sm')}</button><button class="btn icon xs" data-act="zoom-in" data-tip="Zoom in">${ico('plus', 'sm')}</button><button class="btn icon xs" data-act="territory" data-tip="Toggle territory overlay">${ico('flag', 'sm')}</button><button class="btn icon xs" data-act="home" data-tip="Return to capital (H)">${ico('house', 'sm')}</button><button class="btn xs scout-btn" data-act="scout-open" data-tip="Send a scouting party to chart unknown land">${ico('eye', 'sm')} Scout</button></div><canvas id="mm"></canvas></div>
       <div id="insp-host"></div>
       <div id="place-host"></div>`;
     this.bindResTips();
@@ -119,7 +120,18 @@ export class Hud {
     on('campaign', ({ tribe, target }) => { if (target.tribe === P) { sfx('war'); toast('Invasion!', `A ${tribe.name} army marches on ${target.name}!`, { icon: 'military', kind: 'bad', ms: 8000, onClick: () => this.renderer.flyTo(target.x, target.y, 3) }); } });
     on('sfx', ({ k, x, y }) => { const r = this.renderer; if (!r.view) return; const X = x * TILE, Y = y * TILE; if (X < r.view.x0 || X > r.view.x1 || Y < r.view.y0 || Y > r.view.y1 || r.cam.zoom < 2.5) return; sfx(k, { vol: Math.min(1, r.cam.zoom / 6) * 0.6, pan: Math.max(-1, Math.min(1, (X - r.cam.x) / ((r.view.x1 - r.view.x0) / 2))) }); });
     on('placed', ({ tribe }) => { if (tribe.id === P) sfx('place'); });
-    on('log', e => { this.app.hints?.onRecord(g, e); if (isAlert(e, P)) $('.bell', this.root)?.classList.add('ring'); this.updateBell(); });
+    on('day', () => {
+      // one early nudge per run: point new players at scouting
+      const st = this.app.settings;
+      if (g.vis === 'open' || g.tutorial || g.observer || g.day < 1 || (st.scoutPrompted || []).includes(g.runId) || (g.expeditions || []).some(e => e.tribe === P)) return;
+      st.scoutPrompted = [...(st.scoutPrompted || []).slice(-30), g.runId]; this.app.applySettings();
+      sfx('event');
+      toast('The world beyond is unknown', `Send a scouting party to chart new land, find resources and meet your neighbours. ${this.app.touch ? 'Tap' : 'Click'} here, use the Scout button by the map, or ${this.app.touch ? 'tap' : 'click'} any dark unexplored area.`, { icon: 'eye', ms: 14000, onClick: () => ACTIONS['scout-plan'](this) });
+      $('.scout-btn', this.root)?.classList.add('pulse');
+    });
+    on('log', e => {
+      if (e.tribe === P && /Your scouts came home|scouting party never came back/.test(e.text) && !g.tutorial) toast(/never/.test(e.text) ? 'Scouts lost' : 'Scouts returned', e.text + (this.app.touch ? ' Tap' : ' Click') + ' to send another party.', { icon: 'eye', kind: /never/.test(e.text) ? 'bad' : 'good', ms: 9000, onClick: () => ACTIONS['scout-plan'](this) });
+      this.app.hints?.onRecord(g, e); if (isAlert(e, P)) $('.bell', this.root)?.classList.add('ring'); this.updateBell(); });
     on('depleted', ({ tribe, res }) => { if (tribe.id === P && performance.now() - (this.state['dep' + res] || 0) > 60000) { this.state['dep' + res] = performance.now(); toast('Deposit exhausted', `A ${RESOURCES[res].name} deposit has run dry.`, { icon: res }); } });
   }
 
@@ -247,6 +259,12 @@ export class Hud {
     c.strokeStyle = '#c4983e'; c.lineWidth = 1; c.beginPath(); c.arc(9, 9, 8.5, 0, 7); c.stroke();
   }
 
+  exploredShare() {
+    const g = this.game, ex = g.world.explored; if (!ex) return 1;
+    if (this._exT && performance.now() - this._exT < 3000) return this._exV;
+    let n = 0; for (let i = 0; i < ex.length; i += 4) n += ex[i];
+    this._exT = performance.now(); return this._exV = n * 4 / ex.length;
+  }
   warnings() {
     const g = this.game, t = g.player, W = [];
     const need = dailyFoodNeed(g, t), food = foodTotal(t);
@@ -272,6 +290,7 @@ export class Hud {
     for (const c of g.dip.treaties) if (c.type === 'contract' && (c.a === t.id || c.b === t.id)) { const give = c.a === t.id ? c.give : c.get; const lack = Object.entries(give).find(([r, v]) => (t.stock[r] || 0) < v); if (lack) { W.push({ bad: true, icon: lack[0], text: tr('adv.contract', { res: RESOURCES[lack[0]].name, name: g.tribes[c.a === t.id ? c.b : c.a].name }) }); break; } }
     if (t.techs.includes('currency') && (t.rates.coins || 0) < -0.5 && (t.stock.coins || 0) < 40) W.push({ bad: false, icon: 'coins', text: tr('adv.coins', { rate: (t.rates.coins).toFixed(1) }) });
     for (const m of g.dip.missions || []) if (m.from === t.id && m.kind === 'envoy' && m.status === 'missing' && g.tick > m.eta) { W.push({ bad: false, icon: 'scroll', text: tr('adv.envoyLate', { name: g.tribes[m.to].name }) }); break; }
+    if (g.vis !== 'open' && !(g.expeditions || []).some(e => e.tribe === t.id) && this.exploredShare() < 0.4) W.push({ bad: false, icon: 'eye', text: `Only ${Math.round(this.exploredShare() * 100)}% of the world is explored. Send a scouting party to find land, resources and neighbours.`, act: 'scout-open' });
     if (t.lastLedger?.wasted > 5) W.push({ bad: false, icon: 'warning', text: 'Storage is full — goods are being lost. Build storehouses.' });
     return W;
   }
@@ -344,6 +363,7 @@ export class Hud {
     else if (b.dataset.act === 'hud-pins') openHudCustomise(this);
     else if (b.dataset.act === 'territory') { this.app.settings.territory = !this.app.settings.territory; this.app.applySettings(); }
     else if (b.dataset.act === 'home') this.goHome();
+    else if (b.dataset.act === 'scout-open') ACTIONS['scout-plan'](this);
     else if (b.dataset.act === 'zoom-in' || b.dataset.act === 'zoom-out') { const c = this.renderer.cam; c.tz = Math.max(this.renderer.minZoom(), Math.min(9, c.tz * (b.dataset.act === 'zoom-in' ? 1.5 : 1 / 1.5))); }
   }
   setSpeed(i) { this.sim.setSpeed(i); this.update(1); }
@@ -481,7 +501,7 @@ export class Hud {
       return;
     }
     // selection: agents first, then buildings, then the tile (nothing under the fog of war)
-    if (fogged(g, w.x, w.y)) { this.select(null); return; }
+    if (fogged(g, w.x, w.y)) { const fi = g.world.inb(w.x | 0, w.y | 0) ? g.world.idx(w.x | 0, w.y | 0) : -1; this.select(fi >= 0 && g.vis !== 'open' && !g.world.explored?.[fi] ? { kind: 'fog', i: fi } : null); return; }
     const a = g.agentAt(w.x, w.y, 0.8);
     if (a) { this.select({ kind: 'agent', id: a.id }); return; }
     const i = g.world.inb(w.x | 0, w.y | 0) ? g.world.idx(w.x | 0, w.y | 0) : -1;
@@ -527,6 +547,8 @@ export class Hud {
     } else if (s.kind === 'building') {
       const b = g.buildings.get(s.id); if (!b) { this.select(null); return; }
       html = `<div class="inspector frame ${this.panel ? 'shifted' : ''}" style="--tribe:${TRIBES[b.tribe].color}">${buildingTip(this, b, true)}</div>`;
+    } else if (s.kind === 'fog') {
+      html = `<div class="inspector frame ${this.panel ? 'shifted' : ''}"><div class="insp-name">Unexplored land</div><div class="prose" style="font-size:0.9em">Nobody from your people has been here. A scouting party can chart it, along with everything on the way.</div><button class="btn sm primary" data-act="insp-scout" style="margin-top:6px">${ico('eye', 'sm')} Send scouts this way</button></div>`;
     } else if (s.kind === 'tile') {
       const w = g.world; const i = s.i; const b = w.biome[i]; const bd = BIOMES[b];
       const dep = w.deposit[i] ? DEPOSITS[w.deposit[i]] : null; const o = w.owner[i];
@@ -536,7 +558,7 @@ export class Hud {
         ${dep ? `<span>Deposit</span><span>${ico(dep.res, 'sm')} ${dep.name} · ${w.depAmt[i]} left${dep.tech && !g.player.techs.includes(dep.tech) ? ` <span class="warn">(needs ${TECH[dep.tech].name})</span>` : ''}</span>` : ''}
         ${w.fauna[i] ? `<span>${isWater(b) ? 'Fish' : 'Wildlife'}</span><span>${bar(w.fauna[i] / 255, 'blue')}</span>` : ''}
         ${bd.defense ? `<span>Defence</span><span>+${Math.round(bd.defense * 100)}% for defenders</span>` : ''}
-        <span>Travel</span><span>${bd.walk ? (bd.walk <= 1 ? 'Easy' : bd.walk < 2 ? 'Rough' : 'Difficult') : 'Impassable'}</span></div>${!isWater(b) && (o === -1 || o === g.playerId) && !g.observer ? `<button class="btn sm" data-act="insp-expand" style="margin-top:6px" data-tip="Set your expansion direction toward this spot: your land grows this way, your people work toward it, and you may build a few tiles past your border on this side.">${ico('flag', 'sm')} Expand here</button>` : ''}</div>`;
+        <span>Travel</span><span>${bd.walk ? (bd.walk <= 1 ? 'Easy' : bd.walk < 2 ? 'Rough' : 'Difficult') : 'Impassable'}</span></div>${!isWater(b) && (o === -1 || o === g.playerId) && !g.observer ? `<button class="btn sm" data-act="insp-expand" style="margin-top:6px" data-tip="Set your expansion direction toward this spot: your land grows this way, your people work toward it, and you may build a few tiles past your border on this side.">${ico('flag', 'sm')} Expand here</button>` : ''}${g.vis !== 'open' && !g.observer ? ` <button class="btn sm" data-act="insp-scout" style="margin-top:6px" data-tip="Send a scouting party in this direction">${ico('eye', 'sm')} Scout this way</button>` : ''}</div>`;
     }
     if (force || this.lastInspHTML !== html) {
       const first = !host.firstElementChild;
@@ -550,6 +572,10 @@ export class Hud {
     const g = this.game; sfx('click');
     const act = b.dataset.act;
     if (act === 'insp-close') this.select(null);
+    else if (act === 'insp-scout' && this.selected) {
+      const w = g.world, i = this.selected.i; this.select(null);
+      ACTIONS['scout-plan'](this, null, { x: i % w.w, y: (i / w.w) | 0 });
+    }
     else if (act === 'insp-expand' && this.selected?.kind === 'tile') {
       const w = g.world, i = this.selected.i;
       this.sim.call('expandTo', i % w.w, (i / w.w) | 0).then(r => { if (r.ok) { sfx('place'); toast('Expanding this way', 'Your land will grow toward this spot, your people will work toward it, and you may build a few tiles past your border on this side.', { icon: 'flag', kind: 'good', ms: 5000 }); } else toast('Cannot expand there', r.why || '', { kind: 'bad', icon: 'warning' }); });

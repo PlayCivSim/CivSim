@@ -59,7 +59,7 @@ const overview = {
         ${stat('population', 'People', t.pop, `${t.housing} homes`)}${stat('flag', 'Territory', t.territory || 0, 'tiles')}${stat('house', 'Settlements', t.settlements.length, `of ${MAX_SETTLEMENTS[t.stage]}`)}
         ${stat('technology', 'Knowledge', t.techs.length, 'techs')}${stat('military', 'Strength', Math.round(t.strength), (t.jobCounts.soldier || 0) + ' soldiers')}${stat('crown', 'Government', GOVERNMENTS[t.gov].name.split(' ')[0], `${enactedCount(t)}/${lawSlots(t)} laws`)}
       </div>
-      ${W.length ? `<div class="section-title">Concerns</div><div class="warn-list">${W.map(w => `<div class="warn-item ${w.bad ? 'bad' : ''}">${ico(w.icon, 'sm')}${esc(w.text)}</div>`).join('')}</div>` : ''}
+      ${W.length ? `<div class="section-title">Concerns</div><div class="warn-list">${W.map(w => `<div class="warn-item ${w.bad ? 'bad' : ''}" ${w.act ? `data-act="${w.act}" style="cursor:pointer"` : ''}>${ico(w.icon, 'sm')}${esc(w.text)}${w.act ? ' ›' : ''}</div>`).join('')}</div>` : ''}
       <div class="section-title">Stewards</div>
       <div class="prose" style="font-size:0.9em;margin-bottom:6px">Delegate routine decisions to your advisors. They follow the same reasoning as rival rulers.</div>
       <div class="col">
@@ -693,9 +693,10 @@ export const ACTIONS = {
   steward: (hud, b) => { const t = hud.game.player; const v = !t.steward[b.dataset.k]; t.steward[b.dataset.k] = v; hud.sim.call('steward', b.dataset.k, v); },
   envoy: (hud, b) => { const t = hud.game.player; const cfg = { ...(t.envoy || ENVOY_DEFAULTS) }; const k = b.dataset.k; cfg[k] = b.dataset.v != null ? b.dataset.v : !cfg[k]; t.envoy = cfg; hud.sim.call('envoy', cfg); },
   'bridge-pick': hud => { hud.closePanel(); hud.startPlacing('__bridge'); },
-  'scout-plan': async hud => {
-    const g = hud.game, t = g.player;
-    let party = hud.panelState.scoutParty || 2, food = hud.panelState.scoutFood || 24;
+  'scout-open': hud => ACTIONS['scout-plan'](hud),
+  'scout-plan': async (hud, _b, target) => {
+    const g = hud.game, t = g.player; const ps = hud.panelState || (hud.panelState = {});
+    let party = ps.scoutParty || 2, food = ps.scoutFood || 24;
     const body = () => {
       const e = scoutEstimate(party, food), c = canScout(g, t, party, food);
       return `<div class="caps dim">Party size</div><div class="seg" style="margin:4px 0 8px">${[1, 2, 3, 4].map(n => `<button class="btn sm ${party === n ? 'on' : ''}" data-sp="${n}">${n}</button>`).join('')}</div>
@@ -710,15 +711,16 @@ export const ACTIONS = {
         ${c.ok ? '' : `<div class="bad" style="margin-top:6px">${esc(c.why)}</div>`}`;
     };
     const plan = await modal(`<div class="modal-head">${ico('eye', 'xl')}<div><div class="caps" style="color:var(--gold)">Expedition</div><div class="panel-title">Scouting party</div></div></div><div class="scout-body">${body()}</div>
-      <div class="modal-actions"><button class="btn" data-x="0">Cancel</button><button class="btn primary" data-x="1">${ico('flag', 'sm')} Choose direction</button></div>`,
+      <div class="modal-actions"><button class="btn" data-x="0">Cancel</button><button class="btn primary" data-x="1">${ico('flag', 'sm')} ${target ? 'Send them' : 'Choose direction'}</button></div>`,
     { onMount: m => { m.onclick = e => {
       const sp = e.target.closest('[data-sp]'); if (sp) { party = +sp.dataset.sp; }
       const sf = e.target.closest('[data-sf]'); if (sf) food = Math.max(FOOD_MIN, Math.min(FOOD_MAX, food + +sf.dataset.sf));
-      if (sp || sf) { hud.panelState.scoutParty = party; hud.panelState.scoutFood = food; m.querySelector('.scout-body').innerHTML = body(); return; }
+      if (sp || sf) { ps.scoutParty = party; ps.scoutFood = food; m.querySelector('.scout-body').innerHTML = body(); return; }
       const x = e.target.closest('[data-x]'); if (!x) return;
       if (x.dataset.x === '1') { const c = canScout(g, t, party, food); if (!c.ok) { sfx('error'); toast('Cannot send scouts', c.why, { kind: 'bad', icon: 'warning' }); return; } closeModal({ party, food }); } else closeModal(null);
     }; } });
     if (!plan) return;
+    if (target) { const r = await hud.sim.call('scout', plan.party, plan.food, target.x, target.y); if (r.ok) { sfx('place'); toast('Scouts set out', 'They chart the land on either side as they go and turn back when half their food is gone.', { icon: 'eye', kind: 'good', ms: 6000 }); } else { sfx('error'); toast('Cannot send scouts', r.why, { kind: 'bad', icon: 'warning' }); } return; }
     hud.scoutPlan = plan; hud.closePanel(); hud.startPlacing('__scout');
   },
   'scout-recall': (hud, b) => { hud.sim.call('recallScouts', +b.dataset.id); toast('Scouts recalled', 'They will turn for home.', { icon: 'eye', ms: 2500 }); },
