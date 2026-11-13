@@ -7,9 +7,10 @@ import { PANELS, ACTIONS } from './panels.js';
 import { CATEGORIES, categoryOf, involves, isAlert } from '../sim/records.js';
 import { DAYS_PER_YEAR } from '../core/constants.js';
 import { mod } from '../sim/economy.js';
+import { fmtDate, dur, agoText } from '../core/calendar.js';
 
 const CAT = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));
-export const ago = (g, day) => { const d = g.day - day; return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < DAYS_PER_YEAR * 2 ? `${d} days ago` : `${Math.floor(d / DAYS_PER_YEAR)} years ago`; };
+export const ago = (g, day) => agoText(g.day - day);
 
 // ---------------------------------------------------------------- unread state
 // Saved in the run (game.seenSeq, set through the 'markSeen' command). The UI
@@ -58,7 +59,7 @@ PANELS.notices = {
         return `<div class="notice ${al ? 'alert' : ''} ${e.seq > seen ? 'new' : ''}" style="--nc:${c.col}">
           <span class="n-ico">${ico(al ? 'warning' : c.icon, 'sm')}</span>
           <div class="n-main"><div class="n-txt">${esc(e.text)}</div>
-          <div class="n-meta">${t ? `<img src="${emblemURL(t.key)}" width="12" class="pix">` : ''}<span>${c.name}</span><span>·</span><span>Yr ${Math.floor(e.day / DAYS_PER_YEAR) + 1}, day ${e.day % DAYS_PER_YEAR + 1}</span><span>·</span><span class="${g.day - e.day > 10 ? 'faint' : ''}">${ago(g, e.day)}</span></div></div></div>`;
+          <div class="n-meta">${t ? `<img src="${emblemURL(t.key)}" width="12" class="pix">` : ''}<span>${c.name}</span><span>·</span><span>${fmtDate(e.day * 360)}, Yr ${Math.floor(e.day / DAYS_PER_YEAR) + 1}</span><span>·</span><span class="${g.day - e.day > 10 ? 'faint' : ''}">${ago(g, e.day)}</span></div></div></div>`;
       }).join('') || '<div class="prose faint">No notices match.</div>'}</div>`;
   },
   mount(hud) {
@@ -74,7 +75,7 @@ ACTIONS['n-search'] = (hud, el) => { hud.panelState.nq = el.value; hud.renderPan
 
 // ---------------------------------------------------------------- happiness
 const HAPPY_INFO = {
-  food: ['food', 'Food', 'Starvation weighs heaviest. A few days of reserve brings comfort.'],
+  food: ['food', 'Food', 'Starvation weighs heaviest. A few seasons of reserve bring comfort.'],
   variety: ['fruit', 'Food variety', 'Each extra kind of food in store adds a little cheer.'],
   housing: ['house', 'Housing', 'Share of people without a home.'],
   employment: ['idle', 'Employment', 'Idle adults grow restless.'],
@@ -133,7 +134,7 @@ export function manpowerTip(t) {
     <div class="tt-row"><span>Civilian workforce</span><span>${m.civilians}</span></div>
     <div class="tt-row"><span>Barracks room</span><span>${m.soldiers} / ${m.cap}</span></div>
     <div class="divider"></div>
-    <div class="tt-row"><span>Upkeep per day</span><span class="bad">${ico('wood', 'sm')}${fmt(m.upkeep.wood, 1)}${m.upkeep.coins ? ` ${ico('coins', 'sm')}${fmt(m.upkeep.coins, 1)}` : ''}</span></div>
+    <div class="tt-row"><span>Upkeep per season</span><span class="bad">${ico('wood', 'sm')}${fmt(m.upkeep.wood, 1)}${m.upkeep.coins ? ` ${ico('coins', 'sm')}${fmt(m.upkeep.coins, 1)}` : ''}</span></div>
     <div class="faint" style="font-size:0.85em;max-width:220px">Every soldier is an adult taken from the fields and workshops. ${m.share > 0.25 ? '<span class="warn">Over a quarter of your adults are under arms.</span>' : ''}</div>`;
 }
 

@@ -8,11 +8,12 @@ import { categoryOf, involves } from '../sim/records.js';
 import { STAGES } from '../sim/progress.js';
 import { TECH } from '../data/techs.js';
 import { DAYS_PER_YEAR } from '../core/constants.js';
+import { fmtDate, dur, agoText } from '../core/calendar.js';
 
 const LV_CLS = ['lv0', 'lv1', 'lv2', 'lv3'];
-const ago = (g, day) => { const d = g.day - day; return d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`; };
+const ago = (g, day) => agoText(g.day - day);
 const srcText = r => r.src && r.src !== 'open' ? ` from ${r.src}` : '';
-const when = (g, r) => r.day == null ? '' : r.age > 0 ? ` · ${r.age} day${r.age === 1 ? '' : 's'} old` : ' · today';
+const when = (g, r) => r.day == null ? '' : r.age > 0 ? ` · ${dur(r.age)} old` : ' · this season';
 
 export function levelChip(g, r, label) {
   const tip = `${label}: ${LEVELS[r.lv]}${srcText(r)}${r.day != null ? `, learned ${ago(g, r.day)}` : ''}.\n${LEVEL_DESC[r.lv]}${r.exposed ? '\nThis report was exposed as false.' : ''}`;
@@ -51,8 +52,8 @@ export function intentLine(g, P, o, warRiskChip) {
 
 // ---------------------------------------------------------------- missions
 const STATUS = {
-  out: (g, m) => g.tick < m.eta ? `On the road · arrives in about ${Math.max(1, Math.ceil((m.eta - g.tick) / 360))} day(s)` : 'Arriving',
-  missing: (g, m) => g.tick < m.eta ? `On the road · arrives in about ${Math.max(1, Math.ceil((m.eta - g.tick) / 360))} day(s)` : `Overdue · no word for ${Math.max(1, Math.ceil((g.tick - m.eta) / 360))} day(s)`,
+  out: (g, m) => g.tick < m.eta ? `On the road · arrives in ${dur(Math.max(0.1, (m.eta - g.tick) / 360), true)}` : 'Arriving',
+  missing: (g, m) => g.tick < m.eta ? `On the road · arrives in ${dur(Math.max(0.1, (m.eta - g.tick) / 360), true)}` : `Overdue · no word for ${dur(Math.max(0.1, (g.tick - m.eta) / 360))}`,
   back: () => 'Returning home',
   done: () => 'Returned',
   lost: () => 'Lost',
@@ -72,7 +73,7 @@ export function missionsSection(g) {
       <div><b>${esc(spec.name.replace('Agent: ', 'Agent · '))}</b> → ${esc(o.name)}${m.p ? ` <span class="faint">(${esc(m.p.type === 'offerTribute' ? 'offer tribute' : m.p.type)})</span>` : ''}</div>
       <div class="m-st">${esc(st)} · risk ${esc((m.riskLabel || '').toLowerCase())}</div>
       ${m.status === 'out' || m.status === 'missing' ? `<div class="m-bar"><i style="width:${(prog * 100).toFixed(0)}%"></i></div>` : ''}
-      ${last ? `<div class="m-note">${esc(last.text)}</div>` : late ? '<div class="m-note">They may be delayed, or worse. Word usually comes within two days.</div>' : ''}</div></div>`;
+      ${last ? `<div class="m-note">${esc(last.text)}</div>` : late ? '<div class="m-note">They may be delayed, or worse. Word usually comes within six months.</div>' : ''}</div></div>`;
   }).join('')}</div>`;
 }
 
@@ -96,7 +97,7 @@ export function inboxSection(g) {
   if (!list.length) return '';
   return `<div class="section-title">Dispatches</div><div class="inbox">${list.map(e => {
     const old = g.day - e.day > 15;
-    return `<div class="dispatch ${old ? 'old' : ''} ${e.alert ? 'alert' : ''}"><span class="d-when" data-tip="Year ${Math.floor(e.day / DAYS_PER_YEAR) + 1}, day ${e.day % DAYS_PER_YEAR + 1}">${esc(ago(g, e.day))}</span><span>${esc(e.text)}${old ? ' <small class="faint">· may be outdated</small>' : ''}</span></div>`;
+    return `<div class="dispatch ${old ? 'old' : ''} ${e.alert ? 'alert' : ''}"><span class="d-when" data-tip="${fmtDate(e.day * 360)}, Year ${Math.floor(e.day / DAYS_PER_YEAR) + 1}">${esc(ago(g, e.day))}</span><span>${esc(e.text)}${old ? ' <small class="faint">· may be outdated</small>' : ''}</span></div>`;
   }).join('')}</div><div class="faint" style="font-size:0.78em">The full record is in Notices.</div>`;
 }
 
@@ -116,7 +117,7 @@ export function confirmJourney(g, to, kind, extra = '') {
   const catchP = kind === 'spy' || kind === 'sabotage' || kind === 'deceive' ? `<div class="tt-row"><span>Chance of capture on arrival</span><span class="warn">unknown — depends on their counter-intelligence</span></div>` : '';
   return modal(`<div class="modal-head">${ico(s.icon, 'xl')}<div><div class="caps" style="color:var(--gold)">${esc(g.tribes[to].name)}</div><div class="panel-title">Send ${esc(s.name.toLowerCase().replace('agent: ', 'an agent to '))}</div></div></div>
     <div class="prose" style="font-size:0.9em">${esc(s.desc)}</div>${extra}
-    <div class="kvbox"><div class="tt-row"><span>Journey</span><span>${g.dip.contact[g.playerId][to] ? `about ${r.days} day${r.days === 1 ? '' : 's'} each way (${r.dist} leagues)` : 'unknown: their homeland must first be found'}</span></div>
+    <div class="kvbox"><div class="tt-row"><span>Journey</span><span>${g.dip.contact[g.playerId][to] ? `${dur(r.days, true)} each way (${r.dist} leagues)` : 'unknown: their homeland must first be found'}</span></div>
     <div class="tt-row"><span>Risk on the road</span><span class="${r.risk >= 0.2 ? 'bad' : r.risk >= 0.08 ? 'warn' : 'good'}">${r.label} (${Math.round(r.risk * 100)}%)</span></div>
     ${r.why.length ? `<div class="faint" style="font-size:0.82em">Because: ${esc(r.why.join('; '))}.</div>` : ''}${catchP}
     <div class="tt-row"><span>Cost</span><span>${cost} and one adult while away</span></div></div>

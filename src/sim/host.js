@@ -24,6 +24,7 @@ import { startBridge } from './logistics.js';
 import { addRes } from './economy.js';
 import { LAWS } from '../data/laws.js';
 import { DAY_TICKS } from '../core/constants.js';
+import { dur } from '../core/calendar.js';
 
 const VIEW_PAD = 6;
 // battery saver: the worker wakes half as often and sends fewer, larger batches
@@ -232,7 +233,7 @@ export function createHost(post) {
       if (i < 0) return false;
       const pr = game.pendingProposals.splice(i, 1)[0];
       const t = P(); t.envoyBlock = t.envoyBlock || {};
-      game.log(t, 'diplomacy', `You ${yes ? 'accepted' : 'declined'} the ${game.tribes[from].name} ${pr.p.ultimatum ? 'ultimatum' : 'proposal'}${pr.sent != null ? ` (sent ${Math.max(0, Math.round((game.tick - pr.sent) / 360))} days ago)` : ''}. Their envoy carries your answer home.`, 1, { with: from });
+      game.log(t, 'diplomacy', `You ${yes ? 'accepted' : 'declined'} the ${game.tribes[from].name} ${pr.p.ultimatum ? 'ultimatum' : 'proposal'}${pr.sent != null ? ` (sent ${dur(Math.max(0, Math.round((game.tick - pr.sent) / 360)))} ago)` : ''}. Their envoy carries your answer home.`, 1, { with: from });
       const m = game.dip.missions?.find(x => x.id === pr.mission); if (m && m.status === 'back') m.eta = Math.min(m.eta, game.tick + m.days * 360);
       if (yes) { if (pr.p.type === 'gift') game.dip.addMod(pr.to, pr.from, 'gift', 5, { label: 'Generous gifts', decay: 0.4 }); else acceptProposal(game, pr); }
       else {

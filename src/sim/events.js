@@ -8,6 +8,7 @@ import { BUILDINGS } from '../data/buildings.js';
 import { mod, addRes, takeRes, foodTotal } from './economy.js';
 import { makeAgent, isAdult } from './agents.js';
 import { centreOf, destroyBuilding } from './buildings.js';
+import { dur } from '../core/calendar.js';
 
 const count = (g, t, pred) => { let n = 0; for (const b of g.buildings.values()) if (b.tribe === t.id && b.built && pred(b)) n++; return n; };
 const farms = (g, t) => count(g, t, b => BUILDINGS[b.type].field);
@@ -74,7 +75,7 @@ export const EVENTS = [
     text: (g, t) => `A fever spreads through the crowded homes of the ${t.name}. ${t.stock.herbs >= 20 ? 'Your healers have herbs to hand.' : 'Your healers have few herbs.'}`,
     choices: [
       { label: 'Use herbal remedies', desc: 'Spend 20 herbs: halve the deaths.', can: (g, t) => (t.stock.herbs || 0) >= 20, apply: (g, t) => { takeRes(t, 'herbs', 20); return plague(g, t, 0.5); } },
-      { label: 'Quarantine the sick', desc: '-15% productivity for 2 days: fewer deaths.', apply: (g, t) => { tmpMod(g, t, 'Quarantine', { productivity: -0.15 }, 2); return plague(g, t, 0.6); } },
+      { label: 'Quarantine the sick', desc: '-15% productivity for six months: fewer deaths.', apply: (g, t) => { tmpMod(g, t, 'Quarantine', { productivity: -0.15 }, 2); return plague(g, t, 0.6); } },
       { label: 'Let it run its course', desc: 'Full severity.', apply: (g, t) => plague(g, t, 1) },
     ],
   },
@@ -152,7 +153,7 @@ export const EVENTS = [
   {
     key: 'locusts', title: 'Locust Swarm', icon: 'bug', kind: 'bad',
     weight: (g, t) => (g.season === 1 ? 0.5 : 0) * (farms(g, t) > 1 ? 1 : 0),
-    apply: (g, t) => { tmpMod(g, t, 'Locusts', { farm: -0.4 * sev(g) }, 1); return 'A cloud of locusts descends on the fields. Farm output falls sharply for a day.'; },
+    apply: (g, t) => { tmpMod(g, t, 'Locusts', { farm: -0.4 * sev(g) }, 1); return 'A cloud of locusts descends on the fields. Farm output falls sharply for a season.'; },
   },
   {
     key: 'envoy', title: 'Foreign Envoy', icon: 'scroll', kind: 'good',

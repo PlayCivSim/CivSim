@@ -25,6 +25,7 @@ import { isAlert } from '../sim/records.js';
 import { fogged, intel } from '../sim/intel.js';
 import './encyclopedia.js';
 import { t as tr } from '../i18n.js';
+import { fmtDate, dur, agoText } from '../core/calendar.js';
 
 const SPEED_INFO = ['Paused: the world holds still, but you can still give orders', 'Normal: 1x speed', 'Fast: 3x speed', 'Very fast: 8x speed'];
 
@@ -157,7 +158,7 @@ export class Hud {
     const t = g.player;
     $('#tb-stage', this.root).textContent = `${STAGES[t.stage].name} · ${t.def.leaderTitle} ${t.leader?.name || ''}`;
     $('#tb-when', this.root).textContent = g.seasonName;
-    $('#tb-year', this.root).textContent = `Year ${g.year} · Day ${g.day % DAYS_PER_YEAR + 1}`;
+    $('#tb-year', this.root).textContent = `${fmtDate(g.tick)} · Year ${g.year}`;
     $$('[data-speed]', this.root).forEach(b => b.classList.toggle('on', +b.dataset.speed === g.speed));
     const sl = $('#tb-speed', this.root); const sTxt = g.speed === 0 ? 'Paused' : `${SPEED_NAMES[g.speed]} ×${SPEEDS[g.speed]}`;
     if (sl.textContent !== sTxt) { sl.textContent = sTxt; sl.classList.toggle('paused', g.speed === 0); this.root.classList.toggle('paused', g.speed === 0); }
@@ -217,14 +218,14 @@ export class Hud {
         if (k === 'food') {
           const L = t.lastLedger; const need = dailyFoodNeed(g, t);
           return `<div class="tt-title">${ico('food', 'sm')} Food</div>${FOOD_KEYS.map(f => `<div class="tt-row"><span>${ico(f, 'sm')} ${RESOURCES[f].name}</span><span class="num">${fmt(t.stock[f] || 0)} <span class="${(t.rates[f] || 0) >= 0 ? 'good' : 'bad'}">${sign(t.rates[f] || 0)}</span></span></div>`).join('')}
-            <div class="divider"></div><div class="tt-row"><span>Eaten per day</span><span class="num">${fmt(need, 1)}</span></div><div class="tt-row"><span>Days of reserve</span><span class="num">${fmt(foodTotal(t) / Math.max(1, need), 1)}</span></div><div class="tt-row"><span>Spoiled yesterday</span><span class="num">${fmt(L?.spoiled || 0, 1)}</span></div>`;
+            <div class="divider"></div><div class="tt-row"><span>Eaten per season</span><span class="num">${fmt(need, 1)}</span></div><div class="tt-row"><span>Seasons of reserve</span><span class="num">${fmt(foodTotal(t) / Math.max(1, need), 1)}</span></div><div class="tt-row"><span>Spoiled last season</span><span class="num">${fmt(L?.spoiled || 0, 1)}</span></div>`;
         }
         if (k === 'manpower') return manpowerTip(t);
         if (k === 'pop') return `<div class="tt-title">${ico('population', 'sm')} Population</div><div class="tt-row"><span>Adults</span><span>${t.adults}</span></div><div class="tt-row"><span>Children</span><span>${t.children}</span></div><div class="tt-row"><span>Elders</span><span>${t.elders}</span></div><div class="tt-row"><span>Housing</span><span>${t.pop} / ${t.housing}</span></div><div class="tt-row"><span>Homeless</span><span class="${t.homeless ? 'bad' : ''}">${t.homeless}</span></div>`;
         if (k === 'happy') return `<div class="tt-title">${ico('happy', 'sm')} Happiness ${Math.round(t.happiness)}%</div>${Object.entries(t.happyParts || {}).filter(([n]) => n !== 'base').map(([n, v]) => `<div class="tt-row"><span>${cap(n)}</span><span class="${v >= 0 ? 'good' : 'bad'}">${sign(v)}</span></div>`).join('')}<div class="divider"></div><div class="tt-row"><span>Stability</span><span>${Math.round(t.stability)}</span></div><div class="tt-row"><span>Productivity</span><span>${Math.round(t.productivity * 100)}%</span></div>`;
-        if (k === 'research') { const c = t.research.current; return `<div class="tt-title">${ico('research', 'sm')} Research</div>${c ? `<div>${TECH[c].name}: ${fmt(t.research.progress)} / ${techCost(t, c)}</div>` : '<div class="warn">No research selected</div>'}<div class="tt-row"><span>Research per day</span><span class="good">${fmt(t.researchRate || 0, 1)}</span></div>`; }
+        if (k === 'research') { const c = t.research.current; return `<div class="tt-title">${ico('research', 'sm')} Research</div>${c ? `<div>${TECH[c].name}: ${fmt(t.research.progress)} / ${techCost(t, c)}</div>` : '<div class="warn">No research selected</div>'}<div class="tt-row"><span>Research per season</span><span class="good">${fmt(t.researchRate || 0, 1)}</span></div>`; }
         const res = RESOURCES[k];
-        return `<div class="tt-title">${ico(k, 'sm')} ${res.name}</div><div class="tt-row"><span>Stock</span><span class="num">${fmt(t.stock[k] || 0)} / ${k === 'coins' ? 'no limit' : fmt(t._cap || 0)}</span></div><div class="tt-row"><span>Change per day</span><span class="${(t.rates[k] || 0) >= 0 ? 'good' : 'bad'}">${sign(t.rates[k] || 0)}</span></div><div class="tt-row"><span>Produced yesterday</span><span>${fmt(t.lastLedger?.prod[k] || 0, 1)}</span></div><div class="tt-row"><span>Used yesterday</span><span>${fmt(t.lastLedger?.cons[k] || 0, 1)}</span></div>`;
+        return `<div class="tt-title">${ico(k, 'sm')} ${res.name}</div><div class="tt-row"><span>Stock</span><span class="num">${fmt(t.stock[k] || 0)} / ${k === 'coins' ? 'no limit' : fmt(t._cap || 0)}</span></div><div class="tt-row"><span>Change per season</span><span class="${(t.rates[k] || 0) >= 0 ? 'good' : 'bad'}">${sign(t.rates[k] || 0)}</span></div><div class="tt-row"><span>Produced yesterday</span><span>${fmt(t.lastLedger?.prod[k] || 0, 1)}</span></div><div class="tt-row"><span>Used yesterday</span><span>${fmt(t.lastLedger?.cons[k] || 0, 1)}</span></div>`;
       });
       el.onclick = () => { if (k === 'happy') { sfx('click'); openHappiness(this); return; } this.openPanel(k === 'pop' ? 'population' : k === 'manpower' ? 'military' : k === 'research' ? 'technology' : 'economy'); };
     }
@@ -250,7 +251,7 @@ export class Hud {
     const g = this.game, t = g.player, W = [];
     const need = dailyFoodNeed(g, t), food = foodTotal(t);
     if (t.foodSat < 0.98) W.push({ bad: true, icon: 'food', text: 'Your people are starving.' });
-    else if (food < need * 2) W.push({ bad: false, icon: 'food', text: `Only ${fmt(food / Math.max(1, need), 1)} days of food remain.` });
+    else if (food < need * 2) W.push({ bad: false, icon: 'food', text: `Only ${dur(food / Math.max(1, need))} of food remain.` });
     if (t.homeless > 0) W.push({ bad: t.homeless > 3, icon: 'house', text: `${t.homeless} people have no home.` });
     const idle = (t.jobCounts.idle || 0) - t.children; if (idle > 2) W.push({ bad: false, icon: 'idle', text: `${idle} adults have no work.` });
     if (!t.research.current) W.push({ bad: false, icon: 'technology', text: 'No research selected.' });
@@ -265,7 +266,7 @@ export class Hud {
       if (!hostile) continue;
       const r = intel(g, t.id, o.id, 'military');
       if (r.lv === 0) W.push({ bad: true, icon: 'eye', text: tr('adv.noIntel', { name: o.name }) });
-      else if (r.age > 15) W.push({ bad: false, icon: 'eye', text: tr('adv.staleIntel', { name: o.name, age: `${r.age} days old` }) });
+      else if (r.age > 15) W.push({ bad: false, icon: 'eye', text: tr('adv.staleIntel', { name: o.name, age: `${dur(r.age)} old` }) });
     }
     for (const ar of g.armies) if (ar.tribe === t.id && (ar.supply ?? 1) < 0.6) { W.push({ bad: true, icon: 'military', text: tr('adv.supply', { pct: Math.round(ar.supply * 100) }) }); break; }
     for (const c of g.dip.treaties) if (c.type === 'contract' && (c.a === t.id || c.b === t.id)) { const give = c.a === t.id ? c.give : c.get; const lack = Object.entries(give).find(([r, v]) => (t.stock[r] || 0) < v); if (lack) { W.push({ bad: true, icon: lack[0], text: tr('adv.contract', { res: RESOURCES[lack[0]].name, name: g.tribes[c.a === t.id ? c.b : c.a].name }) }); break; } }
@@ -377,7 +378,7 @@ export class Hud {
     let html;
     if (this.placing === '__bridge') {
       const c = gh?.check, a = gh?.a;
-      const msg = !a ? (touch ? 'Tap the near bank, then press Place.' : 'Click the near bank where the bridge starts.') : gh?.ok ? `${c.water} spans · ${Object.entries(c.cost).map(([r, v]) => v + ' ' + r).join(', ')} · about ${c.days} day${c.days === 1 ? '' : 's'} to build` : esc(gh?.why || (touch ? 'Tap the far bank, straight across.' : 'Click the far bank, straight across.'));
+      const msg = !a ? (touch ? 'Tap the near bank, then press Place.' : 'Click the near bank where the bridge starts.') : gh?.ok ? `${c.water} spans · ${Object.entries(c.cost).map(([r, v]) => v + ' ' + r).join(', ')} · ${dur(c.days, true)} to build` : esc(gh?.why || (touch ? 'Tap the far bank, straight across.' : 'Click the far bank, straight across.'));
       html = `<div class="place-hint frame thin">${ico('wave')}<div class="ph-text"><div class="caps" style="color:var(--gold)">${a ? 'Bridge · far bank' : 'Bridge · near bank'}</div><div class="${a && gh?.ok === false ? 'bad' : ''}" style="font-size:0.88em">${msg}</div></div>${buttons}</div>`;
     } else if (this.placing === '__scout') {
       const sp = this.scoutPlan || {};
@@ -448,7 +449,7 @@ export class Hud {
         if (!gh.ok) { sfx('error'); toast('Cannot bridge there', gh.why || '', { kind: 'bad', icon: 'warning', ms: 2500 }); return; }
         if (!gh.a) { gh.a = { x: gh.x, y: gh.y }; gh.ok = false; this.updatePlaceHint(); sfx('click'); return; }
         const a = gh.a; this.cancelPlacing();
-        this.sim.call('bridge', a.x, a.y, gh.x, gh.y).then(r => { if (r.ok) { sfx('place'); toast('Bridge under way', `Builders will lay about two spans a day; done in roughly ${r.days} day${r.days === 1 ? '' : 's'}.`, { icon: 'wave', kind: 'good', ms: 5000 }); } else { sfx('error'); toast('Cannot build the bridge', r.why, { kind: 'bad', icon: 'warning' }); } });
+        this.sim.call('bridge', a.x, a.y, gh.x, gh.y).then(r => { if (r.ok) { sfx('place'); toast('Bridge under way', `Builders lay about two spans a season; done in ${dur(r.days, true)}.`, { icon: 'wave', kind: 'good', ms: 5000 }); } else { sfx('error'); toast('Cannot build the bridge', r.why, { kind: 'bad', icon: 'warning' }); } });
         return;
       }
       if (this.placing === '__scout') {
@@ -659,8 +660,8 @@ export function proposalText(p) {
     case 'offerTribute': return 'They offer to pay you tribute.';
     case 'peace': return p.terms === 'tribute_a' ? 'They sue for peace and offer tribute.' : p.terms === 'tribute_b' ? 'They offer peace — if you pay tribute.' : 'They offer a white peace.';
     case 'gift': return `They send a gift of ${p.amt} ${RESOURCES[p.res].name}.`;
-    case 'tribute': return p.ultimatum ? `Ultimatum: pay tribute for ten days or face war (${p.reason || 'they covet your lands'}).` : 'They demand that you pay tribute.';
-    case 'contract': return `${p.counter ? 'Counteroffer: ' : ''}A supply contract: every ${p.every} days for ${p.every * p.times} days they send ${Object.entries(p.give).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')} for ${Object.entries(p.get).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')}.`;
+    case 'tribute': return p.ultimatum ? `Ultimatum: pay tribute for two and a half years or face war (${p.reason || 'they covet your lands'}).` : 'They demand that you pay tribute.';
+    case 'contract': return `${p.counter ? 'Counteroffer: ' : ''}A supply contract: every ${dur(p.every)} for ${dur(p.every * p.times)} they send ${Object.entries(p.give).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')} for ${Object.entries(p.get).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')}.`;
     case 'exchange': return `${p.counter ? 'Counteroffer: ' : ''}They offer ${Object.entries(p.give).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')} for ${Object.entries(p.get).map(([k, v]) => v + ' ' + RESOURCES[k].name).join(', ')}.`;
     default: return 'They wish to speak with you.';
   }

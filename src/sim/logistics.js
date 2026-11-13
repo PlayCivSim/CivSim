@@ -10,6 +10,7 @@ import { scarcity, canAfford, buildingCost, takeRes } from './economy.js';
 import { eatFood, foodTotal } from './economy.js';
 import { BIOMES, B, isWater } from '../world/biomes.js';
 import { RESOURCES } from '../data/resources.js';
+import { dur } from '../core/calendar.js';
 const RES_FOOD = new Set(Object.keys(RESOURCES).filter(k => RESOURCES[k].food));
 
 // ------------------------------------------------------------------ settlement specialisation
@@ -37,7 +38,7 @@ export function setSpec(game, tribe, sid, spec) {
   const s = game.settlements.get(sid);
   if (!s || s.tribe !== tribe.id) return { ok: false, why: 'Not your settlement' };
   if (spec && !SPECS[spec]) return { ok: false, why: 'Unknown specialisation' };
-  if (s.specAt && game.tick - s.specAt < SPEC_COOLDOWN_DAYS * DAY_TICKS) return { ok: false, why: `Can change again in ${Math.ceil((SPEC_COOLDOWN_DAYS * DAY_TICKS - (game.tick - s.specAt)) / DAY_TICKS)} days` };
+  if (s.specAt && game.tick - s.specAt < SPEC_COOLDOWN_DAYS * DAY_TICKS) return { ok: false, why: `Can change again in ${dur(Math.ceil((SPEC_COOLDOWN_DAYS * DAY_TICKS - (game.tick - s.specAt)) / DAY_TICKS))}` };
   s.spec = spec || null; s.specAt = game.tick;
   game.log(tribe, 'settlement', `${s.name} now focuses on ${spec ? SPECS[spec].name.toLowerCase() : 'nothing in particular'}.`, tribe.isPlayer ? 1 : 0, { at: { x: s.x, y: s.y } });
   return { ok: true };

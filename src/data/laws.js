@@ -10,9 +10,9 @@ export const LAWS = [
   ] },
   { key: 'taxation', name: 'Taxation', cat: 'Economic', tech: 'currency', options: [
     { key: 'none', name: 'No Taxes', desc: 'The people keep what they earn.', mods: {} },
-    { key: 'low', name: 'Light Taxes', desc: '+0.12 coins/citizen per day, -1 happiness.', mods: { taxRate: 0.12, happiness: -1 } },
-    { key: 'moderate', name: 'Moderate Taxes', desc: '+0.25 coins/citizen per day, -3 happiness.', mods: { taxRate: 0.25, happiness: -3 } },
-    { key: 'high', name: 'Heavy Taxes', desc: '+0.42 coins/citizen per day, -7 happiness, -3 stability.', mods: { taxRate: 0.42, happiness: -7, stability: -3 } },
+    { key: 'low', name: 'Light Taxes', desc: '+0.12 coins/citizen per season, -1 happiness.', mods: { taxRate: 0.12, happiness: -1 } },
+    { key: 'moderate', name: 'Moderate Taxes', desc: '+0.25 coins/citizen per season, -3 happiness.', mods: { taxRate: 0.25, happiness: -3 } },
+    { key: 'high', name: 'Heavy Taxes', desc: '+0.42 coins/citizen per season, -7 happiness, -3 stability.', mods: { taxRate: 0.42, happiness: -7, stability: -3 } },
   ] },
   { key: 'trade', name: 'Trade Regulation', cat: 'Economic', tech: 'barter', options: [
     { key: 'open', name: 'Open Markets', desc: 'Free exchange with partners.', mods: {} },
@@ -22,7 +22,7 @@ export const LAWS = [
   ] },
   { key: 'works', name: 'Public Works', cat: 'Economic', options: [
     { key: 'none', name: 'Private Building', desc: 'Families build for themselves.', mods: {} },
-    { key: 'funded', name: 'Funded Works', desc: '+25% build speed. Costs wood & stone each day.', mods: { build: 0.25 }, upkeep: { wood: 0.06, stone: 0.04 } },
+    { key: 'funded', name: 'Funded Works', desc: '+25% build speed. Costs wood & stone each season.', mods: { build: 0.25 }, upkeep: { wood: 0.06, stone: 0.04 } },
   ] },
   { key: 'rationing', name: 'Food Distribution', cat: 'Social', options: [
     { key: 'normal', name: 'Fair Shares', desc: 'Everyone eats their portion.', mods: {} },

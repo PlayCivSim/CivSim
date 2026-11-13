@@ -18,6 +18,7 @@ import { revealFor, playerSees, updateVision, exploreOwned, exploredBy } from '.
 import { addRes, takeRes, foodTotal, eatFood } from './economy.js';
 import { RESOURCES } from '../data/resources.js';
 import { isAdult } from './agents.js';
+import { dur } from '../core/calendar.js';
 
 export const LEVELS = ['Unknown', 'Rumoured', 'Reported', 'Verified'];
 export const LEVEL_DESC = [
@@ -172,7 +173,7 @@ export function sendMission(g, from, to, kind, p = null) {
   // the journey's fate is decided up front so the record is consistent; the sender learns it only when word arrives (or fails to)
   if (g.rng.chance(r.risk)) m.doom = { at: g.tick + Math.floor(g.rng.range(0.2, 0.95) * r.days * DAY_TICKS), why: dangerReason(g, from, to, r) };
   d.missions.push(m);
-  if (g.tribes[from].isPlayer) g.log(t, 'diplomacy', `${t.isPlayer ? 'You' : t.name} sent ${article(kind)} to the ${g.tribes[to].name} (about ${r.days} day${r.days === 1 ? '' : 's'}, ${r.label.toLowerCase()} risk).`, 1, { with: to });
+  if (g.tribes[from].isPlayer) g.log(t, 'diplomacy', `${t.isPlayer ? 'You' : t.name} sent ${article(kind)} to the ${g.tribes[to].name} (${dur(r.days, true)}, ${r.label.toLowerCase()} risk).`, 1, { with: to });
   return { ok: true, mission: m.id, days: r.days, risk: r.label };
 }
 const article = k => ({ envoy: 'an envoy', scout: 'a scout', spy: 'an agent', sabotage: 'a saboteur', deceive: 'an agent' })[k] || 'a mission';
@@ -254,7 +255,7 @@ function arrive(g, m) {
       if (m.p.ultimatum) pr.expires = g.tick + DAY_TICKS * 1.5;
       g.pendingProposals.push(pr);
       m.eta = g.tick + DAY_TICKS * 2 + m.days * DAY_TICKS;      // the envoy waits for your reply, then goes home
-      g.log(from, 'diplomacy', `An envoy of the ${from.name} arrived after ${pr.travel} day${pr.travel === 1 ? '' : 's'} on the road${m.p.ultimatum ? ' with an ultimatum' : ' with a proposal'}.`, m.p.ultimatum ? 2 : 1, { with: m.to, alert: !!m.p.ultimatum });
+      g.log(from, 'diplomacy', `An envoy of the ${from.name} arrived after ${dur(pr.travel)} on the road${m.p.ultimatum ? ' with an ultimatum' : ' with a proposal'}.`, m.p.ultimatum ? 2 : 1, { with: m.to, alert: !!m.p.ultimatum });
       g.bus.emit('proposal', { from: m.from, to: m.to, p: m.p });
     } else if (m.p) {
       for (const [r, v] of Object.entries(m.cargo || {})) addRes(g, from, r, v); // goods are handed over by propose()
@@ -266,7 +267,7 @@ function arrive(g, m) {
         const r2 = d.propose(m.from, m.to, res.counter, true);
         if (r2.accept) { res = r2; m.notes.push({ day: g.day, text: 'Agreed on revised terms.' }); }
       }
-      if (!from.isPlayer && !to.isPlayer) g.log(from, 'diplomacy', `A ${from.name} envoy reached the ${to.name} after ${Math.max(1, Math.round((g.tick - m.depart) / DAY_TICKS))} days: ${proposalName(m.p)} ${res.accept ? 'accepted' : 'refused'}.`, 0, { with: m.to });
+      if (!from.isPlayer && !to.isPlayer) g.log(from, 'diplomacy', `A ${from.name} envoy reached the ${to.name} after ${dur(Math.max(1, Math.round((g.tick - m.depart) / DAY_TICKS)))}: ${proposalName(m.p)} ${res.accept ? 'accepted' : 'refused'}.`, 0, { with: m.to });
       const why = (res.reasons || []).filter(x => x.label).sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 2).map(x => x.label.toLowerCase()).join('; ');
       m.result = { accept: res.accept, why };
       // a refused deal may come back with their counteroffer

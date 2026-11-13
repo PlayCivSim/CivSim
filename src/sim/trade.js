@@ -5,11 +5,12 @@ import { DAY_TICKS } from '../core/constants.js';
 import { RESOURCES } from '../data/resources.js';
 import { addRes, takeRes, scarcity } from './economy.js';
 import { route } from './intel.js';
+import { dur } from '../core/calendar.js';
 
 export const TARIFFS = [0, 0.1, 0.2, 0.3];
 const resList = o => Object.entries(o || {}).map(([r, v]) => `${Math.round(v)} ${RESOURCES[r]?.name || r}`).join(', ');
 export const dealText = p => p.type === 'contract'
-  ? `every ${p.every} days for ${p.every * p.times} days: give ${resList(p.give)}, receive ${resList(p.get)}`
+  ? `every ${dur(p.every)} for ${dur(p.every * p.times)}: give ${resList(p.give)}, receive ${resList(p.get)}`
   : `give ${resList(p.give)}, receive ${resList(p.get)}`;
 
 // ------------------------------------------------------------------ ledger
