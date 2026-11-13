@@ -34,7 +34,9 @@ export const STYLES = {
 const S_OF = k => STYLES[k] || STYLES.oruvai;
 
 // ------------------------------------------------------------------ people
-const RES_COL = { wood: '#8a5a32', stone: '#9a958a', clay: '#b8714a', fibre: '#d8cf98', grain: '#e8c858', meat: '#c45a4a', fish: '#9fc4e0', fruit: '#d8484a', veg: '#7ab845', iron: '#a4624a', copper: '#4fa58f', coal: '#2a2a2e', silver: '#d6dbe4', gold: '#f2c84b', gems: '#e05ad8', oil: '#141018', salt: '#efe9de', herbs: '#5ab86a', tools: '#9aa0a8', weapons: '#b8bec8', steel: '#c4ccd6', goods: '#c89a5a', coins: '#f2c84b', machinery: '#8a8f99', livestock: '#e8e0d0' };
+// work clothes by job: a tunic colour and a hat, so trades read at a glance
+const JOB_LOOK = { farmer: { c: '#c9a65a', hat: 'straw' }, gatherer: { c: '#8aa050', hat: 'scarf' }, woodcutter: { c: '#a8402e', hat: 'knit' }, hunter: { c: '#6a5236', hat: 'hood' }, fisher: { c: '#3a6a8a', hat: 'brim' }, miner: { c: '#5a5a62', hat: 'helmet' }, builder: { c: '#c07a2a', hat: 'cap' }, craftsman: { c: '#7a6a5a', apron: true }, trader: { c: '#7a3a8a', hat: 'feather', sash: true }, researcher: { c: '#3a4a7a', hat: 'cowl', robe: true } };
+const RES_COL = { research: '#7a6ad8', wood: '#8a5a32', stone: '#9a958a', clay: '#b8714a', fibre: '#d8cf98', grain: '#e8c858', meat: '#c45a4a', fish: '#9fc4e0', fruit: '#d8484a', veg: '#7ab845', iron: '#a4624a', copper: '#4fa58f', coal: '#2a2a2e', silver: '#d6dbe4', gold: '#f2c84b', gems: '#e05ad8', oil: '#141018', salt: '#efe9de', herbs: '#5ab86a', tools: '#9aa0a8', weapons: '#b8bec8', steel: '#c4ccd6', goods: '#c89a5a', coins: '#f2c84b', machinery: '#8a8f99', livestock: '#e8e0d0' };
 export const resColor = r => RES_COL[r] || '#ffffff';
 
 export function personSprite(tribeKey, job, frame, female, child, look, carry, tier = 1, flip = false) {
@@ -49,7 +51,8 @@ export function personSprite(tribeKey, job, frame, female, child, look, carry, t
     const rich = tier >= 4;
     let body = pal.primary, bodyD = pal.dark, trim = pal.accent;
     if (job === 'idle' || child) { body = mix(pal.primary, '#9a8a70', 0.45); bodyD = shade(body, -0.3); }
-    if (job === 'farmer' || job === 'gatherer') { body = mix(pal.primary, '#b89a60', 0.35); }
+    const JL = !child && JOB_LOOK[job];
+    if (JL) { body = mix(JL.c, pal.primary, 0.22); bodyD = shade(body, -0.32); }
     if (job === 'soldier' && armour && armour !== 'none') {
       const AC = { hide: ['#8a6a48', '#5e4630'], scale: ['#b88f4a', '#7a5e30'], mail: ['#8f949e', '#5e636c'], plate: ['#c8ced8', '#7d848f'] }[armour];
       if (AC) { body = mix(AC[0], pal.primary, 0.2); bodyD = AC[1]; trim = pal.primary; }
@@ -70,11 +73,22 @@ export function personSprite(tribeKey, job, frame, female, child, look, carry, t
       if (female) { p.px(X - 1 + 0, y0 + 1, hair); p.px(X + 3, y0 + 1, hair); p.px(X + 3, y0 + 2, hair); }
       else p.px(X, y0 + 1, hair);
       p.px(X + 2, y0 + 1, '#2a2020');
-      // tribe headwear
-      if (styleKey === 'oruvai' && (rich || job === 'trader' || job === 'researcher')) p.hline(X, y0, 3, S.metal);
-      if (styleKey === 'kharvak' && job !== 'soldier') { p.hline(X, y0, 3, '#5a4030'); p.px(X - 1, y0, '#7a5a40'); }
-      if (styleKey === 'thalori') { p.px(X - 1, y0 + 1, '#4f8a2a'); p.hline(X, y0, 3, '#4f8a2a'); p.px(X + 1, y0 - 1, '#7ab845'); }
-      if (styleKey === 'vaelith' && (job === 'researcher' || rich)) { p.rect(X, y0 - 1, 3, 1, pal.dark); p.px(X + 1, y0 - 2, pal.primary); p.hline(X, y0, 3, pal.primary); }
+      // work hats (tribe headwear for everyone else)
+      if (JL?.hat) {
+        const h = JL.hat;
+        if (h === 'straw') { p.hline(X - 1, y0, 5, '#e8c860'); p.hline(X, y0 - 1, 3, '#d4b048'); }
+        else if (h === 'scarf') { p.hline(X, y0, 3, '#7a9a40'); p.px(X - 1, y0 + 1, '#7a9a40'); }
+        else if (h === 'knit') { p.hline(X, y0, 3, '#b03a2a'); p.px(X + 1, y0 - 1, '#e8dcc0'); }
+        else if (h === 'hood') { p.hline(X - 1, y0, 5, '#5a4630'); p.px(X - 1, y0 + 1, '#5a4630'); p.px(X + 3, y0 + 1, '#7a6040'); }
+        else if (h === 'brim') { p.hline(X - 1, y0, 5, '#d8b040'); p.hline(X, y0 - 1, 3, '#c8a030'); }
+        else if (h === 'helmet') { p.hline(X, y0, 3, '#d8c040'); p.px(X + 1, y0 - 1, '#d8c040'); p.px(X + 2, y0, '#fff6a0'); }
+        else if (h === 'cap') { p.hline(X, y0, 3, '#e0a030'); p.px(X + 3, y0, '#c08020'); }
+        else if (h === 'feather') { p.hline(X, y0, 3, '#e8dcc0'); p.px(X + 2, y0 - 1, '#d8484a'); p.px(X + 3, y0 - 2, '#d8484a'); }
+        else if (h === 'cowl') { p.hline(X - 1, y0, 5, '#2a3460'); p.px(X - 1, y0 + 1, '#2a3460'); p.px(X + 3, y0 + 1, '#2a3460'); }
+      } else if (styleKey === 'oruvai' && (rich || job === 'trader' || job === 'researcher')) p.hline(X, y0, 3, S.metal);
+      if (!JL?.hat && styleKey === 'kharvak' && job !== 'soldier') { p.hline(X, y0, 3, '#5a4030'); p.px(X - 1, y0, '#7a5a40'); }
+      if (!JL?.hat && styleKey === 'thalori') { p.px(X - 1, y0 + 1, '#4f8a2a'); p.hline(X, y0, 3, '#4f8a2a'); p.px(X + 1, y0 - 1, '#7ab845'); }
+      if (!JL?.hat && styleKey === 'vaelith' && (job === 'researcher' || rich)) { p.rect(X, y0 - 1, 3, 1, pal.dark); p.px(X + 1, y0 - 2, pal.primary); p.hline(X, y0, 3, pal.primary); }
       // torso
       const ty = y0 + 3;
       p.rect(X - 1, ty, 5, 1, body); // shoulders
@@ -86,9 +100,13 @@ export function personSprite(tribeKey, job, frame, female, child, look, carry, t
       if (styleKey === 'vaelith') { p.vline(X + 1, ty, 3, trim); }
       if (styleKey === 'thalori') p.hline(X, ty + 2, 3, '#7a5532');
       if (rich) p.px(X + 1, ty, def.pal.light);
+      // tribe colours stay on the shoulders; aprons and sashes mark the trade
+      if (JL) { p.px(X - 1, ty, pal.primary); p.px(X + 3, ty, pal.primary); }
+      if (JL?.apron) { p.rect(X, ty + 1, 3, 2, '#8a6a42'); p.px(X + 1, ty + 1, '#a07a4a'); }
+      if (JL?.sash) { p.px(X, ty + 1, '#f2c84b'); p.px(X + 1, ty + 2, '#f2c84b'); }
       // legs / robe
       const ly = ty + 3;
-      if (styleKey === 'vaelith' || (female && styleKey === 'oruvai')) {
+      if (styleKey === 'vaelith' || (female && styleKey === 'oruvai') || JL?.robe) {
         p.rect(X, ly, 3, 2, bodyD);
         p.px(X + (frame === 1 ? 0 : frame === 2 ? 2 : 1), ly + 2, boots);
         if (frame === 0 || frame === 3) { p.px(X, ly + 2, boots); p.px(X + 2, ly + 2, boots); }
@@ -322,7 +340,201 @@ function house(p, S, key, cx, baseY, w, wallH, roofH) {
   if (w > 6) windows(p, S, x0, baseY - wallH + 2, w, w > 10 ? 3 : 2);
 }
 
-const PADS = { tower: 20, capitol: 22, w_vaelith: 24, w_thalori: 20, factory: 14, centre: 18, fort: 14, shrine: 10, w_oruvai: 18, w_kharvak: 16 };
+// A small hanging trade sign with a pictogram of what the building makes.
+function tradeSign(p, x, y, res, S) {
+  const c = RES_COL[res] || '#c8a070';
+  p.vline(x + 1, y - 2, 2, '#3a2a1a'); p.hline(x, y - 2, 5, '#3a2a1a');
+  p.rect(x, y, 5, 4, '#e8d8b0'); p.outline(x, y, 5, 4, S.woodD);
+  p.rect(x + 1, y + 1, 3, 2, c); p.px(x + 1, y + 1, shade(c, 0.35)); p.px(x + 3, y + 2, shade(c, -0.3));
+}
+function chimney(p, x, y, h, col, smoke = true) { p.rect(x, y, 2, h, col); p.hline(x, y, 2, shade(col, -0.35)); if (smoke) { p.px(x, y - 2, 'rgba(200,200,200,0.55)'); p.px(x + 1, y - 4, 'rgba(200,200,200,0.4)'); } }
+function cylinder(p, cx, base, rx, h, col) { p.rect(cx - rx, base - h, rx * 2 + 1, h, col); p.vline(cx + rx, base - h, h, shade(col, -0.3)); p.vline(cx - rx, base - h, h, shade(col, 0.25)); p.ellipse(cx, base - h, rx, 1, shade(col, 0.15)); p.ellipse(cx, base, rx, 1, shade(col, -0.25)); }
+function bricks(p, x, y, w, h, col) { p.rect(x, y, w, h, col); for (let yy = y; yy < y + h; yy += 2) { p.hline(x, yy, w, shade(col, -0.25)); for (let xx = x + ((yy - y) % 4 ? 1 : 3); xx < x + w; xx += 4) p.px(xx, yy + 1, shade(col, -0.25)); } }
+
+// Distinct art for the workshops, industries and boosters. Returns true if drawn.
+function specialBuilding(type, p, S, k, W, base, cx) {
+  const sz = W / 8;
+  switch (type) {
+    case 'workshop': {
+      house(p, S, k, cx - 3, base - 2, 10, 5, 5);
+      p.rect(W - 7, base - 7, 6, 1, S.roofD); p.vline(W - 7, base - 6, 5, S.wood); p.vline(W - 2, base - 6, 5, S.wood); // lean-to
+      p.rect(W - 6, base - 3, 4, 1, S.wood); p.px(W - 5, base - 4, '#9aa0a8'); p.px(W - 3, base - 4, '#6a4a2a'); // workbench, tools
+      tradeSign(p, 1, base - 9, 'tools', S); return true;
+    }
+    case 'smelter': {
+      p.ellipse(cx - 2, base - 4, 6, 4, S.stone); p.ellipse(cx - 3, base - 6, 4, 2, shade(S.stone, 0.15));
+      p.rect(cx - 4, base - 4, 4, 3, '#2a1a10'); p.rect(cx - 3, base - 3, 2, 2, '#f08a24'); p.px(cx - 3, base - 3, '#f8d860');
+      chimney(p, W - 5, base - 15, 13, '#6a5a50');
+      p.rect(1, base - 2, 3, 2, '#a4624a'); p.rect(W - 9, base - 2, 2, 2, '#c4ccd6'); return true;
+    }
+    case 'armory': {
+      house(p, S, k, cx - 2, base - 2, 11, 5, 6);
+      // weapon rack and anvil
+      p.hline(W - 6, base - 7, 5, S.wood); for (const x of [W - 6, W - 4, W - 2]) { p.vline(x, base - 10, 8, '#b8bec8'); p.px(x, base - 11, '#e8eef4'); }
+      p.rect(2, base - 3, 4, 1, '#4a4a52'); p.rect(3, base - 2, 2, 2, '#3a3a40');
+      tradeSign(p, cx - 6, base - 11, 'weapons', S); return true;
+    }
+    case 'artisan': {
+      house(p, S, k, cx - 1, base - 2, 12, 5, 6);
+      for (let x = 1; x < 8; x++) p.px(x, base - 7, x % 2 ? S.banner : '#f4ecd8'); p.hline(1, base - 6, 7, shade(S.banner, -0.2)); // awning
+      p.ellipse(3, base - 3, 1, 2, '#b8714a'); p.ellipse(6, base - 2, 1, 1, '#c89a5a'); p.px(6, base - 3, '#5ab86a'); // pots
+      tradeSign(p, W - 6, base - 12, 'goods', S); return true;
+    }
+    case 'mint': {
+      p.rect(2, base - 9, W - 4, 8, S.stone); p.vline(W - 3, base - 9, 8, S.stoneD);
+      p.rect(1, base - 11, W - 2, 2, shade(S.stone, 0.15)); for (let x = 3; x < W - 3; x += 3) p.vline(x, base - 9, 7, shade(S.stone, 0.25)); // columns
+      p.rect(cx - 1, base - 5, 2, 4, '#3a2a18'); p.px(cx - 1, base - 5, '#f2c84b');
+      p.ellipse(cx, base - 13, 2, 1, '#f2c84b'); p.px(cx, base - 13, '#c89a20'); return true;
+    }
+    case 'kiln': {
+      p.ellipse(cx - 1, base - 5, 6, 5, '#b8714a'); p.ellipse(cx - 2, base - 7, 3, 2, '#d08a5a'); p.rect(cx - 2, base - 3, 3, 2, '#2a1a10'); p.px(cx - 1, base - 2, '#f08a24');
+      p.px(cx - 1, base - 11, '#3a3030'); p.px(cx - 1, base - 13, 'rgba(180,180,180,0.6)'); p.px(cx, base - 15, 'rgba(180,180,180,0.4)');
+      for (let i = 0; i < 3; i++) p.hline(W - 5, base - 1 - i, 4 - i, '#8a5a32'); // wood
+      p.rect(1, base - 2, 2, 2, '#2a2a2e'); p.px(2, base - 3, '#2a2a2e'); return true;
+    }
+    case 'brickworks': {
+      house(p, S, k, cx + 2, base - 4, 10, 4, 5); chimney(p, W - 3, base - 14, 9, '#8a4a32');
+      for (let i = 0; i < 3; i++) bricks(p, 1 + i * 2, base - 3 - i, 4, 2 + i, '#b85a3a');
+      return true;
+    }
+    case 'jeweller': {
+      house(p, S, k, cx, base - 2, 12, 6, 6);
+      p.rect(cx + 1, base - 5, 3, 2, '#e8f0ff'); p.px(cx + 2, base - 5, '#e05ad8'); p.px(cx + 3, base - 4, '#5ad8e0'); // display window
+      tradeSign(p, 1, base - 11, 'gems', S); return true;
+    }
+    case 'saltpans': {
+      for (let i = 0; i < 4; i++) { const x = 1 + (i % 2) * 7, y = base - 6 - Math.floor(i / 2) * 6; p.rect(x, y, 6, 5, '#8a7a62'); p.rect(x + 1, y + 1, 4, 3, i % 3 ? '#f4f0e8' : '#bcd8ec'); p.px(x + 2, y + 2, '#ffffff'); }
+      p.vline(W - 2, base - 8, 7, S.wood); p.hline(W - 4, base - 8, 3, S.wood); return true;
+    }
+    case 'herbalist': {
+      p.rect(1, base - W + 4, W - 2, W - 5, '#6a5032');
+      for (let y = base - W + 5; y < base - 1; y += 2) for (let x = 2; x < W - 2; x++) if ((x + y) % 3) p.px(x, y, (x * 5 + y) % 7 ? '#4fa04a' : '#b07ad8');
+      house(p, S, k, W - 5, base - W + 9, 7, 3, 4); return true;
+    }
+    case 'refinery': {
+      cylinder(p, 5, base - 2, 3, 9, '#b8bec8'); cylinder(p, 12, base - 2, 3, 12, '#9aa0a8');
+      p.hline(5, base - 7, 8, '#5a5a62'); p.hline(8, base - 4, 10, '#5a5a62');
+      // flare stack
+      p.vline(W - 4, base - 22, 20, '#4a4a52'); p.px(W - 4, base - 23, '#f08a24'); p.px(W - 4, base - 24, '#f8d860'); p.px(W - 5, base - 23, '#e05a20');
+      p.rect(W - 8, base - 3, 3, 2, '#141018'); return true;
+    }
+    case 'granary': {
+      for (const x of [3, W - 4]) p.vline(x, base - 4, 4, S.woodD); // stilts
+      p.rect(2, base - 11, W - 4, 7, S.wall); p.vline(W - 3, base - 11, 7, S.wallD); p.hline(2, base - 5, W - 4, S.woodD);
+      for (let r = 0; r < 5; r++) { const hw = r + 2; p.hline(cx - hw, base - 16 + r, hw * 2, r % 2 ? S.roof : S.roofD); }
+      p.rect(cx - 1, base - 9, 2, 3, '#2a1e18'); p.px(cx - 4, base - 8, '#e8c858'); p.px(cx + 3, base - 7, '#e8c858'); return true;
+    }
+    case 'smokehouse': {
+      p.rect(2, base - 7, 8, 6, S.stone); p.vline(9, base - 7, 6, S.stoneD); roof(p, S, 6, base - 11, 9, 4, 'pitched'); p.rect(5, base - 4, 2, 3, '#2a1e18');
+      chimney(p, 7, base - 14, 4, S.stoneD);
+      p.hline(W - 6, base - 8, 5, S.wood); p.vline(W - 6, base - 8, 7, S.wood); p.vline(W - 2, base - 8, 7, S.wood); // rack
+      p.vline(W - 5, base - 7, 3, '#9fc4e0'); p.vline(W - 3, base - 7, 3, '#c45a4a'); p.vline(W - 4, base - 7, 2, '#9fc4e0'); return true;
+    }
+    case 'sawmill': {
+      p.rect(1, base - 8, W - 6, 1, S.roofD); p.vline(1, base - 7, 6, S.wood); p.vline(W - 6, base - 7, 6, S.wood);
+      p.ellipse(6, base - 4, 3, 3, '#c4ccd6'); p.ellipse(6, base - 4, 1, 1, '#6a6a72'); for (const [dx, dy] of [[0, -3], [3, 0], [0, 3], [-3, 0]]) p.px(6 + dx, base - 4 + dy, '#e8eef4'); // blade
+      for (let i = 0; i < 3; i++) { p.hline(W - 5, base - 1 - i * 2, 4, '#8a5a32'); p.px(W - 5, base - 1 - i * 2, '#c8a070'); }
+      p.hline(2, base - 1, 8, '#d8b080'); return true;
+    }
+    case 'stampmill': {
+      p.vline(2, base - 16, 15, S.wood); p.vline(W - 3, base - 16, 15, S.wood); p.hline(2, base - 16, W - 4, S.wood); p.hline(2, base - 10, W - 4, S.woodD);
+      for (let i = 0; i < 3; i++) { const x = 5 + i * 3; p.vline(x, base - 15, 6 + (i % 2) * 2, '#8a8f99'); p.rect(x - 1, base - 9 + (i % 2) * 2, 3, 2, '#5a5a62'); }
+      p.rect(3, base - 4, W - 6, 3, '#7a6a52'); p.px(5, base - 4, '#a4624a'); p.px(9, base - 3, '#4fa58f'); return true;
+    }
+    case 'guildhall': {
+      house(p, S, k, cx, base - 2, 20, 10, 8);
+      for (let x = cx - 9; x < cx + 9; x += 4) p.vline(x, base - 11, 9, S.woodD); p.hline(cx - 10, base - 7, 20, S.woodD); // half-timbering
+      p.rect(cx - 1, base - 23, 2, 3, S.wood); p.px(cx - 1, base - 21, '#d8b040'); // bell turret
+      banner(p, S, 1, base - 1, 13); banner(p, S, W - 3, base - 1, 13); tradeSign(p, cx + 4, base - 6, 'tools', S); return true;
+    }
+    case 'caravanserai': {
+      p.rect(1, base - 10, W - 2, 9, S.wall); p.outline(1, base - 10, W - 2, 9, S.wallD);
+      p.rect(3, base - 8, W - 6, 5, '#c8b088'); // courtyard
+      p.rect(cx - 2, base - 6, 4, 5, '#3a2a18'); p.hline(cx - 3, base - 7, 6, S.trim); // arch gate
+      for (const x of [4, W - 7]) { p.rect(x, base - 7, 3, 2, '#c89a5a'); p.px(x, base - 7, '#d8484a'); }
+      p.rect(W - 9, base - 5, 3, 2, '#b08850'); p.px(W - 7, base - 6, '#b08850'); // camel
+      banner(p, S, 2, base - 10, 6); banner(p, S, W - 4, base - 10, 6); return true;
+    }
+    case 'scriptorium': {
+      house(p, S, k, cx, base - 2, 13, 7, 6);
+      p.rect(cx - 4, base - 7, 3, 3, '#f0d27a'); p.rect(cx + 2, base - 7, 3, 3, '#f0d27a'); p.vline(cx - 3, base - 7, 3, S.woodD); p.vline(cx + 3, base - 7, 3, S.woodD);
+      p.rect(W - 4, base - 4, 3, 3, '#e8dcc0'); p.px(W - 3, base - 5, '#3a3a6a'); // scroll + quill
+      return true;
+    }
+    case 'healer': {
+      house(p, S, k, cx - 2, base - 3, 10, 5, 5);
+      for (let x = W - 6; x < W - 1; x++) { p.px(x, base - 2, '#4fa04a'); if (x % 2) p.px(x, base - 3, '#d8484a'); }
+      p.rect(1, base - 3, 2, 2, '#9a958a'); p.px(1, base - 4, '#5ab86a'); // mortar
+      p.rect(cx - 3, base - 11, 3, 1, '#ffffff'); p.rect(cx - 2, base - 12, 1, 3, '#ffffff'); p.px(cx - 2, base - 11, '#d84848'); return true;
+    }
+    case 'blastfurnace': {
+      p.rect(cx - 4, base - 18, 8, 17, S.stone); p.vline(cx + 3, base - 18, 17, S.stoneD); for (let y = base - 16; y < base - 1; y += 3) p.hline(cx - 4, y, 8, shade(S.stone, -0.15));
+      p.rect(cx - 5, base - 20, 10, 2, S.stoneD); p.px(cx - 1, base - 21, '#f8d860'); p.px(cx, base - 22, '#f08a24'); p.px(cx + 1, base - 21, '#f8d860');
+      p.rect(cx - 2, base - 4, 4, 3, '#f08a24'); p.px(cx - 1, base - 3, '#ffe890');
+      p.rect(1, base - 5, 3, 4, '#6a4a2a'); p.hline(1, base - 6, 3, '#8a6a42'); // bellows
+      return true;
+    }
+    case 'steamhouse': {
+      bricks(p, 1, base - 10, W - 8, 9, '#9a4a32'); p.rect(0, base - 12, W - 6, 2, S.roofD);
+      cylinder(p, W - 4, base - 2, 2, 7, '#5a5a62'); chimney(p, W - 4, base - 24, 16, '#4a3a32');
+      p.rect(4, base - 7, 3, 2, '#f0d27a'); p.rect(10, base - 7, 3, 2, '#f0d27a'); p.rect(cx - 2, base - 4, 3, 3, '#2a1e18');
+      p.hline(W - 9, base - 5, 4, '#c4ccd6'); return true;
+    }
+    case 'powerstation': {
+      p.rect(1, base - 9, 11, 8, '#c8c4bc'); p.vline(11, base - 9, 8, '#9a968e'); for (let x = 3; x < 11; x += 3) p.rect(x, base - 7, 2, 2, '#f0d27a');
+      // cooling tower
+      for (let r = 0; r < 16; r++) { const hw = Math.round(4 + Math.abs(r - 10) * 0.35); p.hline(W - 7 - hw, base - 1 - r, hw * 2, r % 4 ? '#d8d4cc' : '#b8b4ac'); }
+      p.px(W - 8, base - 19, 'rgba(230,230,230,0.7)'); p.px(W - 6, base - 21, 'rgba(230,230,230,0.5)');
+      // pylon with a spark
+      p.vline(2, base - 18, 9, '#5a5a62'); p.hline(0, base - 16, 5, '#5a5a62'); p.px(0, base - 17, '#8ad8ff'); p.px(4, base - 17, '#8ad8ff'); return true;
+    }
+    case 'windmill': {
+      p.rect(cx - 3, base - 12, 6, 11, S.wall); p.vline(cx + 2, base - 12, 11, S.wallD); p.rect(cx - 4, base - 13, 8, 2, S.roof);
+      p.rect(cx - 1, base - 4, 2, 3, '#2a1e18');
+      const hx = cx, hy = base - 13; for (const [dx, dy] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) for (let r = 1; r <= 6; r++) { p.px(hx + dx * r, hy + dy * r, S.wood); if (r > 2) p.px(hx + dx * r + (dx === dy ? 1 : 0), hy + dy * r + (dx === dy ? 0 : 1), '#ecdcc0'); }
+      p.px(hx, hy, '#3a2a1a'); return true;
+    }
+    case 'waterwheel': {
+      house(p, S, k, 5, base - 2, 9, 6, 5);
+      p.ellipse(W - 5, base - 6, 4, 4, S.woodD); p.ellipse(W - 5, base - 6, 3, 3, 'rgba(0,0,0,0)');
+      for (const [dx, dy] of [[0, -4], [4, 0], [0, 4], [-4, 0], [3, -3], [-3, 3], [3, 3], [-3, -3]]) p.px(W - 5 + dx, base - 6 + dy, S.wood);
+      p.vline(W - 5, base - 9, 7, S.wood); p.hline(W - 8, base - 6, 7, S.wood); p.px(W - 5, base - 6, '#3a2a1a');
+      p.hline(W - 10, base - 1, 9, '#4a8ad8'); p.px(W - 2, base - 2, '#cfe4f4'); return true;
+    }
+    case 'boatyard': {
+      p.rect(1, base - 3, W - 2, 2, '#8a6a4a'); for (let x = 2; x < W - 1; x += 3) p.px(x, base - 2, '#6b4e34'); // slipway
+      // hull on a cradle
+      p.hline(3, base - 6, 10, '#7a5232'); p.hline(4, base - 5, 8, '#5a3a22'); p.px(2, base - 7, '#7a5232'); p.px(13, base - 7, '#7a5232');
+      for (const x of [5, 8, 11]) p.vline(x, base - 4, 2, S.woodD);
+      p.vline(8, base - 14, 8, S.wood); p.rect(9, base - 13, 4, 5, '#ecdcc0'); // mast and sail
+      return true;
+    }
+    case 'outpost': {
+      // a work camp: canvas tent, ore cart on rails and a pick
+      for (let r = 0; r < 6; r++) p.hline(4 - r, base - 9 + r, r * 2 + 1, r % 2 ? '#e8dcc0' : '#d4c4a0'); p.vline(4, base - 10, 2, S.woodD); p.px(4, base - 4, '#3a2a18');
+      p.hline(7, base - 1, 8, '#6a6a6a'); p.rect(9, base - 4, 5, 3, '#5a4030'); p.px(10, base - 5, '#a4624a'); p.px(12, base - 5, '#9a958a'); p.px(10, base - 1, '#2a2a2a'); p.px(13, base - 1, '#2a2a2a');
+      p.vline(W - 2, base - 9, 7, S.wood); p.hline(W - 4, base - 9, 4, '#8a8f99'); banner(p, S, 1, base - 1, 9); return true;
+    }
+    case 'loggingcamp': {
+      for (let r = 0; r < 6; r++) p.hline(5 - r, base - 10 + r, r * 2 + 1, r % 2 ? '#c8b088' : '#b09870'); p.px(5, base - 5, '#3a2a18');
+      for (let i = 0; i < 3; i++) { p.hline(8, base - 1 - i * 2, 7 - i, '#8a5a32'); p.px(8, base - 1 - i * 2, '#c8a070'); p.px(14 - i, base - 1 - i * 2, '#c8a070'); }
+      p.rect(W - 3, base - 4, 2, 3, '#6b4a2e'); p.px(W - 3, base - 5, '#b8bec8'); banner(p, S, 1, base - 1, 9); return true;
+    }
+    case 'storehouse': {
+      // a long barn with wide doors, crates and sacks
+      p.rect(1, base - 8, W - 2, 7, S.wood); p.vline(W - 2, base - 8, 7, S.woodD); for (let x = 3; x < W - 2; x += 3) p.vline(x, base - 8, 7, S.woodD);
+      for (let r = 0; r < 4; r++) p.hline(1 - (r === 3 ? 1 : 0), base - 11 + r, W - 2 + (r === 3 ? 2 : 0), r % 2 ? S.roof : S.roofD);
+      p.rect(cx - 3, base - 6, 6, 5, '#3a2a18'); p.vline(cx, base - 6, 5, S.woodD);
+      p.rect(1, base - 3, 3, 2, '#a07a4a'); p.rect(W - 4, base - 2, 2, 2, '#e8c858'); return true;
+    }
+    case 'school': { house(p, S, k, cx - 1, base - 2, 12, 6, 6); p.rect(W - 5, base - 7, 4, 3, '#2a3a2a'); p.outline(W - 5, base - 7, 4, 3, S.wood); p.px(W - 4, base - 6, '#e8e8e8'); p.vline(W - 4, base - 4, 3, S.wood); return true; }
+    case 'library': { house(p, S, k, cx, base - 2, 14, 8, 6); for (let x = cx - 6; x < cx + 6; x += 3) p.vline(x, base - 9, 7, S.trim); tradeSign(p, W - 5, base - 13, 'research', S); return true; }
+    case 'bathhouse': { house(p, S, k, cx + 2, base - 2, 11, 5, 5); p.rect(1, base - 4, 5, 3, S.stone); p.rect(2, base - 3, 3, 1, '#4a8ad8'); p.px(2, base - 6, 'rgba(255,255,255,0.6)'); p.px(4, base - 7, 'rgba(255,255,255,0.45)'); return true; }
+  }
+  return false;
+}
+
+const PADS = { refinery: 16, steamhouse: 16, powerstation: 14, blastfurnace: 14, windmill: 12, granary: 10, stampmill: 12, guildhall: 14, smelter: 10, tower: 20, capitol: 22, w_vaelith: 24, w_thalori: 20, factory: 14, centre: 18, fort: 14, shrine: 10, w_oruvai: 18, w_kharvak: 16 };
 export const buildingPad = type => PADS[type] || 12; // extra canvas height above the footprint
 
 export function buildingSprite(type, tribeKey, opts = {}) {
@@ -337,11 +549,9 @@ export function buildingSprite(type, tribeKey, opts = {}) {
     const gnd = (col) => { p.rect(1, base - W + 2, W - 2, W - 2, col); };
     // newer buildings borrow the look of a close relative, with a few touches of their own below
     const ALIAS = { kiln: 'smelter', brickworks: 'workshop', jeweller: 'mint', saltpans: 'well', herbalist: 'gatherer', refinery: 'factory', granary: 'storehouse', smokehouse: 'hunter', sawmill: 'lumber', stampmill: 'mine', guildhall: 'artisan', caravanserai: 'market', scriptorium: 'library', healer: 'shrine', blastfurnace: 'smelter', steamhouse: 'factory', powerstation: 'factory' };
-    if (type === 'windmill' || type === 'waterwheel') {
-      house(p, S, k, cx, base - 2, 10, 7, 5);
-      if (type === 'windmill') { const hx = cx, hy = base - 13; for (const [dx, dy] of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) for (let r = 1; r <= 6; r++) p.px(hx + dx * r, hy + dy * r, r > 2 ? '#e8dcc0' : S.wood); p.px(hx, hy, '#3a2a1a'); }
-      else { p.ellipse(W - 4, base - 5, 3, 3, S.wood); p.ellipse(W - 4, base - 5, 1, 1, '#3a2a1a'); p.hline(W - 7, base - 1, 6, '#4a8ad8'); }
-      return c;
+    if (specialBuilding(type, p, S, k, W, base, cx)) {
+      if (opts.ruin) { const ctx = c.getContext('2d'); ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = 'rgba(30,20,10,0.55)'; ctx.fillRect(0, 0, W, H); }
+      return outlined(c);
     }
     switch (ALIAS[type] || type) {
       case 'centre': {

@@ -1,10 +1,11 @@
 // "What's new" shown on the main menu: newest first. Add to the top when
 // something notable ships; the menu shows the first three.
 // Bump GAME_VERSION with every update that ships, so players can tell they are on the latest build.
-export const GAME_VERSION = '1.17.0';
+export const GAME_VERSION = '1.18.0';
 export const GAME_BUILD_DATE = '2026-11-12';
 
 export const CHANGELOG = [
+  { title: 'Fresh art', text: 'Every industry and booster has its own look, workshops hang trade signs, and each trade wears its own work clothes and hat.' },
   { title: 'A real calendar', text: 'Years now run 365 days with proper dates, from spring on 1 March to the end of winter in February. Durations read in weeks, months and years.' },
   { title: 'Closed borders', text: 'People no longer wander through other peoples\' land. Crossing needs a Border Access agreement; only armies at war march in uninvited.' },
   { title: 'Boats & great bridges', text: 'Build a Boatyard and your people row across rivers, lakes and coasts (open ocean with Navigation). Lay great bridges up to 10 spans with Roads & Bridges, or 24 across open sea with Engineering.' },
