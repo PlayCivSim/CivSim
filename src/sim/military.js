@@ -65,7 +65,8 @@ export function launchCampaign(game, tribe, targetSid, frac = 0.8, food = null, 
   const n = Math.max(1, Math.floor(soldiers.length * frac));
   if (!soldiers.length) return { ok: false, why: 'You have no idle soldiers' };
   // the army carries its food; what it takes is no longer available at home
-  if (food == null) food = estimateCampaign(game, tribe, targetSid, frac)?.food || n * 4;
+  const est = estimateCampaign(game, tribe, targetSid, frac);
+  if (food == null) food = est?.food || n * 4;
   const carried = eatFood(tribe, Math.min(food, foodTotal(tribe) * 0.8)) || 0;
   plan = sanitizePlan(tribe, plan || autoPlan(tribe, target, game));
   // the line of approach: from home toward the target, turned by the chosen angle
@@ -73,7 +74,9 @@ export function launchCampaign(game, tribe, targetSid, frac = 0.8, food = null, 
   const ang0 = Math.atan2(home.y - target.y, home.x - target.x);
   const ap = APPROACHES[plan.approach] || APPROACHES.direct;
   const army = { id: game.nextId++, tribe: tribe.id, target: targetSid, enemy: enemy.id, state: 'march', start: game.tick, size: n, losses: 0, kills: 0, food: carried, foodPlanned: food,
-    plan, angle: ap.angle == null ? null : ang0 + ap.angle * Math.PI / 180, comp: {} };
+    plan, angle: ap.angle == null ? null : ang0 + ap.angle * Math.PI / 180, comp: {},
+    // long marches on big maps get time to arrive and fight
+    deadline: game.tick + 360 * Math.max(4, Math.ceil((est?.days || Math.hypot(target.x - (game.settlements.get(tribe.capital) || target).x, target.y - (game.settlements.get(tribe.capital) || target).y) / 25) * 1.6) + 3) };
   game.armies.push(army);
   soldiers.sort((a, b) => Math.hypot(a.x - target.x, a.y - target.y) - Math.hypot(b.x - target.x, b.y - target.y));
   const picked = soldiers.slice(0, n);
@@ -93,8 +96,21 @@ export function launchCampaign(game, tribe, targetSid, frac = 0.8, food = null, 
   let assigned = 0;
   mixKeys.forEach((u, i) => { const c = i === mixKeys.length - 1 ? rest - assigned : Math.round(rest * plan.mix[u] / tot); for (let k = 0; k < c; k++) roles.push(u); assigned += c; });
   while (roles.length < picked.length) roles.push(mixKeys[0] || 'warrior');
-  picked.forEach((a, i) => { a.army = army.id; a.state = 'fight'; a.task = { kind: 'army' }; a.path = null; a.hp = maxHp(tribe); a.unit = roles[i]; army.comp[roles[i]] = (army.comp[roles[i]] || 0) + 1; });
-  game.log(tribe, 'war', `${tribe.name} marched ${n} soldiers against ${target.name}.`, 2, { with: enemy.id, at: target });
+  // coordinated assault: split into groups that close in from different sides and charge together
+  const groups = Math.max(1, Math.min(3, plan.groups | 0 || 1, Math.floor(picked.length / 3) || 1));
+  const forces = [army];
+  if (groups > 1) {
+    army.op = army.id; army.group = 0; army.food = carried / groups;
+    const spread = groups === 2 ? [-1.1, 1.1] : [-1.4, 0, 1.4];
+    const base = army.angle ?? ang0;
+    army.angle = base + spread[0];
+    for (let k = 1; k < groups; k++) { const f = { ...army, id: game.nextId++, group: k, angle: base + spread[k], comp: {}, losses: 0, kills: 0, plan: { ...plan } }; game.armies.push(f); forces.push(f); }
+  }
+  // deal soldiers out so every group gets a similar mix
+  const order = picked.map((a, i) => [a, roles[i]]).sort((x, y) => (x[1] > y[1] ? 1 : x[1] < y[1] ? -1 : 0));
+  order.forEach(([a, role], i) => { const f = forces[i % forces.length]; a.army = f.id; a.state = 'fight'; a.task = { kind: 'army' }; a.path = null; a.hp = maxHp(tribe); a.unit = role; a.staged = null; f.comp[role] = (f.comp[role] || 0) + 1; });
+  for (const f of forces) f.size = Object.values(f.comp).reduce((x, y) => x + y, 0);
+  game.log(tribe, 'war', `${tribe.name} marched ${n} soldiers against ${target.name}${forces.length > 1 ? ` in ${forces.length} groups for a coordinated assault` : ''}.`, 2, { with: enemy.id, at: target });
   game.bus.emit('campaign', { army, tribe, target });
   return { ok: true, army };
 }
@@ -111,6 +127,7 @@ export function sanitizePlan(tribe, p) {
     approach: APPROACHES[p.approach] ? p.approach : 'direct',
     focus: ['auto', 'army', 'towers', 'hearth', 'stores', 'homes'].includes(p.focus) ? p.focus : 'auto',
     lead: ['together', 'spear', 'sword', 'warrior', 'archer', 'siege'].includes(p.lead) ? p.lead : 'together',
+    groups: Math.max(1, Math.min(3, p.groups | 0 || 1)),
   };
 }
 
@@ -141,7 +158,7 @@ function moveToward(game, a, x, y, dt, speed = 1.7) {
     const goalMoved = Math.abs(gx0 - x) + Math.abs(gy0 - y) > Math.max(3, d * 0.25);
     if (!a.path || a.pi >= a.path.length || goalMoved) {
       const goal = w.idx(Math.max(0, Math.min(w.w - 1, x | 0)), Math.max(0, Math.min(w.h - 1, y | 0)));
-      const p = game.pf.find(w.idx(a.x | 0, a.y | 0), goal, { maxNodes: 9000, boats: game.tribes[a.tribe]?.boats || 0, closed: closedMask(game, a.tribe) });
+      const p = game.pf.find(w.idx(a.x | 0, a.y | 0), goal, { maxNodes: Math.min(150000, 9000 + Math.round(d) * 350), boats: game.tribes[a.tribe]?.boats || 0, closed: closedMask(game, a.tribe) });
       if (p === undefined) return false;
       a.path = p || []; a.pi = 0; a.pathGoal = goal;
       if (!p) { a.path = null; a.stuck = (a.stuck || 0) + 1; return false; }
@@ -220,7 +237,9 @@ function strikeBuilding(game, a, b) {
     game.fx.push({ kind: 'stone', x: a.x, y: a.y - 1, tx: c.x, ty: c.y - 0.5, t: 0, life: 1.1, blast: blast ? 1 : 0 });
     game.bus.emit('sfx', { k: 'clash', x: c.x, y: c.y });
     if (blast) {
-      game.fx.push({ kind: 'blast', x: c.x, y: c.y, t: 0, life: 0.7 });
+      game.fx.push({ kind: 'blast', x: c.x, y: c.y, t: 0, life: 0.8 }, { kind: 'debris', x: c.x, y: c.y, t: 0, life: 1.1, seed: game.rng.int(0, 999) }, { kind: 'scorch', x: c.x + game.rng.range(-1, 1), y: c.y + game.rng.range(-0.5, 1), t: 0, life: 25 });
+      if (a.tribe === game.playerId || b.tribe === game.playerId) game.shake = Math.max(game.shake || 0, 0.35);
+      game.bus.emit('sfx', { k: 'boom', x: c.x, y: c.y });
       if (b.type !== 'centre' && game.rng.chance(0.3)) b.burning = Math.max(b.burning || 0, game.tick + 90);
       for (const o of game.nearbyAgents(c.x, c.y, 2.5)) if (o.tribe !== a.tribe && o.job === 'soldier' && !o.hidden && game.dip.atWar(a.tribe, o.tribe)) {
         o.hp -= 14 * armourTake(game, o, 'blast');
@@ -230,7 +249,9 @@ function strikeBuilding(game, a, b) {
   } else if (u === 'sapper') {
     // one charge, then they fight with what they have
     dmg = Math.min(dmg * 14, (b.maxHp || 100) * 0.3); a.unit = 'warrior';
-    game.fx.push({ kind: 'blast', x: c.x, y: c.y, t: 0, life: 0.9, big: 1 });
+    game.fx.push({ kind: 'blast', x: c.x, y: c.y, t: 0, life: 1.1, big: 1 }, { kind: 'debris', x: c.x, y: c.y, t: 0, life: 1.4, seed: game.rng.int(0, 999), big: 1 }, { kind: 'scorch', x: c.x, y: c.y + 0.5, t: 0, life: 40, big: 1 });
+    if (a.tribe === game.playerId || b.tribe === game.playerId) game.shake = Math.max(game.shake || 0, 0.8);
+    game.bus.emit('sfx', { k: 'boom', x: c.x, y: c.y, big: 1 });
     game.bus.emit('sfx', { k: 'clash', x: c.x, y: c.y });
     for (const o of game.nearbyAgents(c.x, c.y, 2)) if (o !== a && o.job === 'soldier' && !o.hidden) { o.hp -= 10 * armourTake(game, o, 'blast'); if (o.hp <= 0 && o.tribe !== a.tribe) { const ar = o.army && game.armies.find(r => r.id === o.army); if (ar) ar.losses++; game.removeAgent(o, 'battle'); } }
   } else if (u === 'spear') dmg *= 0.8;
@@ -328,6 +349,7 @@ export function updateSoldier(game, a, dt) {
       if (!home || moveToward(game, a, home.x + 0.5, home.y + 3, dt, 1.7 * spd)) { a.army = null; a.unit = null; a.staged = null; a.anim = null; a.state = 'think'; a.path = null; }
       return;
     }
+    if (army.order === 'hold') { a.moving = false; a.anim = null; return; } // holding position (still fights anyone who comes close)
     const d = Math.hypot(s.x - a.x, s.y - a.y);
     s.danger = game.tick + 60;
     game.tribes[s.tribe].threat = true;
@@ -341,9 +363,21 @@ export function updateSoldier(game, a, dt) {
       army.staged = (army.staged || 0) + 1;
       if (!army.stagedAt) army.stagedAt = game.tick;
     }
+    // coordinated groups wait for each other, then charge as one
+    if (army.op && !army.go && army.order !== 'charge') {
+      const sib = game.armies.filter(r => r.op === army.op && r.state !== 'return' && r.state !== 'done');
+      const first = Math.min(...sib.map(r => r.stagedAt || Infinity));
+      if (sib.every(r => r.stagedAt) || game.tick - first > 300) {
+        for (const r of sib) { r.go = game.tick; r.stagedAt = game.tick; r.leadAt = 0; }
+        const st = game.tribes[army.tribe];
+        game.log(st, 'war', `All ${sib.length} groups of the ${st.name} are in position around ${s.name}. The assault begins!`, 2, { with: army.enemy, at: s });
+        game.bus.emit('sfx', { k: 'war', x: s.x, y: s.y });
+        if (army.tribe === game.playerId || s.tribe === game.playerId) game.shake = Math.max(game.shake || 0, 0.6);
+      } else { a.moving = false; return; }
+    }
     // waves: the lead troops go in first, the rest wait at the staging point
     // the rest hold until the lead troops have been fighting a while (or waited too long)
-    if (!isLead && !(army.leadAt && game.tick - army.leadAt > (lead === 'siege' ? 120 : 50)) && game.tick - (army.stagedAt || game.tick) < 360) { a.moving = false; return; }
+    if (army.order !== 'charge' && !isLead && !(army.leadAt && game.tick - army.leadAt > (lead === 'siege' ? 120 : 50)) && game.tick - (army.stagedAt || game.tick) < 360) { a.moving = false; return; }
     // pick a building by the focus of the attack
     const focus = plan?.focus || 'auto';
     let tgt = null, bd = 1e9;
@@ -419,9 +453,36 @@ export function updateDefences(game) {
     const t = game.tribes[ar.tribe];
     const breakAt = 0.55 + (t.def?.quirks?.morale || 0);
     if (ar.losses / ar.size > breakAt) { ar.state = 'return'; t.raidCooldown = t.raidCooldown || {}; t.raidCooldown[ar.target] = game.tick + 360 * 5; game.log(t, 'war', `The ${t.name} army fell back from ${game.settlements.get(ar.target)?.name || 'the field'}.`, 1); }
-    if (game.tick - ar.start > 360 * 4) ar.state = 'return';
+    if (game.tick > (ar.deadline || ar.start + 360 * 4)) ar.state = 'return';
   }
   const keep = game.armies.filter(ar => ar.state !== 'done' && [...game.agents.values()].some(a => a.army === ar.id));
   for (const ar of game.armies) if (!keep.includes(ar) && ar.food > 1) addRes(game, game.tribes[ar.tribe], 'grain', ar.food); // unused food returns to the stores
   game.armies = keep;
+}
+
+// ---------------------------------------------------------------- field orders
+export const ORDERS = { advance: 'Advance', hold: 'Hold position', charge: 'Charge now', retreat: 'Fall back' };
+export function orderArmy(game, tribe, id, order) {
+  const ar = game.armies.find(r => r.id === id && r.tribe === tribe.id); if (!ar) return { ok: false, why: 'No such army' };
+  if (!ORDERS[order]) return { ok: false, why: 'Unknown order' };
+  if (order === 'retreat') { ar.state = 'return'; ar.order = 'retreat'; return { ok: true }; }
+  if (ar.state === 'return') return { ok: false, why: 'They are already marching home' };
+  ar.order = order === 'advance' ? null : order;
+  if (order === 'charge') { ar.go = game.tick; ar.leadAt = game.tick - 999; }
+  return { ok: true };
+}
+export function setArmyFocus(game, tribe, id, focus) {
+  const ar = game.armies.find(r => r.id === id && r.tribe === tribe.id); if (!ar) return { ok: false };
+  if (!['auto', 'army', 'towers', 'hearth', 'stores', 'homes'].includes(focus)) return { ok: false };
+  ar.plan = { ...(ar.plan || {}), focus }; return { ok: true };
+}
+export function retargetArmy(game, tribe, id, sid) {
+  const ar = game.armies.find(r => r.id === id && r.tribe === tribe.id); const s = game.settlements.get(sid);
+  if (!ar || !s) return { ok: false, why: 'No such target' };
+  if (!game.dip.atWar(tribe.id, s.tribe)) return { ok: false, why: 'You are not at war with them' };
+  ar.target = sid; ar.enemy = s.tribe; ar.stagedAt = 0; ar.go = 0; ar.leadAt = 0; ar.order = null; ar.op = null; if (ar.state === 'return') ar.state = 'march';
+  const home = game.settlements.get(tribe.capital) || s; const ang0 = Math.atan2(home.y - s.y, home.x - s.x); if (ar.angle != null) ar.angle = ang0;
+  for (const a of game.agents.values()) if (a.army === ar.id) { a.staged = null; a.path = null; }
+  game.log(tribe, 'war', `An army of the ${tribe.name} turned toward ${s.name}.`, 1, { with: s.tribe, at: s });
+  return { ok: true };
 }

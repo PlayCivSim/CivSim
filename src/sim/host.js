@@ -17,7 +17,7 @@ import { resolveChoice } from './events.js';
 import { setResearch, prereqPath, completeTech } from './progress.js';
 import { normaliseAlloc, assignJobs } from './population.js';
 import { enactLaw, adoptGov } from './government.js';
-import { launchCampaign, recallArmy } from './military.js';
+import { launchCampaign, recallArmy, orderArmy, setArmyFocus, retargetArmy } from './military.js';
 import { armourOk } from '../data/warfare.js';
 import { sendScouts, recallScouts } from './explore.js';
 import { startBridge } from './logistics.js';
@@ -273,6 +273,9 @@ export function createHost(post) {
     scout(party, food, x, y) { return sendScouts(game, P(), party, food, x, y); },
     recallScouts(id) { return recallScouts(game, P(), id); },
     setArmour(k) { const t = P(); if (k != null && !armourOk(t, k)) return { ok: false, why: 'Not researched' }; t.armour = k || null; return { ok: true }; },
+    armyOrder(id, o) { return orderArmy(game, P(), id, o); },
+    armyFocus(id, f) { return setArmyFocus(game, P(), id, f); },
+    armyRetarget(id, sid) { return retargetArmy(game, P(), id, sid); },
     recall(id) { const a = game.armies.find(x => x.id === id && x.tribe === game.playerId); if (a) recallArmy(game, a); return !!a; },
     bFocus(id, k) { const b = game.buildings.get(id); if (b && b.tribe === game.playerId) { b.focus = k || null; b._rock = null; } return true; },
     bRecipe(id, r) { const b = game.buildings.get(id); if (b && b.tribe === game.playerId) b.recipe = r; return true; },

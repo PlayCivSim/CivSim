@@ -5,7 +5,7 @@
 let ctx = null, trackBus, master, musicBus, sfxBus, ambBus, uiBus, reverb, limiter;
 const vol = { master: 0.8, music: 0.5, sfx: 0.7, ambience: 0.6, ui: 0.6 };
 // minimum gap (ms) between repeats of the same cue; unlisted cues use 60ms
-const COOLDOWN = { hover: 70, click: 50, open: 120, close: 120, place: 150, built: 700, tech: 1500, stage: 3000, diplomacy: 900, war: 3500, event: 900, bad: 1500, coin: 300, save: 1000, error: 250, chop: 140, hammer: 160, clash: 110 };
+const COOLDOWN = { hover: 70, click: 50, open: 120, close: 120, place: 150, built: 700, tech: 1500, stage: 3000, diplomacy: 900, war: 3500, event: 900, bad: 1500, coin: 300, save: 1000, error: 250, chop: 140, hammer: 160, clash: 110, boom: 160 };
 const UI_CUES = new Set(['hover', 'click', 'open', 'close', 'error']);
 const MAX_VOICES = 10;
 let voices = [];
@@ -281,6 +281,7 @@ export function sfx(kind, opts = {}) {
     case 'coin': tone('square', 1568, 0, 0.06, 0.03 * v); tone('square', 2093, 0, 0.12, 0.03 * v, 0.06); break;
     case 'chop': noise(0.07, 1800, 3, 0.07 * v, 0, 'bandpass', pan); tone('square', 220, 120, 0.05, 0.03 * v, 0, pan); break;
     case 'hammer': tone('square', 900, 600, 0.04, 0.03 * v, 0, pan); noise(0.04, 3000, 2, 0.04 * v, 0, 'bandpass', pan); break;
+    case 'boom': noise(0.9, 140, 0.7, 0.32 * v, 0, 'lowpass', pan); tone('sine', 90, 32, 0.8, 0.22 * v, 0, pan); noise(0.25, 1800, 1, 0.08 * v, 0.02, 'bandpass', pan); break;
     case 'clash': noise(0.12, 4200, 4, 0.08 * v, 0, 'bandpass', pan); tone('square', 1700, 1200, 0.08, 0.02 * v, 0, pan); break;
     case 'error': tone('square', 200, 150, 0.15, 0.05 * v); break;
     case 'save': [784, 1046].forEach((f, i) => tone('triangle', f, 0, 0.2, 0.04 * v, i * 0.08)); break;

@@ -2,7 +2,7 @@
 // build placement, notifications and the escape menu.
 import { h, $, $$, esc, fmt, sign, toast, modal, closeModal, modalOpen, confirmDialog, promptDialog, refreshTip, tip, bar, mapTip } from './dom.js';
 import { ico, emblemURL, spriteURL } from './icons.js';
-import { PANELS, ACTIONS, buildingTip } from './panels.js';
+import { PANELS, ACTIONS, buildingTip, armyOrdersHTML } from './panels.js';
 import { TRIBES } from '../data/tribes.js';
 import { BUILDINGS, JOBS } from '../data/buildings.js';
 import { RESOURCES, FOOD_KEYS, DEPOSITS } from '../data/resources.js';
@@ -79,6 +79,7 @@ export class Hud {
       <div class="minimap frame thin"><div class="mm-tools"><button class="btn icon xs" data-act="zoom-out" data-tip="Zoom out">${ico('minus', 'sm')}</button><button class="btn icon xs" data-act="zoom-in" data-tip="Zoom in">${ico('plus', 'sm')}</button><button class="btn icon xs" data-act="territory" data-tip="Toggle territory overlay">${ico('flag', 'sm')}</button><button class="btn icon xs" data-act="home" data-tip="Return to capital (H)">${ico('house', 'sm')}</button><button class="btn xs scout-btn" data-act="scout-open" data-tip="Send a scouting party to chart unknown land">${ico('eye', 'sm')} Scout</button></div><canvas id="mm"></canvas></div>
       <div id="insp-host"></div>
       <div id="place-host"></div>`;
+    $('#insp-host', this.root).addEventListener('input', e => this.onPanelInput(e)); // army focus/target selects in the inspector
     this.bindResTips();
     this.applyHudPins();
     tip($('#tb-save', this.root), () => { const a = this.app; const ago = a.lastSaved ? Math.round((Date.now() - a.lastSaved) / 1000) : null; return `<div class="tt-title">${ico('save', 'sm')} Saving</div>${a.saving ? 'Saving now…' : a.saveError ? `<span class="bad">The last save failed: ${esc(a.saveError)}. Earlier saves are untouched.</span>` : ago == null ? 'Not saved yet this session.' : `Last saved ${ago < 60 ? ago + ' s' : Math.round(ago / 60) + ' min'} ago (${esc(a.lastSlot || 'auto')}).`}<div class="faint">${a.settings.autosaveMin ? `Autosaves every ${a.settings.autosaveMin} min.` : 'Autosave is off.'}</div>`; });
@@ -118,7 +119,7 @@ export class Hud {
     on('eliminated', ({ tribe }) => { if (tribe.id === P) this.defeat(); else toast('A civilisation falls', `The ${tribe.name} are no more.`, { icon: 'skull', ms: 9000 }); });
     on('allyCall', ({ victim, aggressor }) => this.allyCall(victim, aggressor));
     on('campaign', ({ tribe, target }) => { if (target.tribe === P) { sfx('war'); toast('Invasion!', `A ${tribe.name} army marches on ${target.name}!`, { icon: 'military', kind: 'bad', ms: 8000, onClick: () => this.renderer.flyTo(target.x, target.y, 3) }); } });
-    on('sfx', ({ k, x, y }) => { const r = this.renderer; if (!r.view) return; const X = x * TILE, Y = y * TILE; if (X < r.view.x0 || X > r.view.x1 || Y < r.view.y0 || Y > r.view.y1 || r.cam.zoom < 2.5) return; sfx(k, { vol: Math.min(1, r.cam.zoom / 6) * 0.6, pan: Math.max(-1, Math.min(1, (X - r.cam.x) / ((r.view.x1 - r.view.x0) / 2))) }); });
+    on('sfx', ({ k, x, y }) => { const r = this.renderer; if (!r.view) return; const X = x * TILE, Y = y * TILE; const loud = k === 'boom' || k === 'war'; if (X < r.view.x0 || X > r.view.x1 || Y < r.view.y0 || Y > r.view.y1 || (r.cam.zoom < 2.5 && !loud)) return; sfx(k, { vol: Math.max(loud ? 0.5 : 0, Math.min(1, r.cam.zoom / 6) * 0.6), pan: Math.max(-1, Math.min(1, (X - r.cam.x) / ((r.view.x1 - r.view.x0) / 2))) }); });
     on('placed', ({ tribe }) => { if (tribe.id === P) sfx('place'); });
     on('day', () => {
       // one early nudge per run: point new players at scouting
@@ -543,7 +544,7 @@ export class Hud {
         ${a.carry ? `<span>Carrying</span><span>${Object.entries(a.carry).map(([r, v]) => ico(r, 'sm') + ' ' + v.toFixed(1)).join(' ')}</span>` : ''}
         ${skills.length ? `<span>Skills</span><span>${skills.map(([k, v]) => `${JOBS[k]?.name || k} ${Math.round(v * 100)}%`).join(', ')}</span>` : ''}
         ${a.job === 'soldier' ? `<span>Vigour</span><span>${Math.max(0, Math.round(a.hp))} · ${a.kills || 0} victories</span>` : ''}
-        </div><div class="row" style="margin-top:8px"><button class="btn xs ${this.following === a.id ? 'on' : ''}" data-act="insp-follow">${ico('eye', 'sm')} Follow</button></div></div>`;
+        </div><div class="row" style="margin-top:8px"><button class="btn xs ${this.following === a.id ? 'on' : ''}" data-act="insp-follow">${ico('eye', 'sm')} Follow</button></div>${a.army && a.tribe === g.playerId && g.armies.find(r => r.id === a.army) ? `<div class="caps" style="color:var(--gold);margin-top:6px">Army orders</div>${armyOrdersHTML(g, g.player, g.armies.find(r => r.id === a.army))}` : ''}</div>`;
     } else if (s.kind === 'building') {
       const b = g.buildings.get(s.id); if (!b) { this.select(null); return; }
       html = `<div class="inspector frame ${this.panel ? 'shifted' : ''}" style="--tribe:${TRIBES[b.tribe].color}">${buildingTip(this, b, true)}</div>`;
@@ -572,6 +573,7 @@ export class Hud {
     const g = this.game; sfx('click');
     const act = b.dataset.act;
     if (act === 'insp-close') this.select(null);
+    else if (ACTIONS[act] && act.startsWith('army-')) ACTIONS[act](this, b);
     else if (act === 'insp-scout' && this.selected) {
       const w = g.world, i = this.selected.i; this.select(null);
       ACTIONS['scout-plan'](this, null, { x: i % w.w, y: (i / w.w) | 0 });

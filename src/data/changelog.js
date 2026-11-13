@@ -1,10 +1,11 @@
 // "What's new" shown on the main menu: newest first. Add to the top when
 // something notable ships; the menu shows the first three.
 // Bump GAME_VERSION with every update that ships, so players can tell they are on the latest build.
-export const GAME_VERSION = '1.19.1';
+export const GAME_VERSION = '1.20.0';
 export const GAME_BUILD_DATE = '2026-11-12';
 
 export const CHANGELOG = [
+  { title: 'Command the battle', text: 'Split armies into pincers that close in from several sides and charge together. Order armies in the field to hold, charge, fall back, switch focus or turn on another town. Bigger explosions, flying debris and scorched earth.' },
   { title: 'Scouting, front and centre', text: 'A Scout button sits by the minimap, tapping dark unexplored land offers to send scouts that way, and your advisors remind you when most of the world is still unknown.' },
   { title: 'Bigger worlds', text: 'Every map size is much larger, and Large worlds are now vast: four times the land they had before.' },
   { title: 'Fresh art', text: 'Every industry and booster has its own look, workshops hang trade signs, and each trade wears its own work clothes and hat.' },
