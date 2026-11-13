@@ -6,7 +6,7 @@
 //   every 50 ticks  – job + housing assignment, needs/happiness, stage checks
 //   every day       – economy ledger, demographics, regrowth, diplomacy, events, AI strategy
 import '../data/registry.js'; // content packs (see docs/MODDING.md)
-import { updateSupply, checkEra, aiSpecialise, dailyOutposts, aiOutpost, autoBridges } from './logistics.js';
+import { updateSupply, checkEra, aiSpecialise, dailyOutposts, aiOutpost, autoBridges, updateBridgeJobs } from './logistics.js';
 import { TECH } from '../data/techs.js';
 import { rollPersonality } from './aimind.js';
 import { updateMissions, dailyIntel } from './intel.js';
@@ -59,6 +59,7 @@ export class Game {
     this.settlements = new Map();
     this.armies = [];
     this.expeditions = [];
+    this.bridgeJobs = [];
     this.history = [];
     this.fx = [];
     this.reserved = new Set();
@@ -246,6 +247,7 @@ export class Game {
     updateAgents(this);
     if (tk % 10 === 5) updateMissions(this);
     updateExpeditions(this);
+    updateBridgeJobs(this);
     if (tk % 20 === 7) updateVision(this);
     if (tk % 10 === 0) {
       census(this);
@@ -340,7 +342,7 @@ export class Game {
       world: { trees: enc(w.trees), treeMax: enc(w.treeMax), deposit: enc(w.deposit), depAmt: enc(w.depAmt), fauna: enc(w.fauna), road: enc(w.road), biome: enc(w.biome) },
       logSeq: this.logSeq || 0, seenSeq: this.seenSeq || 0, territoryVersion: this.territoryVersion,
       tribes, agents, buildings: [...this.buildings.values()], settlements: [...this.settlements.values()],
-      armies: this.armies, expeditions: this.expeditions, history: this.history, dip: this.dip.toJSON(), pendingEvents: this.pendingEvents, weather: this.weather,
+      armies: this.armies, bridgeJobs: this.bridgeJobs, expeditions: this.expeditions, history: this.history, dip: this.dip.toJSON(), pendingEvents: this.pendingEvents, weather: this.weather,
     };
   }
 
@@ -368,6 +370,7 @@ export class Game {
     for (const s of d.settlements) g.settlements.set(s.id, s);
     for (const a of d.agents) { if ((a.state === 'pathWait' || a.state === 'travel') && !a.expedition) { a.state = 'think'; a.hidden = false; } g.agents.set(a.id, a); }
     g.armies = d.armies || [];
+    g.bridgeJobs = d.bridgeJobs || [];
     g.expeditions = d.expeditions || [];
     g.history = d.history || [];
     g.seenSeq = d.seenSeq || 0;

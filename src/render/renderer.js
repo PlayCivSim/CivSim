@@ -313,6 +313,15 @@ export class Renderer {
       jobKey = `soldier.${u}.${armourOf(mt)}`;
     }
     const spr = personSprite(tribe.key, jobKey, frame, a.female, child, a.look, carry, this.game.tribes[a.tribe].stage, a.facing < 0);
+    // rowing: a little boat under anyone on open water
+    const wd = this.game.world, wi = wd.inb(a.x | 0, a.y | 0) ? wd.idx(a.x | 0, a.y | 0) : -1;
+    if (wi >= 0 && wd.biome[wi] <= 4 && !wd.road[wi]) {
+      ctx.fillStyle = '#5a3a22'; ctx.fillRect(ax - 5, ay - 3, 10, 3); ctx.fillStyle = '#7a5232'; ctx.fillRect(ax - 4, ay - 4, 8, 1); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(ax - 6, ay, 12, 1);
+      const spr = personSprite(tribe.key, child ? 'idle' : a.job, 0, a.female, child, a.look, null, this.game.tribes[a.tribe].stage, a.facing < 0);
+      ctx.save(); ctx.beginPath(); ctx.rect(ax - 6, ay - 16, 12, 12.5); ctx.clip(); ctx.drawImage(spr, Math.round(ax - 4.5), Math.round(ay - 14)); ctx.restore();
+      if (Math.sin(t * 6 + a.id) > 0) { ctx.fillStyle = '#8a6a42'; ctx.fillRect(ax + (a.facing < 0 ? -7 : 5), ay - 4, 2, 1); }
+      return;
+    }
     // shadow
     ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(ax - 2, ay - 0.5, 4, 1);
     ctx.drawImage(spr, Math.round(ax - 4.5), Math.round(ay - 11));
@@ -411,6 +420,12 @@ export class Renderer {
     if (this.ghost) {
       const gh = this.ghost; const def = BUILDINGS[gh.type];
       const x = gh.x * TILE, y = gh.y * TILE, sz = (def?.size || 3) * TILE;
+      if (gh.type === '__bridge') {
+        const ok = gh.ok, col = ok ? 'rgba(242,200,75,0.55)' : 'rgba(255,90,90,0.45)';
+        if (gh.a) { const x0 = Math.min(gh.a.x, gh.x), y0 = Math.min(gh.a.y, gh.y); ctx.fillStyle = col; ctx.fillRect(x0 * TILE, y0 * TILE, (Math.abs(gh.x - gh.a.x) + 1) * TILE, (Math.abs(gh.y - gh.a.y) + 1) * TILE); }
+        else { ctx.fillStyle = col; ctx.fillRect(gh.x * TILE, gh.y * TILE, TILE, TILE); }
+        return;
+      }
       if (gh.type === '__scout') {
         const cap = this.game.player && this.game.settlements.get(this.game.player.capital);
         if (cap) {

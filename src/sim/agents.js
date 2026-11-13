@@ -38,7 +38,7 @@ export function goTo(game, a, tile, kind, extra) {
   const from = tileOf(game, a);
   // long trips (outposts, distant sites) get a bigger search so they are not mistaken for unreachable
   const far = Math.abs((tile % game.world.w) - (from % game.world.w)) + Math.abs(((tile / game.world.w) | 0) - ((from / game.world.w) | 0)) > 30;
-  const p = game.pf.find(from, tile, { maxNodes: extra?.maxNodes ?? (far ? 16000 : undefined), force: extra?.force });
+  const p = game.pf.find(from, tile, { maxNodes: extra?.maxNodes ?? (far ? 16000 : undefined), force: extra?.force, boats: game.tribes[a.tribe]?.boats || 0 });
   if (p === undefined) { a.state = 'pathWait'; a.pending = { tile, kind, extra }; return 'wait'; }
   if (p === null) { a.fails++; return 'fail'; }
   a.path = p; a.pi = 0; a.dest = tile; a.task = { ...(extra || {}), act: kind }; a.state = 'walk'; a.hidden = false; a.fails = 0;
@@ -125,6 +125,7 @@ function step(game, a, dt) {
   const cur = tileOf(game, a);
   let cost = w.walkCost(cur) || 1;
   let speed = 1.6 / Math.max(0.4, cost);
+  if (!w.walkCost(cur) && isWater(w.biome[cur])) speed *= 0.8; // rowing
   if (w.road[cur]) speed *= 1 + mod(tribe, 'roadSpeed');
   if (a.job === 'soldier' && a.army) speed *= 1.1;
   if (ageYears(a) < 6 || ageYears(a) > 65) speed *= 0.75;

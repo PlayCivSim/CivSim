@@ -296,3 +296,69 @@ export function autoBridges(game) {
     if (t.isPlayer) game.log(t, 'build', `Your people bridged the river (${best.len} span${best.len > 1 ? 's' : ''}).`, 1, { at: { x: best.x, y: best.y }, cat: 'production' });
   }
 }
+
+// ---------------------------------------------------------------- great bridges
+// The player (or a rival) lays a straight bridge from one bank to another.
+// Roads & Bridges spans up to 10 water tiles of rivers, lakes and shallows;
+// Engineering spans 24 and may cross open sea (not the deep ocean).
+export function bridgeSpan(t) { return t.techs.includes('engineering') ? 24 : t.techs.includes('roads') ? 10 : 0; }
+export function bridgeCostPer(t) { return t.techs.includes('engineering') ? { stone: 8, wood: 4, steel: 1 } : { wood: 8, stone: 5 }; }
+export function bridgeCheck(game, t, x0, y0, x1, y1) {
+  const w = game.world;
+  const span = bridgeSpan(t); if (!span) return { ok: false, why: 'Needs Roads & Bridges' };
+  if (!w.inb(x0, y0) || !w.inb(x1, y1)) return { ok: false, why: 'Off the map' };
+  if (x0 !== x1 && y0 !== y1) return { ok: false, why: 'Bridges run straight across: line them up' };
+  const dx = Math.sign(x1 - x0), dy = Math.sign(y1 - y0), len = Math.abs(x1 - x0) + Math.abs(y1 - y0);
+  if (!len) return { ok: false, why: 'Pick the far bank' };
+  const i0 = w.idx(x0, y0), i1 = w.idx(x1, y1);
+  if (isWater(w.biome[i0]) || isWater(w.biome[i1])) return { ok: false, why: 'Both ends must be on land' };
+  if (w.owner[i0] !== t.id && w.owner[i1] !== t.id) return { ok: false, why: 'One end must be in your territory' };
+  if (game.vis !== 'open') { const ex = game.explored?.[t.id]; if (ex && (!ex[i0] || !ex[i1])) return { ok: false, why: 'You have not explored the far bank' }; }
+  const water = [];
+  for (let k = 1; k < len; k++) {
+    const x = x0 + dx * k, y = y0 + dy * k, i = w.idx(x, y), b = w.biome[i];
+    if (w.occ[i]) return { ok: false, why: 'Something is in the way' };
+    if (b === B.DEEP) return { ok: false, why: 'The deep ocean is too deep to bridge' };
+    if (b === B.OCEAN && !t.techs.includes('engineering')) return { ok: false, why: 'Open sea needs Engineering' };
+    if (b === B.PEAK || b === B.MOUNTAIN) return { ok: false, why: 'Mountains are in the way' };
+    if (w.owner[i] >= 0 && w.owner[i] !== t.id) return { ok: false, why: 'It crosses another people’s land' };
+    if (isWater(b) && !w.road[i]) water.push(i);
+  }
+  if (!water.length) return { ok: false, why: 'There is no water to cross here' };
+  if (water.length > span) return { ok: false, why: `Too long: ${water.length} tiles of water, you can span ${span}` };
+  const per = bridgeCostPer(t), cost = {}; for (const [r, v] of Object.entries(per)) cost[r] = v * water.length;
+  return { ok: true, len, water: water.length, cost, dx, dy, days: Math.ceil(water.length / 2) };
+}
+export function startBridge(game, t, x0, y0, x1, y1) {
+  const c = bridgeCheck(game, t, x0, y0, x1, y1); if (!c.ok) return c;
+  if (!canAfford(t, c.cost)) return { ok: false, why: 'Not enough materials' };
+  if ((game.bridgeJobs || []).filter(j => j.tribe === t.id).length >= 2) return { ok: false, why: 'Two bridges are already being built' };
+  for (const [r, v] of Object.entries(c.cost)) takeRes(t, r, v);
+  (game.bridgeJobs = game.bridgeJobs || []).push({ tribe: t.id, x0, y0, x1, y1, dx: c.dx, dy: c.dy, k: 0, len: c.len, stone: t.techs.includes('engineering') });
+  game.log(t, 'settlement', `Work began on a ${c.water}-span bridge.`, 1, { at: { x: (x0 + x1) / 2, y: (y0 + y1) / 2 } });
+  return { ok: true, days: c.days };
+}
+// builders lay about two spans a day; the bridge opens when the last plank is down
+export function updateBridgeJobs(game) {
+  if (!game.bridgeJobs?.length || game.tick % 180) return;
+  const w = game.world;
+  for (const j of [...game.bridgeJobs]) {
+    const t = game.tribes[j.tribe];
+    if (!t.alive) { game.bridgeJobs = game.bridgeJobs.filter(x => x !== j); continue; }
+    if (!(t.jobCounts?.builder > 0) && game.rng.chance(0.5)) continue; // no builders: slower
+    let laid = 0;
+    while (j.k <= j.len && laid < 1) {
+      const x = j.x0 + j.dx * j.k, y = j.y0 + j.dy * j.k, i = w.idx(x, y);
+      j.k++;
+      if (w.occ[i]) continue;
+      if (isWater(w.biome[i])) laid++;
+      w.road[i] = Math.max(w.road[i], j.stone ? 2 : 1); w.trees[i] = 0;
+      game.markTiles(x, y, 1, 1);
+    }
+    game.pathDirty = true;
+    if (j.k > j.len) {
+      game.bridgeJobs = game.bridgeJobs.filter(x => x !== j);
+      game.log(t, 'settlement', 'A great bridge was finished. People can now cross.', t.isPlayer ? 2 : 1, { at: { x: (j.x0 + j.x1) / 2, y: (j.y0 + j.y1) / 2 } });
+    }
+  }
+}

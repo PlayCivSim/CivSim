@@ -7,6 +7,7 @@ import { TRIBES } from '../data/tribes.js';
 import { BUILDINGS, JOBS } from '../data/buildings.js';
 import { RESOURCES, FOOD_KEYS, DEPOSITS } from '../data/resources.js';
 import { BIOMES, isWater } from '../world/biomes.js';
+import { bridgeCheck, bridgeSpan } from '../sim/logistics.js';
 import { TECH } from '../data/techs.js';
 import { STAGES } from '../sim/progress.js';
 import { SPEEDS, SPEED_NAMES, TILE, DAYS_PER_YEAR } from '../core/constants.js';
@@ -359,7 +360,7 @@ export class Hud {
   }
   confirmPlace() {
     const gh = this.renderer.ghost; if (!gh) return;
-    const s = gh.type === '__settle' || gh.type === '__expand' || gh.type === '__scout' ? 1 : BUILDINGS[gh.type].size;
+    const s = gh.type === '__settle' || gh.type === '__expand' || gh.type === '__scout' || gh.type === '__bridge' ? 1 : BUILDINGS[gh.type].size;
     this.onClick({ x: gh.x + s / 2, y: gh.y + s / 2 }, { confirmed: true, shiftKey: !!this.repeatPlace });
   }
   cancelPlacing() {
@@ -374,7 +375,11 @@ export class Hud {
       ? `<div class="row" style="gap:4px"><button class="btn sm primary ${gh?.ok ? '' : 'disabled'}" data-act="confirm-place" ${gh?.ok ? '' : 'disabled'}>${ico('check', 'sm')} Place</button>${this.placing !== '__settle' ? `<button class="btn sm ${this.repeatPlace ? 'on' : ''}" data-act="repeat-place" data-tip="Keep placing more of this building">Repeat</button>` : ''}<button class="btn sm" data-act="cancel-place">${ico('close', 'sm')}</button></div>`
       : `<button class="btn sm" data-act="cancel-place">Cancel (Esc)</button>`;
     let html;
-    if (this.placing === '__scout') {
+    if (this.placing === '__bridge') {
+      const c = gh?.check, a = gh?.a;
+      const msg = !a ? (touch ? 'Tap the near bank, then press Place.' : 'Click the near bank where the bridge starts.') : gh?.ok ? `${c.water} spans · ${Object.entries(c.cost).map(([r, v]) => v + ' ' + r).join(', ')} · about ${c.days} day${c.days === 1 ? '' : 's'} to build` : esc(gh?.why || (touch ? 'Tap the far bank, straight across.' : 'Click the far bank, straight across.'));
+      html = `<div class="place-hint frame thin">${ico('wave')}<div class="ph-text"><div class="caps" style="color:var(--gold)">${a ? 'Bridge · far bank' : 'Bridge · near bank'}</div><div class="${a && gh?.ok === false ? 'bad' : ''}" style="font-size:0.88em">${msg}</div></div>${buttons}</div>`;
+    } else if (this.placing === '__scout') {
       const sp = this.scoutPlan || {};
       html = `<div class="place-hint frame thin">${ico('eye')}<div class="ph-text"><div class="caps" style="color:var(--gold)">Scouting party · ${sp.party} ${sp.party === 1 ? 'scout' : 'scouts'}, ${sp.food} food</div><div class="${gh?.ok === false ? 'bad' : ''}" style="font-size:0.88em">${gh?.ok === false ? esc(gh.why || '') : (touch ? 'Tap the direction they should head, then press Place.' : 'Click the direction they should head.')}</div></div>${buttons}</div>`;
     } else if (this.placing === '__expand') {
@@ -405,7 +410,13 @@ export class Hud {
   onHover(w, e) {
     const gh = this.renderer.ghost; if (!gh) return;
     const g = this.game, t = g.player;
-    if (gh.type === '__scout') {
+    if (gh.type === '__bridge') {
+      let x = Math.floor(w.x), y = Math.floor(w.y);
+      if (gh.a) { if (Math.abs(x - gh.a.x) >= Math.abs(y - gh.a.y)) y = gh.a.y; else x = gh.a.x; } // snap straight across
+      gh.x = x; gh.y = y;
+      if (!gh.a) { const wd = g.world, i = wd.inb(x, y) ? wd.idx(x, y) : -1; gh.ok = i >= 0 && !isWater(wd.biome[i]) && wd.owner[i] === t.id; gh.why = gh.ok ? '' : 'Start on dry land inside your territory'; }
+      else { const c = bridgeCheck(g, t, gh.a.x, gh.a.y, x, y); gh.check = c; gh.ok = c.ok; gh.why = c.why; }
+    } else if (gh.type === '__scout') {
       gh.x = Math.floor(w.x); gh.y = Math.floor(w.y);
       const cap = g.settlements.get(t.capital), wd = g.world;
       gh.ok = wd.inb(gh.x, gh.y) && !!cap && Math.hypot(gh.x - cap.x, gh.y - cap.y) >= 3; gh.why = gh.ok ? '' : 'Pick a direction away from your capital';
@@ -433,6 +444,13 @@ export class Hud {
       this.onHover(w, e);
       // touch: a tap only positions the building; the Place button commits it
       if ((this.app.touch || e.pointerType === 'touch') && !e.confirmed) { this.updatePlaceHint(); return; }
+      if (this.placing === '__bridge') {
+        if (!gh.ok) { sfx('error'); toast('Cannot bridge there', gh.why || '', { kind: 'bad', icon: 'warning', ms: 2500 }); return; }
+        if (!gh.a) { gh.a = { x: gh.x, y: gh.y }; gh.ok = false; this.updatePlaceHint(); sfx('click'); return; }
+        const a = gh.a; this.cancelPlacing();
+        this.sim.call('bridge', a.x, a.y, gh.x, gh.y).then(r => { if (r.ok) { sfx('place'); toast('Bridge under way', `Builders will lay about two spans a day; done in roughly ${r.days} day${r.days === 1 ? '' : 's'}.`, { icon: 'wave', kind: 'good', ms: 5000 }); } else { sfx('error'); toast('Cannot build the bridge', r.why, { kind: 'bad', icon: 'warning' }); } });
+        return;
+      }
       if (this.placing === '__scout') {
         if (!gh.ok) { sfx('error'); toast('Pick another direction', gh.why || '', { kind: 'bad', icon: 'warning', ms: 2500 }); return; }
         const sp = this.scoutPlan || {}; this.cancelPlacing();

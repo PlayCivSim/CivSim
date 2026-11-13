@@ -127,6 +127,7 @@ function buildUtilities(game, t) {
   if (avail.has('mint') && !countB(game, t, 'mint') && ((t.stock.gold || 0) + (t.stock.silver || 0) > 5)) add('mint', 4, 'Coinage');
   if (avail.has('factory') && !countB(game, t, 'factory')) add('factory', 6, 'Industry');
   if (avail.has('derrick') && countB(game, t, 'derrick') < 1) add('derrick', 4, 'Oil');
+  if (avail.has('boatyard') && !countB(game, t, 'boatyard') && t.pop > 30) add('boatyard', 2.5 + ai.trade, 'Boats to cross the water');
   if (avail.has('refinery') && countB(game, t, 'derrick') && !countB(game, t, 'refinery')) add('refinery', 5, 'Refine oil');
   if (avail.has('kiln') && countB(game, t, 'smelter') && (t.stock.coal || 0) < 10 && !countB(game, t, 'kiln')) add('kiln', 4, 'Charcoal for the smelter');
   if (avail.has('jeweller') && (t.stock.gems || 0) + (t.stock.gold || 0) > 6 && !countB(game, t, 'jeweller')) add('jeweller', 3.5, 'Luxury goods');

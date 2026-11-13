@@ -21,7 +21,7 @@ import { TREATY_NAMES } from '../sim/diplomacy.js';
 import { intelBadges, economyLine, strengthChip, intentLine, missionsSection, counterSection, reputationLine, inboxSection, intelActions, confirmJourney } from './intelui.js';
 import { route, intel } from '../sim/intel.js';
 import { traits } from '../sim/aimind.js';
-import { SPECS, SPEC_COOLDOWN_DAYS, ERAS, eraOf, supplyAt, estimateCampaign } from '../sim/logistics.js';
+import { SPECS, SPEC_COOLDOWN_DAYS, ERAS, eraOf, supplyAt, estimateCampaign, bridgeSpan, bridgeCostPer } from '../sim/logistics.js';
 import { counterOffer, dealText, embargoed, TARIFFS } from '../sim/trade.js';
 import { proposalText } from './hud.js';
 import { sfx } from '../audio/audio.js';
@@ -108,6 +108,7 @@ const build = {
     }).join('');
     return `<div class="bcat">${BUILDING_CATS.map(c => `<button class="btn xs ${st.bcat === c.key ? 'on' : ''}" data-act="bcat" data-cat="${c.key}">${c.name}</button>`).join('')}</div>
       ${st.bcat === 'government' ? `<button class="bcard ${canFound(g, t).ok ? '' : 'cant'}" data-act="found" style="width:100%;margin-bottom:8px"><div class="bimg">${ico('settle', 'xl')}</div><div><div class="bname">New Settlement</div><div class="bdesc">Found a new town within 45 tiles of your lands. ${esc(canFound(g, t).why || '')}</div>${costHTML(t, { wood: 80, stone: 40, grain: 40 })}</div></button>` : ''}
+      ${st.bcat === 'infrastructure' ? (() => { const sp = bridgeSpan(t); return `<button class="bcard ${sp ? '' : 'locked'}" data-act="${sp ? 'bridge-pick' : ''}" style="width:100%;margin-bottom:8px"><div class="bimg">${ico('wave', 'xl')}</div><div><div class="bname">Great Bridge</div><div class="bdesc">${sp ? `Lay a straight bridge from your land to a far bank, up to ${sp} tiles of water${t.techs.includes('engineering') ? ', even across open sea' : ' (rivers, lakes and shallows)'}. Built span by span.` : '<span class="warn">Requires Roads & Bridges</span>'}</div><div class="bmakes">Each span: ${Object.entries(bridgeCostPer(t)).map(([r, v]) => `${v} ${ico(r, 'sm')}${RESOURCES[r].name}`).join(' + ')}</div></div></button>`; })() : ''}
       <div class="bgrid">${cards}</div>
       <div class="prose" style="font-size:0.85em;margin-top:10px">Click a building, then click the map. Right-click or Esc to cancel. Buildings must be inside your territory; builders will raise them over time.</div>`;
   },
@@ -690,6 +691,7 @@ const confirmAsync = async (...a) => (await import('./dom.js')).confirmDialog(..
 export const ACTIONS = {
   steward: (hud, b) => { const t = hud.game.player; const v = !t.steward[b.dataset.k]; t.steward[b.dataset.k] = v; hud.sim.call('steward', b.dataset.k, v); },
   envoy: (hud, b) => { const t = hud.game.player; const cfg = { ...(t.envoy || ENVOY_DEFAULTS) }; const k = b.dataset.k; cfg[k] = b.dataset.v != null ? b.dataset.v : !cfg[k]; t.envoy = cfg; hud.sim.call('envoy', cfg); },
+  'bridge-pick': hud => { hud.closePanel(); hud.startPlacing('__bridge'); },
   'scout-plan': async hud => {
     const g = hud.game, t = g.player;
     let party = hud.panelState.scoutParty || 2, food = hud.panelState.scoutFood || 24;

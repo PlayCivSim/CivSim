@@ -122,6 +122,9 @@ export const BUILDINGS = {
   shrine: { name: 'Shrine', cat: 'infrastructure', size: 2, cost: { wood: 20, stone: 20 }, work: 50, tech: 'oraltradition', hp: 90, desc: 'A place of gathering and remembrance.', effect: { happiness: 1.2, stability: 1 } },
   bathhouse: { name: 'Bathhouse', cat: 'infrastructure', size: 2, cost: { stone: 40, clay: 30 }, work: 80, tech: 'sanitation', hp: 120, desc: 'Improves health and reduces epidemics.', effect: { health: 0.06, happiness: 0.8, disease: -0.3 } },
 
+  boatyard: { name: 'Boatyard', cat: 'infrastructure', size: 2, cost: { wood: 45, fibre: 10 }, work: 80, tech: 'fishing', hp: 120, site: 'water',
+    desc: 'Builds boats. Once you have one, your people row across rivers, lakes and coastal waters instead of walking round them; with Navigation they cross the open ocean too. Boats are a little slower than walking.' },
+
   // ---------------- Research
   school: { name: 'Learning Hut', cat: 'research', size: 2, cost: { wood: 25 }, work: 45, job: 'researcher', slots: 3, tech: 'oraltradition', hp: 90,
     prod: { research: 1.0, time: 40 }, desc: 'Elders teach and record knowledge. Produces research.' },

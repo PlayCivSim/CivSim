@@ -140,7 +140,7 @@ function moveToward(game, a, x, y, dt, speed = 1.7) {
     const goalMoved = Math.abs(gx0 - x) + Math.abs(gy0 - y) > Math.max(3, d * 0.25);
     if (!a.path || a.pi >= a.path.length || goalMoved) {
       const goal = w.idx(Math.max(0, Math.min(w.w - 1, x | 0)), Math.max(0, Math.min(w.h - 1, y | 0)));
-      const p = game.pf.find(w.idx(a.x | 0, a.y | 0), goal, { maxNodes: 9000 });
+      const p = game.pf.find(w.idx(a.x | 0, a.y | 0), goal, { maxNodes: 9000, boats: game.tribes[a.tribe]?.boats || 0 });
       if (p === undefined) return false;
       a.path = p || []; a.pi = 0; a.pathGoal = goal;
       if (!p) { a.path = null; a.stuck = (a.stuck || 0) + 1; return false; }
@@ -158,7 +158,7 @@ function moveToward(game, a, x, y, dt, speed = 1.7) {
   const s = speed * dt;
   a.moving = true; if (Math.abs(dx) > 0.01) a.facing = dx > 0 ? 1 : -1;
   const nx = a.x + dx / d * Math.min(s, d), ny = a.y + dy / d * Math.min(s, d);
-  if (w.walkCost(w.idx(nx | 0, ny | 0)) > 0) { a.x = nx; a.y = ny; }
+  const ni = w.idx(nx | 0, ny | 0); if (w.walkCost(ni) > 0 || (game.tribes[a.tribe]?.boats && w.biome[ni] <= 4 && (w.biome[ni] !== 0 || game.tribes[a.tribe].boats >= 2))) { a.x = nx; a.y = ny; }
   return d <= s;
 }
 

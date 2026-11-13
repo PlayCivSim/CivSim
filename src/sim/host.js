@@ -20,6 +20,7 @@ import { enactLaw, adoptGov } from './government.js';
 import { launchCampaign, recallArmy } from './military.js';
 import { armourOk } from '../data/warfare.js';
 import { sendScouts, recallScouts } from './explore.js';
+import { startBridge } from './logistics.js';
 import { addRes } from './economy.js';
 import { LAWS } from '../data/laws.js';
 import { DAY_TICKS } from '../core/constants.js';
@@ -267,6 +268,7 @@ export function createHost(post) {
     enactLaw(law, opt) { return enactLaw(game, P(), law, opt); },
     adoptGov(k) { return adoptGov(game, P(), k); },
     campaign(sid, frac, food, plan) { const r = launchCampaign(game, P(), sid, frac, food, plan); return { ok: r.ok, why: r.why }; },
+    bridge(x0, y0, x1, y1) { return startBridge(game, P(), x0, y0, x1, y1); },
     scout(party, food, x, y) { return sendScouts(game, P(), party, food, x, y); },
     recallScouts(id) { return recallScouts(game, P(), id); },
     setArmour(k) { const t = P(); if (k != null && !armourOk(t, k)) return { ok: false, why: 'Not researched' }; t.armour = k || null; return { ok: true }; },

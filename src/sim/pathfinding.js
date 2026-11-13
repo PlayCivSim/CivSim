@@ -27,13 +27,14 @@ export class Pathfinder {
   // null if unreachable, undefined if budget exhausted (try later).
   find(from, to, opts = {}) {
     if (from === to) return [];
-    const key = from * 1e6 + to;
+    const boats = opts.boats || 0;
+    const key = from * 1e6 + to + boats * 0.25;
     const c = this.cache.get(key);
     if (c !== undefined) { this.stats.hits++; return c; }
     if ((this.budget <= 0 || this.nodeBudget <= 0) && !opts.force) return undefined;
     this.budget--;
     this.stats.searches++;
-    const p = this.search(from, to, opts.maxNodes || 3000, opts.bridges);
+    const p = this.search(from, to, opts.maxNodes || 3000, opts.bridges, boats);
     if (!p) this.stats.fails++;
     if (this.cache.size > 4000) {
       let k = 0; for (const kk of this.cache.keys()) { this.cache.delete(kk); if (++k > 1000) break; }
@@ -42,11 +43,13 @@ export class Pathfinder {
     return p;
   }
 
-  search(from, to, maxNodes, bridges = true) {
+  search(from, to, maxNodes, bridges = true, boats = 0) {
+    // rowing: water is passable (deep ocean only with ocean-going boats), a little slower than open ground
+    const cost = i => { const c = this.world.walkCost(i); if (!boats) return c; const b = this.world.biome[i]; if (b <= 4 && !this.world.road[i] && (b !== 0 || boats >= 2)) return 1.5; return c; };
     const w = this.world.w, h = this.world.h, world = this.world;
     const cur = ++this.cur;
     const tx = to % w, ty = (to / w) | 0;
-    if (world.walkCost(to) === 0) return null;
+    if (cost(to) === 0) return null;
     let size = 0;
     const heap = this.heap, hf = this.hf, g = this.g, stamp = this.stamp, closed = this.closed, parent = this.parent;
     const push = (i, f) => {
@@ -86,10 +89,10 @@ export class Pathfinder {
         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
         const ni = ny * w + nx;
         if (closed[ni] === cur) continue;
-        let c = world.walkCost(ni);
+        let c = cost(ni);
         if (c === 0) continue;
         if (!bridges && world.biome[ni] === 4 && !world.road[ni]) continue;
-        if (dx && dy) { if (world.walkCost(y * w + nx) === 0 || world.walkCost(ny * w + x) === 0) continue; }
+        if (dx && dy) { if (cost(y * w + nx) === 0 || cost(ny * w + x) === 0) continue; }
         const occ = world.occ[ni];
         if (occ && ni !== to) c += 2.5; // walk around buildings when possible
         const ng = g[i] + c * dc;

@@ -66,6 +66,8 @@ export function computeMods(game, tribe) {
   // booster buildings: a small tribe-wide bonus per type built (a second copy adds nothing)
   const boosted = new Set();
   for (const b of game.buildings.values()) { if (b.tribe !== tribe.id || !b.built) continue; const tm = BUILDINGS[b.type]?.tribeMods; if (tm && !boosted.has(b.type)) { boosted.add(b.type); addMods(m, tm); } }
+  // boats: a Boatyard lets people row across water (open ocean with Navigation)
+  tribe.boats = boosted.has('boatyard') || [...game.buildings.values()].some(b => b.tribe === tribe.id && b.built && b.type === 'boatyard') ? (tribe.techs.includes('navigation') ? 2 : 1) : 0;
   for (const em of tribe.eventMods) addMods(m, em.mods);
   // Difficulty no longer grants AI production or research bonuses; it changes how well they decide (see assessWar).
   tribe.mods = m;
