@@ -27,14 +27,14 @@ export class Pathfinder {
   // null if unreachable, undefined if budget exhausted (try later).
   find(from, to, opts = {}) {
     if (from === to) return [];
-    const boats = opts.boats || 0;
-    const key = from * 1e6 + to + boats * 0.25;
+    const boats = opts.boats || 0, closedMask = opts.closed || 0;
+    const key = from * 1e6 + to + (boats * 256 + closedMask) / 1024;
     const c = this.cache.get(key);
     if (c !== undefined) { this.stats.hits++; return c; }
     if ((this.budget <= 0 || this.nodeBudget <= 0) && !opts.force) return undefined;
     this.budget--;
     this.stats.searches++;
-    const p = this.search(from, to, opts.maxNodes || 3000, opts.bridges, boats);
+    const p = this.search(from, to, opts.maxNodes || 3000, opts.bridges, boats, closedMask);
     if (!p) this.stats.fails++;
     if (this.cache.size > 4000) {
       let k = 0; for (const kk of this.cache.keys()) { this.cache.delete(kk); if (++k > 1000) break; }
@@ -43,7 +43,12 @@ export class Pathfinder {
     return p;
   }
 
-  search(from, to, maxNodes, bridges = true, boats = 0) {
+  search(from, to, maxNodes, bridges = true, boats = 0, closedMask = 0) {
+    // closed borders: tiles owned by a people in `closedMask` are off limits, unless the
+    // walker already stands in such land (then it may walk out)
+    const own = this.world.owner;
+    const startClosed = closedMask && own[from] >= 0 && (closedMask >> own[from]) & 1;
+    const shut = i => closedMask && own[i] >= 0 && (closedMask >> own[i]) & 1;
     // rowing: water is passable (deep ocean only with ocean-going boats), a little slower than open ground
     const cost = i => { const c = this.world.walkCost(i); if (!boats) return c; const b = this.world.biome[i]; if (b <= 4 && !this.world.road[i] && (b !== 0 || boats >= 2)) return 1.5; return c; };
     const w = this.world.w, h = this.world.h, world = this.world;
@@ -91,6 +96,7 @@ export class Pathfinder {
         if (closed[ni] === cur) continue;
         let c = cost(ni);
         if (c === 0) continue;
+        if (shut(ni)) { if (!startClosed) continue; c += 3; }
         if (!bridges && world.biome[ni] === 4 && !world.road[ni]) continue;
         if (dx && dy) { if (cost(y * w + nx) === 0 || cost(ny * w + x) === 0) continue; }
         const occ = world.occ[ni];
@@ -110,4 +116,13 @@ export class Pathfinder {
     path.reverse();
     return path;
   }
+}
+
+// Which peoples' lands a tribe may not walk through: everyone it has no
+// Border Access agreement with, except enemies at war (armies must invade).
+export function closedMask(game, tid) {
+  if (tid == null || !game.dip) return 0;
+  let m = 0;
+  for (const o of game.tribes) if (o.id !== tid && o.alive && !game.dip.has('access', tid, o.id) && !game.dip.atWar(tid, o.id)) m |= 1 << o.id;
+  return m;
 }

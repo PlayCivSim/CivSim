@@ -326,7 +326,7 @@ export function recomputeTerritory(game) {
   }
   let changed = false;
   for (let i = 0; i < w.n; i++) if (prev[i] !== w.owner[i]) { changed = true; break; }
-  if (changed) { game.territoryVersion++; game.bus.emit('territory'); }
+  if (changed) { game.territoryVersion++; game.pathDirty = true; game.bus.emit('territory'); }
   for (const t of game.tribes) t.territory = 0;
   for (let i = 0; i < w.n; i++) { const o = w.owner[i]; if (o >= 0 && !isWater(w.biome[i])) game.tribes[o].territory++; }
   game.territoryDirty = false;

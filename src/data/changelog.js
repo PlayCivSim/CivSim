@@ -1,10 +1,11 @@
 // "What's new" shown on the main menu: newest first. Add to the top when
 // something notable ships; the menu shows the first three.
 // Bump GAME_VERSION with every update that ships, so players can tell they are on the latest build.
-export const GAME_VERSION = '1.15.0';
+export const GAME_VERSION = '1.16.0';
 export const GAME_BUILD_DATE = '2026-11-12';
 
 export const CHANGELOG = [
+  { title: 'Closed borders', text: 'People no longer wander through other peoples\' land. Crossing needs a Border Access agreement; only armies at war march in uninvited.' },
   { title: 'Boats & great bridges', text: 'Build a Boatyard and your people row across rivers, lakes and coasts (open ocean with Navigation). Lay great bridges up to 10 spans with Roads & Bridges, or 24 across open sea with Engineering.' },
   { title: 'Boosters & new industry', text: 'Fourteen booster buildings speed up nearby work and give small tribe-wide bonuses. New Charcoal Kiln, Brickworks, Salt Pans, Herb Garden, Jeweller and Oil Refinery. Every building now shows exactly what it makes.' },
   { title: 'Battery saver', text: 'Phones and tablets now run lighter by default: 30 frames a second, simpler effects and a normal-resolution canvas. Turn it off in Settings › Graphics.' },

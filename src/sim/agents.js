@@ -2,6 +2,7 @@
 // movement. Production happens through these work cycles, so the economy is a
 // direct result of what people are visibly doing on the map.
 import { specMul, specOf } from './logistics.js';
+import { closedMask } from './pathfinding.js';
 import { DAY_TICKS, TICK_DT, WORK_AGE, ELDER_AGE, DAYS_PER_YEAR } from '../core/constants.js';
 import { BUILDINGS } from '../data/buildings.js';
 import { BIOMES, B, isWater } from '../world/biomes.js';
@@ -38,7 +39,7 @@ export function goTo(game, a, tile, kind, extra) {
   const from = tileOf(game, a);
   // long trips (outposts, distant sites) get a bigger search so they are not mistaken for unreachable
   const far = Math.abs((tile % game.world.w) - (from % game.world.w)) + Math.abs(((tile / game.world.w) | 0) - ((from / game.world.w) | 0)) > 30;
-  const p = game.pf.find(from, tile, { maxNodes: extra?.maxNodes ?? (far ? 16000 : undefined), force: extra?.force, boats: game.tribes[a.tribe]?.boats || 0 });
+  const p = game.pf.find(from, tile, { maxNodes: extra?.maxNodes ?? (far ? 16000 : undefined), force: extra?.force, boats: game.tribes[a.tribe]?.boats || 0, closed: closedMask(game, a.tribe) });
   if (p === undefined) { a.state = 'pathWait'; a.pending = { tile, kind, extra }; return 'wait'; }
   if (p === null) { a.fails++; return 'fail'; }
   a.path = p; a.pi = 0; a.dest = tile; a.task = { ...(extra || {}), act: kind }; a.state = 'walk'; a.hidden = false; a.fails = 0;
@@ -318,11 +319,13 @@ function gatherTask(game, tribe, a, s, job, wb) {
   // sample random tiles in radius and pick the nearest good one
   const rad = prod.radius || 9;
   let bestD = 1e9;
+  const cm = closedMask(game, a.tribe);
   for (let k = 0; k < 18; k++) {
     const x = Math.round(origin.x + r.range(-rad, rad)), y = Math.round(origin.y + r.range(-rad, rad));
     if (!w.inb(x, y)) continue;
     const i = w.idx(x, y);
     if (game.reserved.has(i)) continue;
+    if (cm && w.owner[i] >= 0 && (cm >> w.owner[i]) & 1) continue; // not on a neighbour's land without Border Access
     let ok = false;
     if (kind === 'trees') ok = w.trees[i] > 20 && !w.occ[i];
     else if (kind === 'game') ok = w.fauna[i] > 25 && !isWater(w.biome[i]) && !w.occ[i];

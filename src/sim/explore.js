@@ -7,6 +7,7 @@ import { BIOMES, B } from '../world/biomes.js';
 import { revealFor } from './vision.js';
 import { eatFood, foodTotal, addRes } from './economy.js';
 import { isAdult } from './agents.js';
+import { closedMask } from './pathfinding.js';
 
 export const SCOUT_MAX = 4;
 export const RATION = 1.5;          // food per scout per day
@@ -90,7 +91,8 @@ export function updateExpeditions(g) {
         let moved = false;
         // keep to the chosen heading; skirt water and peaks by following the shore
         const base = e.ang0 ?? (e.ang0 = e.ang);
-        const ok = (x, y) => { if (!w.inb(x | 0, y | 0)) return false; const i = w.idx(x | 0, y | 0); return w.walkCost(i) > 0 || (t.boats > 0 && w.biome[i] <= 4 && (w.biome[i] !== 0 || t.boats >= 2)); };
+        const ok = (x, y) => { if (!w.inb(x | 0, y | 0)) return false; const i = w.idx(x | 0, y | 0); const o = w.owner[i]; if (o >= 0 && o !== t.id && (closedMask(g, t.id) >> o) & 1) return false; // closed borders turn scouts aside
+          return w.walkCost(i) > 0 || (t.boats > 0 && w.biome[i] <= 4 && (w.biome[i] !== 0 || t.boats >= 2)); };
         for (const off of [0, 0.35, -0.35, 0.7, -0.7, 1.05, -1.05, 1.4, -1.4, 1.75, -1.75]) {
           const a = e.ang + off, nx = e.x + Math.cos(a) * step, ny = e.y + Math.sin(a) * step;
           // look a little ahead so the party does not walk into a dead end
