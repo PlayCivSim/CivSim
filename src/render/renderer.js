@@ -52,7 +52,8 @@ export class Renderer {
   }
 
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // battery saver renders at one canvas pixel per CSS pixel (a quarter of the work on Retina screens)
+    const dpr = this.settings.saver ? 1 : Math.min(window.devicePixelRatio || 1, 2);
     this.dpr = dpr;
     const r = this.cv.getBoundingClientRect();
     this.cv.width = Math.max(1, Math.round(r.width * dpr)); this.cv.height = Math.max(1, Math.round(r.height * dpr));

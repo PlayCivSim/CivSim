@@ -48,6 +48,7 @@ class App {
     this.hud = new Hud(this);
     this.hints = new Hints(this);
     await this.showMenu();
+    if (this.saverNotice) { this.saverNotice = false; toast('Battery saver is on', 'Touch devices run lighter visuals to save battery and heat. Turn it off in Settings › Graphics for full lighting, particles and sharper rendering.', { icon: 'menu', ms: 10000 }); }
     requestAnimationFrame(t => this.loop(t));
     document.getElementById('boot')?.remove();
   }
@@ -56,7 +57,13 @@ class App {
     const s = this.settings;
     document.documentElement.style.setProperty('--ui', s.uiScale);
     document.body.classList.toggle('cb', !!s.colorblind);
-    Object.assign(this.renderer.settings, { particles: s.particles, animations: s.animations, territory: s.territory, quality: s.quality, lighting: s.lighting !== false });
+    // battery saver: touch devices get it by default (once); it overrides the heavy options without changing them
+    if (s.inputMode === 'touch' && !s.saverAsked) { s.saver = true; s.saverAsked = true; this.saverNotice = true; }
+    const sv = !!s.saver;
+    const dprChanged = this.renderer.settings.saver !== sv;
+    Object.assign(this.renderer.settings, { saver: sv, particles: s.particles && !sv, animations: s.animations && !sv, territory: s.territory, quality: sv ? 'low' : s.quality, lighting: s.lighting !== false && !sv });
+    if (dprChanged) this.renderer.resize();
+    this.sim?.call('setSaver', sv).catch(() => {});
     setVolumes(s);
     this.touch = s.inputMode === 'touch';
     document.body.classList.toggle('touch', this.touch);
@@ -198,6 +205,11 @@ class App {
 
   // ---------------------------------------------------------------- loop
   loop(now) {
+    // battery saver: draw at most 30 frames a second (10 while a window or the pause holds the world still)
+    if (this.settings.saver) {
+      const held = this.mode === 'game' && (modalOpen() || this.hud?.blocking() || this.game?.speed === 0);
+      if (now - this.last < (held ? 95 : 31)) { requestAnimationFrame(t => this.loop(t)); return; }
+    }
     const dt = Math.min(0.1, (now - this.last) / 1000); this.last = now;
     const g = this.game;
     if (g) {

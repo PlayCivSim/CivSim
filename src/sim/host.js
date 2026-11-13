@@ -24,7 +24,9 @@ import { addRes } from './economy.js';
 import { LAWS } from '../data/laws.js';
 import { DAY_TICKS } from '../core/constants.js';
 
-const FAST_MS = 50, SLOW_MS = 250, WORLD_MS = 3000, VIEW_PAD = 6;
+const VIEW_PAD = 6;
+// battery saver: the worker wakes half as often and sends fewer, larger batches
+let saver = false, TICK_MS = 16, FAST_MS = 50, SLOW_MS = 250, WORLD_MS = 3000;
 
 export function createHost(post) {
   let game = null, hold = false, last = 0, timer = null;
@@ -53,11 +55,11 @@ export function createHost(post) {
     });
     post({ type: 'init', data: g.serialize() });
     g.fx.length = 0; g.dirtyTiles.length = 0;
-    if (!timer) { last = performance.now(); timer = setTimeout(loop, 16); }
+    if (!timer) { last = performance.now(); timer = setTimeout(loop, TICK_MS); }
   }
 
   function loop() {
-    timer = setTimeout(loop, 16);
+    timer = setTimeout(loop, TICK_MS);
     if (!game) return;
     const now = performance.now();
     const dt = Math.min(0.25, (now - last) / 1000); last = now;
@@ -121,6 +123,7 @@ export function createHost(post) {
     markSeen(seq) { game.seenSeq = Math.max(game.seenSeq || 0, seq | 0); return game.seenSeq; },
     unload() { game = null; unsub?.(); return true; },
     setSpeed(i) { game.speed = i; return i; },
+    setSaver(v) { saver = !!v; TICK_MS = saver ? 33 : 16; FAST_MS = saver ? 100 : 50; SLOW_MS = saver ? 500 : 250; WORLD_MS = saver ? 6000 : 3000; return saver; },
     setHold(v) { hold = !!v; return hold; },
     setView(v) { game.view = v ? { x0: v.x0 - VIEW_PAD, y0: v.y0 - VIEW_PAD, x1: v.x1 + VIEW_PAD, y1: v.y1 + VIEW_PAD } : null; return true; },
     watch(id) { watch = id; return true; },
@@ -283,10 +286,10 @@ export function createHost(post) {
     const fn = COMMANDS[msg.name];
     try {
       if (!fn) throw new Error('Unknown command ' + msg.name);
-      if (!game && !['create', 'load'].includes(msg.name)) throw new Error('No game loaded');
+      if (!game && !['create', 'load', 'setSaver'].includes(msg.name)) throw new Error('No game loaded');
       const value = fn(...(msg.args || []));
       post({ type: 'result', id: msg.id, ok: true, value });
-      if (game && !['serialize', 'setView', 'watch', 'create', 'load', 'unload'].includes(msg.name)) flush(performance.now(), true);
+      if (game && !['serialize', 'setView', 'watch', 'create', 'load', 'unload', 'setSaver'].includes(msg.name)) flush(performance.now(), true);
     } catch (e) {
       post({ type: 'result', id: msg.id, ok: false, error: String(e?.stack || e) });
     }
